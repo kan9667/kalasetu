@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🪔 Karigar Setu
+# 🪔 KalaSetu
 ### AI-Driven Market Linkage & Smart Cataloging for Marginalized Artisans
 
 docs: https://docs.google.com/document/d/11JJ13SqLMxHMm4TntohtAeoQhq9FtmR79HMz0T-F4cY/edit?usp=sharing
