@@ -3,6 +3,8 @@
 # 🪔 Karigar Setu
 ### AI-Driven Market Linkage & Smart Cataloging for Marginalized Artisans
 
+docs: https://docs.google.com/document/d/11JJ13SqLMxHMm4TntohtAeoQhq9FtmR79HMz0T-F4cY/edit?usp=sharing
+
 **An offline-first mobile "virtual business manager" that turns a phone photo and a voice note into a professional, fairly-priced, bilingual product listing — no typing, no English, no middlemen.**
 
 *Built for Smart India Hackathon 2026 · Problem Statement PS-90*
