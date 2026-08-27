@@ -47,7 +47,7 @@ All three features are stitched together by one guiding principle: **the artisan
 ```mermaid
 flowchart LR
     A["📷🎙️ Artisan captures photo\n& voice note (Flutter app)"] --> B{Connectivity?}
-    B -- "Offline" --> C[("Local queue\nSQLite / Hive")]
+    B -- "Offline" --> C[("Local queue\nDrift")]
     C -- "on reconnect" --> D[FastAPI backend]
     B -- "Online" --> D
 
