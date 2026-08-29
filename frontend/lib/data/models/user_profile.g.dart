@@ -1,3 +1,5 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
 part of 'user_profile.dart';
 
 // **************************************************************************
@@ -19,9 +21,9 @@ class UserProfileAdapter extends TypeAdapter<UserProfile> {
       name: fields[1] as String,
       phone: fields[2] as String,
       avatarUrl: fields[3] as String?,
-      craftType: fields[4] as String? ?? 'Handicraft',
-      locationCluster: fields[5] as String? ?? 'Rural Cluster',
-      preferredLanguage: fields[6] as String? ?? 'en',
+      craftType: fields[4] as String,
+      locationCluster: fields[5] as String,
+      preferredLanguage: fields[6] as String,
     );
   }
 
