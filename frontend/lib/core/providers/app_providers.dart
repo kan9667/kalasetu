@@ -63,7 +63,6 @@ final connectivityProvider = StreamProvider<bool>((ref) async* {
 class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   final ProductRepository _repository;
   final Ref _ref;
-<<<<<<< HEAD
   late final VoidCallback _syncListener;
 
   ProductListNotifier(this._repository, this._ref) : super(const AsyncValue.loading()) {
@@ -75,15 +74,6 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
       }
     };
     syncService.syncState.addListener(_syncListener);
-=======
-  final SyncService _syncService;
-
-  ProductListNotifier(
-    this._repository,
-    this._ref,
-    this._syncService,
-  ) : super(const AsyncValue.loading()) {
->>>>>>> cde34e8 ( flutter ki mkc)
     loadProducts();
   }
 
@@ -122,7 +112,8 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   }
 
   Future<int> syncQueue() async {
-    final count = await _syncService.triggerSync();
+    final syncService = _ref.read(syncServiceProvider);
+    final count = await syncService.triggerSync();
     await loadProducts();
     return count;
   }
@@ -138,7 +129,6 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
 final productListProvider =
     StateNotifierProvider<ProductListNotifier, AsyncValue<List<Product>>>((ref) {
   final repository = ref.watch(productRepositoryProvider);
-<<<<<<< HEAD
   final notifier = ProductListNotifier(repository, ref);
   ref.watch(syncServiceProvider);
   ref.listen<AsyncValue<bool>>(connectivityProvider, (previous, next) {
@@ -147,11 +137,6 @@ final productListProvider =
     }
   });
   return notifier;
-=======
-  final syncService = ref.watch(syncServiceProvider);
-
-  return ProductListNotifier(repository, ref, syncService);
->>>>>>> cde34e8 ( flutter ki mkc)
 });
 
 // --- User Profile Provider ---
