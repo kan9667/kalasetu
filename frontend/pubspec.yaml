@@ -29,7 +29,7 @@ dependencies:
   # Media
   camera: ^0.11.0+2
   image_picker: ^1.1.2
-  record: ^5.1.2
+  record: ^7.1.1
   just_audio: ^0.9.40
   flutter_tts: ^4.1.0
   cached_network_image: ^3.4.1
