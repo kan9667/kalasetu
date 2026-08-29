@@ -22,6 +22,12 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
+  # Offline media queue
+  isar: ^3.1.0+1
+  isar_flutter_libs: ^3.1.0+1
+  uuid: ^4.5.1
+  workmanager: ^0.6.0
+
   # Networking
   dio: ^5.7.0
   connectivity_plus: ^6.0.5
@@ -29,7 +35,7 @@ dependencies:
   # Media
   camera: ^0.11.0+2
   image_picker: ^1.1.2
-  record: ^5.1.2
+  record: ^7.1.1
   just_audio: ^0.9.40
   flutter_tts: ^4.1.0
   cached_network_image: ^3.4.1
@@ -44,7 +50,7 @@ dependencies:
 
   # Utils
   path_provider: ^2.1.4
-  permission_handler: ^11.3.1
+  permission_handler: ^13.0.1
 
 dev_dependencies:
   flutter_test:
@@ -55,9 +61,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
   assets:
     - assets/images/
     - assets/icons/
     - assets/lottie/
     - assets/translations/
+  
+dependency_overrides:
+  permission_handler_windows: ^0.2.2

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,6 +11,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/widgets/responsive_widgets.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/offline_sync/models/queue_item.dart';
 
 class Step1CaptureWidget extends ConsumerStatefulWidget {
   const Step1CaptureWidget({super.key});
@@ -30,7 +32,7 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
         imageQuality: 85,
       );
       if (photo != null) {
-        ref.read(addProductFlowProvider.notifier).setImage(photo.path);
+        await ref.read(addProductFlowProvider.notifier).queueImage(File(photo.path));
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
@@ -197,6 +199,45 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
                   isCompact: isCompact,
                 ),
               ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (draft.originalImagePath.isNotEmpty && !draft.isEnhanced) {
+      return SingleChildScrollView(
+        padding: EdgeInsets.all(screenPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('capture_title'.tr(), style: AppTextStyles.headlineLarge),
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              height: isCompact ? 240 : 320,
+              child: AppImage(imageUrl: draft.originalImagePath, fit: BoxFit.cover),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Image saved locally and waiting for internet connection.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppButton(
+              label: 'accept_photo'.tr(),
+              icon: Icons.check_circle,
+              onPressed: draft.imageQueueStatus == QueueStatus.completed
+                  ? () => ref.read(addProductFlowProvider.notifier).nextStep()
+                  : null,
+              isCompact: isCompact,
+            ),
+            AppButton(
+              label: 'redo_photo'.tr(),
+              type: AppButtonType.outlined,
+              icon: Icons.refresh,
+              onPressed: () => ref.read(addProductFlowProvider.notifier).setImage(''),
+              isCompact: isCompact,
             ),
           ],
         ),
