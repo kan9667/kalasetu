@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_colors.dart';
@@ -62,8 +64,8 @@ class AppImage extends StatelessWidget {
       );
     }
 
-    return Image.network(
-      imageUrl,
+    return Image.file(
+      File(imageUrl),
       width: width,
       height: height,
       fit: fit,

@@ -5,6 +5,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'app.dart';
 import 'data/models/product.dart';
 import 'data/models/user_profile.dart';
+import 'core/offline_sync/offline_sync_service.dart';
+import 'core/offline_sync/services/upload_api.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +32,11 @@ void main() async {
   await Hive.openBox<UserProfile>('user_profile_box');
   await Hive.openBox('auth_box');
   await Hive.openBox('draft_box');
+
+  await OfflineSyncService.instance.init(
+    uploadApi: MockUploadApi(),
+    healthCheckUrl: null,
+  );
 
   runApp(
     EasyLocalization(
