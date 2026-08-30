@@ -58,6 +58,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   build_runner: ^2.4.13
   hive_generator: ^2.0.1
+  isar_generator: ^3.1.0+1
 
 flutter:
   uses-material-design: true
@@ -66,7 +67,4 @@ flutter:
     - assets/icons/
     - assets/lottie/
     - assets/translations/
-dependency_overrides:
-  record_platform_interface: 1.1.0
-  record_linux: 0.7.2
-  permission_handler_windows: ^0.2.2
+
