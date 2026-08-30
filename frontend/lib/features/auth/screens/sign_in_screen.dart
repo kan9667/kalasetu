@@ -52,21 +52,26 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             children: [
               const SizedBox(height: AppSpacing.xl),
 
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: const BoxDecoration(
-                  color: AppColors.terracotta,
-                  shape: BoxShape.circle,
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(AppRadii.lg),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.terracotta.withValues(alpha: 0.08),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    width: 160,
+                    fit: BoxFit.contain,
+                  ),
                 ),
-                child: const Icon(Icons.palette, size: 48, color: AppColors.textOnPrimary),
-              ),
-
-              const SizedBox(height: AppSpacing.lg),
-
-              Text(
-                'KalaSetu',
-                style: AppTextStyles.displayLarge.copyWith(color: AppColors.terracotta),
-                textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: AppSpacing.sm),
