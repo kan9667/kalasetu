@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_image.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/offline_sync/models/queue_item.dart';
 
@@ -28,9 +28,12 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
         maxWidth: 1200,
       );
       if (picked != null) {
+        debugPrint('[Step1Capture] Image selected: ${picked.path}');
         await ref.read(addProductFlowProvider.notifier).queueImage(File(picked.path));
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[Step1Capture] Image picker error: $e\n$st');
+    }
   }
 
   Future<void> _addAdditionalImage() async {
@@ -41,9 +44,12 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
         maxWidth: 1200,
       );
       if (picked != null) {
+        debugPrint('[Step1Capture] Additional image selected: ${picked.path}');
         await ref.read(addProductFlowProvider.notifier).addAdditionalImage(picked.path);
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[Step1Capture] Additional image error: $e\n$st');
+    }
   }
 
   @override
@@ -162,8 +168,8 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
               child: SizedBox(
                 height: 230,
                 width: double.infinity,
-                child: Image.file(
-                  File(displayImagePath),
+                child: AppImage(
+                  imageUrl: displayImagePath,
                   fit: BoxFit.cover,
                 ),
               ),

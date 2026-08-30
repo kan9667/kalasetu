@@ -23,14 +23,29 @@
 # ============================================================
 
 import os
+import sys
 import time
+from pathlib import Path
 
-from processors.input_validation import validate_input
-from processors.background_removal import remove_background
-from processors.cropping import auto_crop
-from processors.background_canvas import place_on_clean_background, place_on_ecommerce_canvas
-from processors.lighting import improve_lighting, correct_white_balance, sharpen_image
-from processors.image_output import resize_image, save_image
+# Ensure ML/image_pipeline directory is in sys.path so 'processors' and 'config' can be imported anywhere
+_PIPELINE_DIR = Path(__file__).resolve().parent
+if str(_PIPELINE_DIR) not in sys.path:
+    sys.path.insert(0, str(_PIPELINE_DIR))
+
+try:
+    from processors.input_validation import validate_input
+    from processors.background_removal import remove_background
+    from processors.cropping import auto_crop
+    from processors.background_canvas import place_on_clean_background, place_on_ecommerce_canvas
+    from processors.lighting import improve_lighting, correct_white_balance, sharpen_image
+    from processors.image_output import resize_image, save_image
+except ImportError:
+    from .processors.input_validation import validate_input
+    from .processors.background_removal import remove_background
+    from .processors.cropping import auto_crop
+    from .processors.background_canvas import place_on_clean_background, place_on_ecommerce_canvas
+    from .processors.lighting import improve_lighting, correct_white_balance, sharpen_image
+    from .processors.image_output import resize_image, save_image
 
 
 def enhance_image(input_path, output_path=None, **options):

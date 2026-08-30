@@ -53,7 +53,7 @@ final apiServiceProvider = Provider<ApiService>((ref) {
 });
 
 final imageEnhancerServiceProvider = Provider<ImageEnhancerService>((ref) {
-  return MockImageEnhancerService();
+  return HttpImageEnhancerService();
 });
 
 final speechServiceProvider = Provider<SpeechService>((ref) {
@@ -93,17 +93,19 @@ final connectivityProvider = StreamProvider<bool>((ref) async* {
 class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   final ProductRepository _repository;
   final Ref _ref;
+  final SyncService _syncService;
   late final VoidCallback _syncListener;
 
-  ProductListNotifier(this._repository, this._ref) : super(const AsyncValue.loading()) {
-    final syncService = _ref.read(syncServiceProvider);
+  ProductListNotifier(this._repository, this._ref)
+      : _syncService = _ref.read(syncServiceProvider),
+        super(const AsyncValue.loading()) {
     _syncListener = () {
-      final syncState = syncService.syncState.value;
+      final syncState = _syncService.syncState.value;
       if (syncState == SyncState.completed || syncState == SyncState.idle) {
         unawaited(loadProducts(forceRefresh: true));
       }
     };
-    syncService.syncState.addListener(_syncListener);
+    _syncService.syncState.addListener(_syncListener);
     loadProducts();
   }
 
@@ -142,16 +144,14 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   }
 
   Future<int> syncQueue() async {
-    final syncService = _ref.read(syncServiceProvider);
-    final count = await syncService.triggerSync();
+    final count = await _syncService.triggerSync();
     await loadProducts();
     return count;
   }
 
   @override
   void dispose() {
-    final syncService = _ref.read(syncServiceProvider);
-    syncService.syncState.removeListener(_syncListener);
+    _syncService.syncState.removeListener(_syncListener);
     super.dispose();
   }
 }
@@ -483,18 +483,55 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   Future<String> queueImage(File imageFile) async {
     state = state.copyWith(
       originalImagePath: imageFile.path,
-      enhancedImagePath: '',
+      enhancedImagePath: imageFile.path,
       isEnhanced: false,
+      isAiProcessing: true,
       imageQueueStatus: QueueStatus.pending,
     );
 
-    final localId = await OfflineSyncService.instance.enqueueImage(
-      imageFile: imageFile,
-      productDraftId: state.draftId,
-    );
+    String localId = '';
+    if (OfflineSyncService.instance.isInitialized) {
+      try {
+        localId = await OfflineSyncService.instance.enqueueImage(
+          imageFile: imageFile,
+          productDraftId: state.draftId,
+        );
+      } catch (_) {}
+    }
     state = state.copyWith(imageQueueItemId: localId);
     _persistDraft();
+
+    // Trigger HTTP AI Image Enhancement
+    unawaited(_enhanceProductImage(imageFile));
+
     return localId;
+  }
+
+  Future<void> _enhanceProductImage(File imageFile) async {
+    try {
+      debugPrint('[AddProductFlow] Triggering AI Enhancer for: ${imageFile.path}');
+      final enhancer = _ref.read(imageEnhancerServiceProvider);
+      final enhancedUrl = await enhancer.enhanceImage(
+        imageFile.path,
+        draftId: state.draftId,
+      );
+      debugPrint('[AddProductFlow] Received enhancedUrl: $enhancedUrl (original: ${imageFile.path})');
+      if (enhancedUrl.isNotEmpty && enhancedUrl != imageFile.path) {
+        state = state.copyWith(
+          enhancedImagePath: enhancedUrl,
+          isEnhanced: true,
+          isAiProcessing: false,
+          imageQueueStatus: QueueStatus.completed,
+        );
+        _persistDraft();
+        debugPrint('[AddProductFlow] State updated: isEnhanced=true, enhancedImagePath=$enhancedUrl');
+      } else {
+        state = state.copyWith(isAiProcessing: false);
+      }
+    } catch (e, st) {
+      debugPrint('[AddProductFlow] AI enhancement error: $e\n$st');
+      state = state.copyWith(isAiProcessing: false);
+    }
   }
 
   Future<void> addAdditionalImage(String path) async {

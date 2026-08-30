@@ -71,7 +71,7 @@ class LLMPricer:
 
     def __init__(self):
         settings = get_settings()
-        self.client = genai.Client(api_key=settings.gemini_api_key)
+        self.client = genai.Client(api_key=settings.gemini_api_key) if settings.gemini_api_key else None
         self.model = settings.llm_model
 
     def calculate_price(
@@ -84,21 +84,18 @@ class LLMPricer:
     ) -> PricingResult:
         """
         Calculate a price recommendation using the LLM.
-
-        Args:
-            description: English description of the artisan's product.
-            comparables: Top-K similar benchmark products from the vector store.
-            cost_inputs: Optional cost breakdown for floor-price calculation.
-            image_path: Optional path to the artisan's product image.
-            category: Optional product category.
-
-        Returns:
-            PricingResult with the suggested price and reasoning.
         """
         # Calculate cost floor
         cost_floor = 0.0
         if cost_inputs:
             cost_floor = cost_inputs.cost_floor
+
+        if not self.client:
+            return self._fallback_pricing(
+                comparables=comparables,
+                cost_floor=cost_floor,
+                description=description,
+            )
 
         # Build the comparables text block
         comparables_text = self._format_comparables(comparables)

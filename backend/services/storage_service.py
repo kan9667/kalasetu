@@ -19,6 +19,7 @@ class StorageService:
     """Manages file storage in backend/uploads directory."""
 
     def __init__(self):
+        self.settings = settings
         self.upload_dir = ensure_upload_dir()
 
     async def save_upload(self, file: UploadFile, subfolder: str = "images") -> str:

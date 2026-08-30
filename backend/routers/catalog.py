@@ -28,15 +28,36 @@ async def enhance_image(
 ):
     """
     Upload and optimize product photos for studio quality e-commerce listings.
+    Non-blocking: offloads CPU-bound rembg/CV processing to background threadpool.
     """
     try:
-        saved_url = await storage_service.save_upload(image, subfolder="enhanced")
+        # 1. Save original raw upload
+        raw_url = await storage_service.save_upload(image, subfolder="raw")
+        raw_path = storage_service.get_local_path_from_url(raw_url)
+        if not raw_path:
+            raise HTTPException(status_code=500, detail="Failed to locate stored raw image")
+
+        # 2. Prepare destination path for enhanced image
+        enhanced_dir = storage_service.upload_dir / "enhanced"
+        enhanced_dir.mkdir(parents=True, exist_ok=True)
+        enhanced_filename = f"{raw_path.stem}_enhanced.jpg"
+        enhanced_path = enhanced_dir / enhanced_filename
+
+        # 3. Execute non-blocking AI image enhancement
+        await catalog_service.enhance_product_photo(
+            input_path=str(raw_path),
+            output_path=str(enhanced_path),
+        )
+
+        enhanced_url = f"{storage_service.settings.static_url_prefix}/enhanced/{enhanced_filename}" if hasattr(storage_service, 'settings') else f"/uploads/enhanced/{enhanced_filename}"
+
         return ImageEnhanceResponse(
-            original_url=saved_url,
-            enhanced_url=saved_url,
+            original_url=raw_url,
+            enhanced_url=enhanced_url,
             status="success",
         )
     except Exception as e:
+        # If enhancement raises an error, fallback gracefully or report HTTP 500
         raise HTTPException(status_code=500, detail=f"Image enhancement failed: {str(e)}")
 
 

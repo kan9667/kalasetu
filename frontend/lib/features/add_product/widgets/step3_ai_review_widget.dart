@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/connectivity_pill.dart';
+import '../../../core/widgets/app_image.dart';
 import '../../../core/providers/app_providers.dart';
 
 class Step3AiReviewWidget extends ConsumerStatefulWidget {
@@ -48,7 +49,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
       }
     });
 
-    if (draft.isAiProcessing) {
+    if (draft.isAiProcessing && draft.titleEn.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -76,6 +77,10 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
       return const _OfflineWaitingView();
     }
 
+    final hasEnhancedImage = draft.isEnhanced &&
+        draft.enhancedImagePath.isNotEmpty &&
+        draft.enhancedImagePath != draft.originalImagePath;
+
     return SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
@@ -85,18 +90,56 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
           if (draft.originalImagePath.isNotEmpty) ...[
             SizedBox(
               height: 240,
-              child: draft.isEnhanced && draft.enhancedImagePath.isNotEmpty
+              child: hasEnhancedImage
                   ? _BeforeAfterSlider(
                       beforePath: draft.originalImagePath,
                       afterPath: draft.enhancedImagePath,
                     )
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.file(
-                        File(draft.originalImagePath),
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                      ),
+                  : Stack(
+                      children: [
+                        Positioned.fill(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: AppImage(
+                              imageUrl: draft.enhancedImagePath.isNotEmpty
+                                  ? draft.enhancedImagePath
+                                  : draft.originalImagePath,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                            ),
+                          ),
+                        ),
+                        if (draft.isAiProcessing)
+                          Positioned(
+                            bottom: 12,
+                            left: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'AI Enhancing image...',
+                                    style: TextStyle(color: Colors.white, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
             ),
             const SizedBox(height: 8),
@@ -425,12 +468,12 @@ class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: Image.file(File(widget.afterPath), fit: BoxFit.cover),
+                    child: AppImage(imageUrl: widget.afterPath, fit: BoxFit.cover),
                   ),
                   Positioned.fill(
                     child: ClipRect(
                       clipper: _LeftEdgeClipper(width: handleX),
-                      child: Image.file(File(widget.beforePath), fit: BoxFit.cover),
+                      child: AppImage(imageUrl: widget.beforePath, fit: BoxFit.cover),
                     ),
                   ),
                   Positioned(

@@ -177,8 +177,31 @@ class RealUploadApi implements UploadApi {
     required File file,
     required String idempotencyKey,
     required String productDraftId,
-  }) =>
-      _upload('/v1/uploads/image', file, idempotencyKey, productDraftId);
+  }) async {
+    final formData = FormData.fromMap({
+      'image': await MultipartFile.fromFile(file.path),
+      'idempotency_key': idempotencyKey,
+      'product_draft_id': productDraftId,
+    });
+
+    final response = await _dio.post('/api/v1/catalog/enhance-image', data: formData);
+    final data = response.data as Map<String, dynamic>;
+    final enhancedUrl = data['enhanced_url'] as String? ?? data['enhanced_image_url'] as String?;
+
+    final cleanPrefix = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final resolvedUrl = (enhancedUrl != null && !enhancedUrl.startsWith('http'))
+        ? '$cleanPrefix${enhancedUrl.startsWith('/') ? enhancedUrl : '/$enhancedUrl'}'
+        : (enhancedUrl ?? file.path);
+
+    return UploadResult(
+      jobId: idempotencyKey,
+      immediatelyCompleted: true,
+      resultPayload: {
+        'enhancedImageUrl': resolvedUrl,
+        'originalImageUrl': data['original_url'],
+      },
+    );
+  }
 
   @override
   Future<UploadResult> uploadVoiceNote({
@@ -200,14 +223,11 @@ class RealUploadApi implements UploadApi {
       'product_draft_id': productDraftId,
     });
 
-    // The backend should treat idempotency_key as a dedupe key: if it has
-    // already seen this key, return the existing job/result instead of
-    // reprocessing. This is what makes retries safe.
     final response = await _dio.post(path, data: formData);
     final data = response.data as Map<String, dynamic>;
 
     return UploadResult(
-      jobId: data['job_id'] as String,
+      jobId: (data['job_id'] ?? idempotencyKey) as String,
       immediatelyCompleted: data['status'] == 'completed',
       resultPayload: data['result'] as Map<String, dynamic>?,
     );

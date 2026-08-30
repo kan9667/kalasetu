@@ -42,6 +42,8 @@ class SyncService {
     }
   }
 
+  Timer? _idleResetTimer;
+
   Future<int> triggerSync() async {
     if (!isOnline.value || _isSyncing) return 0;
 
@@ -50,7 +52,8 @@ class SyncService {
     try {
       final count = await productRepository.syncPendingQueue();
       syncState.value = SyncState.completed;
-      Future.delayed(const Duration(seconds: 3), () {
+      _idleResetTimer?.cancel();
+      _idleResetTimer = Timer(const Duration(seconds: 3), () {
         syncState.value = SyncState.idle;
       });
       return count;
@@ -65,6 +68,7 @@ class SyncService {
 
   void dispose() {
     _subscription?.cancel();
+    _idleResetTimer?.cancel();
     syncState.dispose();
     isOnline.dispose();
   }
