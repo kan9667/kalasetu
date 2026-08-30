@@ -29,6 +29,7 @@ from backend.routers import (
     pricing_router,
     products_router,
     catalog_router,
+    auth_router,
 )
 
 settings = get_settings()
@@ -81,6 +82,7 @@ app.include_router(health_router)
 app.include_router(pricing_router)
 app.include_router(products_router)
 app.include_router(catalog_router)
+app.include_router(auth_router)
 
 
 @app.get("/", tags=["Root"])

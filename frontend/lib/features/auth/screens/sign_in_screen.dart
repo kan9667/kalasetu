@@ -116,12 +116,47 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
               AppButton(
                 label: 'continue_btn'.tr(),
+                icon: Icons.login,
                 onPressed: _handleContinue,
+                isCompact: isCompact,
+              ),
+
+              const SizedBox(height: AppSpacing.lg),
+
+              // Divider with 'OR'
+              Row(
+                children: [
+                  const Expanded(child: Divider(color: AppColors.border)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                    child: Text(
+                      'new_artisan_prompt'.tr(),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: Divider(color: AppColors.border)),
+                ],
+              ),
+
+              const SizedBox(height: AppSpacing.lg),
+
+              // Register as New Artisan Button
+              AppButton(
+                label: 'new_artisan_register_btn'.tr(),
+                type: AppButtonType.secondary,
+                icon: Icons.person_add_alt_1,
+                onPressed: () {
+                  context.pushNamed(AppRouteConstants.register);
+                },
                 isCompact: isCompact,
               ),
 
               const SizedBox(height: AppSpacing.md),
 
+              // NGO Coordinator Assist Button
               AppButton(
                 label: 'ngo_assist_btn'.tr(),
                 type: AppButtonType.outlined,

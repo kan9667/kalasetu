@@ -23,14 +23,17 @@ class UserProfileAdapter extends TypeAdapter<UserProfile> {
       avatarUrl: fields[3] as String?,
       craftType: fields[4] as String,
       locationCluster: fields[5] as String,
-      preferredLanguage: fields[6] as String,
+      preferredLanguage: fields[6] as String? ?? 'en',
+      state: fields[7] as String? ?? '',
+      experienceYears: fields[8] as String?,
+      pehchanId: fields[9] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, UserProfile obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -44,7 +47,13 @@ class UserProfileAdapter extends TypeAdapter<UserProfile> {
       ..writeByte(5)
       ..write(obj.locationCluster)
       ..writeByte(6)
-      ..write(obj.preferredLanguage);
+      ..write(obj.preferredLanguage)
+      ..writeByte(7)
+      ..write(obj.state)
+      ..writeByte(8)
+      ..write(obj.experienceYears)
+      ..writeByte(9)
+      ..write(obj.pehchanId);
   }
 
   @override
