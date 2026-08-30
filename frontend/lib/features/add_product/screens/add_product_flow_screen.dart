@@ -27,17 +27,16 @@ class AddProductFlowScreen extends ConsumerWidget {
     ];
 
     return AppScaffold(
-      appBar: AppBar(
-        title: Text('tab_add_product'.tr()),
-        leading: currentStep > 0
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  ref.read(addProductFlowProvider.notifier).previousStep();
-                },
-              )
-            : null,
-      ),
+      title: 'tab_add_product'.tr(),
+      automaticallyImplyLeading: false,
+      leading: currentStep > 0
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                ref.read(addProductFlowProvider.notifier).previousStep();
+              },
+            )
+          : null,
       body: Column(
         children: [
           StepProgressBar(

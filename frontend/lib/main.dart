@@ -6,14 +6,23 @@ import 'app.dart';
 import 'data/models/product.dart';
 import 'data/models/user_profile.dart';
 
+Future<Box<T>> _openSafeBox<T>(String boxName) async {
+  try {
+    return await Hive.openBox<T>(boxName);
+  } catch (e) {
+    debugPrint('Resetting incompatible Hive box "$boxName": $e');
+    await Hive.deleteBoxFromDisk(boxName);
+    return await Hive.openBox<T>(boxName);
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EasyLocalization.ensureInitialized();
 
-  // Initialize Hive
   await Hive.initFlutter();
 
-  // Register Hive TypeAdapters
+  // Register adapters if not already present
   if (!Hive.isAdapterRegistered(1)) {
     Hive.registerAdapter(ProductStatusAdapter());
   }
@@ -24,20 +33,19 @@ void main() async {
     Hive.registerAdapter(UserProfileAdapter());
   }
 
-  // Open Hive Boxes
-  await Hive.openBox<Product>('products_box');
-  await Hive.openBox<String>('pending_sync_box');
-  await Hive.openBox<UserProfile>('user_profile_box');
-  await Hive.openBox('auth_box');
-  await Hive.openBox('draft_box');
+  // Safely open all boxes
+  await _openSafeBox<Product>('products_box');
+  await _openSafeBox<String>('pending_sync_box');
+  await _openSafeBox<UserProfile>('user_profile_box');
+  await _openSafeBox('auth_box');
+  await _openSafeBox('draft_box');
+  await _openSafeBox('app_settings_box');
 
   runApp(
     EasyLocalization(
       supportedLocales: const [
         Locale('en'),
         Locale('hi'),
-        Locale('ta'),
-        Locale('bn'),
       ],
       path: 'assets/translations',
       fallbackLocale: const Locale('en'),

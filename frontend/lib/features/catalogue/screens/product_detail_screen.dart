@@ -91,12 +91,12 @@ class ProductDetailScreen extends ConsumerWidget {
               child: Text('cancel'.tr()),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.brick),
               onPressed: () async {
                 await ref.read(productListProvider.notifier).deleteProduct(productId);
                 if (ctx.mounted) {
-                  Navigator.pop(ctx); // Close dialog
-                  context.pop(); // Back to catalogue
+                  Navigator.pop(ctx);
+                  context.pop();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('product_deleted_success'.tr())),
                   );
@@ -108,6 +108,19 @@ class ProductDetailScreen extends ConsumerWidget {
         );
       },
     );
+  }
+
+  (IconData, Color, Color, String) _statusVisual(ProductStatus status) {
+    switch (status) {
+      case ProductStatus.live:
+        return (Icons.check_circle, AppColors.forestGreenLight.withValues(alpha: 0.2), AppColors.forestGreenDark, 'status_live');
+      case ProductStatus.pendingSync:
+        return (Icons.cloud_queue, AppColors.turmericLight.withValues(alpha: 0.3), AppColors.turmericDark, 'status_pending_sync');
+      case ProductStatus.draft:
+        return (Icons.edit_note, AppColors.surfaceVariant, AppColors.textSecondary, 'status_draft');
+      case ProductStatus.sold:
+        return (Icons.sell, AppColors.mustard.withValues(alpha: 0.25), AppColors.terracottaDark, 'status_sold');
+    }
   }
 
   @override
@@ -126,12 +139,12 @@ class ProductDetailScreen extends ConsumerWidget {
               title: 'Craft Product',
               description: 'No product details found',
               price: 0,
-              imageUrl: '',
+              photoPath: '',
               category: 'General',
             ),
           );
 
-          final isLive = product.status == ProductStatus.live;
+          final (statusIcon, statusBg, statusFg, statusLabelKey) = _statusVisual(product.status);
 
           return CustomScrollView(
             slivers: [
@@ -151,14 +164,37 @@ class ProductDetailScreen extends ConsumerWidget {
                   ),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
-                  background: AppImage(imageUrl: product.imageUrl, fit: BoxFit.cover),
+                  background: AppImage(imageUrl: product.displayPhotoPath, fit: BoxFit.cover),
                 ),
               ),
               SliverPadding(
                 padding: const EdgeInsets.all(AppSpacing.screenPadding),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    // Status Badge & Category
+                    if (product.allPhotoPaths.length > 1) ...[
+                      SizedBox(
+                        height: 64,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: [
+                            for (final path in product.allPhotoPaths)
+                              Padding(
+                                padding: const EdgeInsets.only(right: AppSpacing.xs),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                                  child: SizedBox(
+                                    width: 64,
+                                    height: 64,
+                                    child: AppImage(imageUrl: path, fit: BoxFit.cover),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
+
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -169,24 +205,16 @@ class ProductDetailScreen extends ConsumerWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: isLive
-                                ? AppColors.forestGreenLight.withValues(alpha: 0.2)
-                                : AppColors.turmericLight.withValues(alpha: 0.3),
+                            color: statusBg,
                             borderRadius: BorderRadius.circular(AppRadii.chip),
                           ),
                           child: Row(
                             children: [
-                              Icon(
-                                isLive ? Icons.check_circle : Icons.cloud_queue,
-                                size: 14,
-                                color: isLive ? AppColors.forestGreen : AppColors.turmericDark,
-                              ),
+                              Icon(statusIcon, size: 14, color: statusFg),
                               const SizedBox(width: 4),
                               Text(
-                                isLive ? 'status_live'.tr() : 'status_pending_sync'.tr(),
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: isLive ? AppColors.forestGreenDark : AppColors.turmericDark,
-                                ),
+                                statusLabelKey.tr(),
+                                style: AppTextStyles.labelSmall.copyWith(color: statusFg),
                               ),
                             ],
                           ),
@@ -216,16 +244,12 @@ class ProductDetailScreen extends ConsumerWidget {
                     ),
 
                     const SizedBox(height: AppSpacing.lg),
-
                     const Divider(),
                     const SizedBox(height: AppSpacing.md),
 
                     Text('product_desc_label'.tr(), style: AppTextStyles.headlineSmall),
                     const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      product.description,
-                      style: AppTextStyles.bodyLarge,
-                    ),
+                    Text(product.description, style: AppTextStyles.bodyLarge),
                     if (product.descriptionHi.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.sm),
                       Text(
@@ -252,7 +276,6 @@ class ProductDetailScreen extends ConsumerWidget {
                       const SizedBox(height: AppSpacing.lg),
                     ],
 
-                    // Timestamp
                     Text(
                       '${'created_on'.tr()}: ${product.createdAt.day}/${product.createdAt.month}/${product.createdAt.year}',
                       style: AppTextStyles.caption,

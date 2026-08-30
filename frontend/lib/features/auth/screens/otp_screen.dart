@@ -57,8 +57,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     final authState = ref.watch(authStateProvider);
 
     return AppScaffold(
-      showOfflineBanner: false,
-      appBar: AppBar(
+      rawAppBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),

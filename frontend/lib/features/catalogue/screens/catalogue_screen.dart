@@ -43,14 +43,12 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
 
   List<Product> _filterProducts(List<Product> products) {
     return products.where((p) {
-      // Category filter
       if (_selectedCategory != 'filter_all') {
         final catName = _selectedCategory.replaceAll('filter_', '').toLowerCase();
         if (!p.category.toLowerCase().contains(catName)) {
           return false;
         }
       }
-      // Search query
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
         final matchTitle = p.title.toLowerCase().contains(q) || p.titleHi.toLowerCase().contains(q);
@@ -87,6 +85,12 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
         labelKey = 'status_draft';
         icon = Icons.edit_note;
         break;
+      case ProductStatus.sold:
+        bg = AppColors.mustard.withValues(alpha: 0.25);
+        fg = AppColors.terracottaDark;
+        labelKey = 'status_sold';
+        icon = Icons.sell;
+        break;
     }
 
     return Container(
@@ -114,27 +118,24 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     final productsAsync = ref.watch(productListProvider);
 
     return AppScaffold(
-      appBar: AppBar(
-        title: Text('my_catalogue_title'.tr()),
-        actions: [
-          IconButton(
-            icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
-            tooltip: _isGridView ? 'list_view'.tr() : 'grid_view'.tr(),
-            onPressed: () {
-              setState(() => _isGridView = !_isGridView);
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              ref.read(productListProvider.notifier).loadProducts(forceRefresh: true);
-            },
-          ),
-        ],
-      ),
+      title: 'my_catalogue_title'.tr(),
+      actions: [
+        IconButton(
+          icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
+          tooltip: _isGridView ? 'list_view'.tr() : 'grid_view'.tr(),
+          onPressed: () {
+            setState(() => _isGridView = !_isGridView);
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          onPressed: () {
+            ref.read(productListProvider.notifier).loadProducts(forceRefresh: true);
+          },
+        ),
+      ],
       body: Column(
         children: [
-          // Search Bar
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding,
@@ -161,8 +162,6 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
               },
             ),
           ),
-
-          // Category Chips Horizontal Scroll
           SizedBox(
             height: 48,
             child: ListView.builder(
@@ -186,10 +185,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
               },
             ),
           ),
-
           const SizedBox(height: AppSpacing.xs),
-
-          // Main Catalogue List/Grid View
           Expanded(
             child: productsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -214,10 +210,11 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                   ),
                 ),
               ),
-              data: (products) {
+                data: (products) {
                 final filtered = _filterProducts(products);
+                final hasActiveFilter = _searchQuery.isNotEmpty || _selectedCategory != 'filter_all';
 
-                if (filtered.isEmpty) {
+                if (products.isEmpty) {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -227,7 +224,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                           Container(
                             width: 100,
                             height: 100,
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               color: AppColors.surfaceVariant,
                               shape: BoxShape.circle,
                             ),
@@ -238,16 +235,11 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                             ),
                           ),
                           const SizedBox(height: AppSpacing.lg),
-                          Text(
-                            'no_products_title'.tr(),
-                            style: AppTextStyles.headlineMedium,
-                          ),
+                          Text('no_products_title'.tr(), style: AppTextStyles.headlineMedium),
                           const SizedBox(height: AppSpacing.sm),
                           Text(
                             'no_products_desc'.tr(),
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
+                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: AppSpacing.xl),
@@ -259,6 +251,59 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                               ref.read(homeTabIndexProvider.notifier).state = 0;
                             },
                           ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 100,
+                            height: 100,
+                            decoration: const BoxDecoration(
+                              color: AppColors.surfaceVariant,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.search_off,
+                              size: 56,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          const Text(
+                            'No products match your search',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF3F342B)),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            'Try a different keyword or category filter.',
+                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (hasActiveFilter) ...[
+                            const SizedBox(height: AppSpacing.xl),
+                            AppButton(
+                              label: 'Clear search & filters',
+                              icon: Icons.clear,
+                              width: 220,
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _searchQuery = '';
+                                  _selectedCategory = 'filter_all';
+                                });
+                              },
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -322,11 +367,7 @@ class _GridProductCard extends StatelessWidget {
   final Widget statusBadge;
   final VoidCallback onTap;
 
-  const _GridProductCard({
-    required this.product,
-    required this.statusBadge,
-    required this.onTap,
-  });
+  const _GridProductCard({required this.product, required this.statusBadge, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -338,14 +379,13 @@ class _GridProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.card)),
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child: AppImage(imageUrl: product.imageUrl, fit: BoxFit.cover),
+                      child: AppImage(imageUrl: product.displayPhotoPath, fit: BoxFit.cover),
                     ),
                     Positioned(top: 8, left: 8, child: statusBadge),
                   ],
@@ -386,11 +426,7 @@ class _ListProductCard extends StatelessWidget {
   final Widget statusBadge;
   final VoidCallback onTap;
 
-  const _ListProductCard({
-    required this.product,
-    required this.statusBadge,
-    required this.onTap,
-  });
+  const _ListProductCard({required this.product, required this.statusBadge, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -403,13 +439,12 @@ class _ListProductCard extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.sm),
           child: Row(
             children: [
-              // Image
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadii.md),
                 child: SizedBox(
                   width: 90,
                   height: 90,
-                  child: AppImage(imageUrl: product.imageUrl, fit: BoxFit.cover),
+                  child: AppImage(imageUrl: product.displayPhotoPath, fit: BoxFit.cover),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),

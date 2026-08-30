@@ -11,29 +11,31 @@ class KalaSetuApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(goRouterProvider);
 
-    List<LocalizationsDelegate<dynamic>>? delegates;
-    List<Locale> supported = const [
-      Locale('en'),
-      Locale('hi'),
-      Locale('ta'),
-      Locale('bn'),
-    ];
-    Locale? currentLocale;
-
-    try {
-      delegates = context.localizationDelegates;
-      supported = context.supportedLocales;
-      currentLocale = context.locale;
-    } catch (_) {}
-
     return MaterialApp.router(
       title: 'KalaSetu',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: router,
-      localizationsDelegates: delegates,
-      supportedLocales: supported,
-      locale: currentLocale,
+      localizationsDelegates: context.localizationDelegates,
+      supportedLocales: context.supportedLocales,
+      locale: context.locale,
+      // 1. Disables Android overscroll distortion across the entire app
+      scrollBehavior: const MaterialScrollBehavior().copyWith(
+        overscroll: false,
+        physics: const ClampingScrollPhysics(),
+      ),
+      // 2. Clamps text scale to prevent OS accessibility sizes from breaking button bounds
+      builder: (context, child) {
+        final mediaQueryData = MediaQuery.of(context);
+        final clampedTextScaler = mediaQueryData.textScaler.clamp(
+          minScaleFactor: 0.85,
+          maxScaleFactor: 1.15,
+        );
+        return MediaQuery(
+          data: mediaQueryData.copyWith(textScaler: clampedTextScaler),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }

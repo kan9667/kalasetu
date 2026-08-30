@@ -3,31 +3,31 @@ import 'app_colors.dart';
 import 'app_text_styles.dart';
 import 'app_spacing.dart';
 
-/// Centralized theme configuration for KalaSetu app
+/// Centralized theme configuration for ArtisanLink
 class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
 
-      // Color scheme
+      // Color scheme — built from the earthy ArtisanLink palette
       colorScheme: ColorScheme.light(
         primary: AppColors.terracotta,
         onPrimary: AppColors.textOnPrimary,
-        primaryContainer: AppColors.terracottaLight,
+        primaryContainer: AppColors.plasterDark,
         onPrimaryContainer: AppColors.terracottaDark,
 
-        secondary: AppColors.indigo,
+        secondary: AppColors.oak,
         onSecondary: AppColors.textOnPrimary,
-        secondaryContainer: AppColors.indigoLight,
-        onSecondaryContainer: AppColors.indigoDark,
+        secondaryContainer: AppColors.plasterDark,
+        onSecondaryContainer: AppColors.charcoal,
 
-        tertiary: AppColors.turmeric,
+        tertiary: AppColors.mustard,
         onTertiary: AppColors.textPrimary,
-        tertiaryContainer: AppColors.turmericLight,
-        onTertiaryContainer: AppColors.turmericDark,
+        tertiaryContainer: AppColors.plasterDark,
+        onTertiaryContainer: AppColors.charcoal,
 
-        error: AppColors.error,
+        error: AppColors.brick,
         onError: AppColors.textOnPrimary,
 
         surface: AppColors.surface,
@@ -58,9 +58,10 @@ class AppTheme {
         labelSmall: AppTextStyles.labelSmall,
       ),
 
-      // AppBar
+      // AppBar — flat, matches the background so it doesn't feel like a
+      // separate "app chrome" layer
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.surface,
+        backgroundColor: AppColors.background,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         centerTitle: false,
@@ -71,12 +72,13 @@ class AppTheme {
         ),
       ),
 
-      // Card
+      // Card — flat with a thin oak border instead of a Material shadow
       cardTheme: CardThemeData(
         color: AppColors.surface,
-        elevation: AppElevation.low,
+        elevation: AppElevation.none,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.card),
+          side: const BorderSide(color: AppColors.oak, width: 0.6),
         ),
         margin: const EdgeInsets.symmetric(
           horizontal: AppSpacing.screenPadding,
@@ -84,7 +86,7 @@ class AppTheme {
         ),
       ),
 
-      // Elevated Button
+      // Elevated Button — the single dominant primary action per screen
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.terracotta,
@@ -97,15 +99,15 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.button),
           ),
-          elevation: AppElevation.low,
+          elevation: AppElevation.none,
           textStyle: AppTextStyles.labelLarge,
         ),
       ),
 
-      // Outlined Button
+      // Outlined Button — secondary action, visually subordinate
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.terracotta,
+          foregroundColor: AppColors.charcoal,
           minimumSize: const Size(double.infinity, AppSpacing.minTouchTarget),
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
@@ -115,8 +117,8 @@ class AppTheme {
             borderRadius: BorderRadius.circular(AppRadii.button),
           ),
           side: const BorderSide(
-            color: AppColors.terracotta,
-            width: 2,
+            color: AppColors.oak,
+            width: 1.5,
           ),
           textStyle: AppTextStyles.labelLarge,
         ),
@@ -143,37 +145,37 @@ class AppTheme {
           vertical: AppSpacing.md,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.md),
+          borderRadius: BorderRadius.circular(AppRadii.lg),
           borderSide: const BorderSide(
-            color: AppColors.border,
+            color: AppColors.oak,
             width: 1.5,
           ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.md),
+          borderRadius: BorderRadius.circular(AppRadii.lg),
           borderSide: const BorderSide(
-            color: AppColors.border,
+            color: AppColors.oak,
             width: 1.5,
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.md),
+          borderRadius: BorderRadius.circular(AppRadii.lg),
           borderSide: const BorderSide(
             color: AppColors.terracotta,
             width: 2,
           ),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.md),
+          borderRadius: BorderRadius.circular(AppRadii.lg),
           borderSide: const BorderSide(
-            color: AppColors.error,
+            color: AppColors.brick,
             width: 1.5,
           ),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.md),
+          borderRadius: BorderRadius.circular(AppRadii.lg),
           borderSide: const BorderSide(
-            color: AppColors.error,
+            color: AppColors.brick,
             width: 2,
           ),
         ),
@@ -184,25 +186,27 @@ class AppTheme {
           color: AppColors.textTertiary,
         ),
         errorStyle: AppTextStyles.bodySmall.copyWith(
-          color: AppColors.error,
+          color: AppColors.brick,
         ),
       ),
 
-      // Chip
+      // Chip — used for language chips, filter chips, keyword tags
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surfaceVariant,
-        selectedColor: AppColors.terracottaLight,
-        labelStyle: AppTextStyles.labelSmall,
+        selectedColor: AppColors.terracotta,
+        labelStyle: AppTextStyles.labelSmall.copyWith(color: AppColors.textPrimary),
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: AppSpacing.sm,
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.chip),
+          side: const BorderSide(color: AppColors.oak, width: 0.6),
         ),
       ),
 
-      // Bottom Navigation Bar
+      // Bottom Navigation Bar — 4 tabs, center "New Product" visually emphasized
+      // at the widget level (handled in the nav bar widget, not here)
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.surface,
         selectedItemColor: AppColors.terracotta,
@@ -210,14 +214,14 @@ class AppTheme {
         selectedLabelStyle: AppTextStyles.labelSmall,
         unselectedLabelStyle: AppTextStyles.labelSmall,
         type: BottomNavigationBarType.fixed,
-        elevation: AppElevation.medium,
+        elevation: AppElevation.subtle,
       ),
 
       // Floating Action Button
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: AppColors.terracotta,
         foregroundColor: AppColors.textOnPrimary,
-        elevation: AppElevation.medium,
+        elevation: AppElevation.subtle,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.lg),
         ),
@@ -236,18 +240,18 @@ class AppTheme {
       // Bottom Sheet
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(AppRadii.bottomSheet),
           ),
         ),
         modalBackgroundColor: AppColors.surface,
-        modalElevation: AppElevation.high,
+        modalElevation: AppElevation.medium,
       ),
 
-      // Snackbar
+      // Snackbar — calm, never alarming (used for routine sync status too)
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.indigo,
+        backgroundColor: AppColors.charcoal,
         contentTextStyle: AppTextStyles.bodyMedium.copyWith(
           color: AppColors.textOnPrimary,
         ),

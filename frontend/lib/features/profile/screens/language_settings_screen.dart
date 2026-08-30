@@ -5,32 +5,24 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/language_picker.dart';
 import '../../../core/providers/app_providers.dart';
 
 class LanguageSettingsScreen extends ConsumerWidget {
   const LanguageSettingsScreen({super.key});
-
-  static const List<Map<String, String>> languages = [
-    {'code': 'en', 'name': 'English', 'native': 'English'},
-    {'code': 'hi', 'name': 'Hindi', 'native': 'हिन्दी'},
-    {'code': 'ta', 'name': 'Tamil', 'native': 'தமிழ்'},
-    {'code': 'bn', 'name': 'Bengali', 'native': 'বাংলা'},
-  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentCode = context.locale.languageCode;
 
     return AppScaffold(
-      appBar: AppBar(
-        title: Text('language_settings_title'.tr()),
-      ),
+      title: 'language_settings_title'.tr(),
       body: ListView.separated(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
-        itemCount: languages.length,
+        itemCount: LanguagePicker.languages.length,
         separatorBuilder: (c, i) => const Divider(),
         itemBuilder: (context, index) {
-          final lang = languages[index];
+          final lang = LanguagePicker.languages[index];
           final isSelected = currentCode == lang['code'];
 
           return ListTile(
@@ -43,7 +35,6 @@ class LanguageSettingsScreen extends ConsumerWidget {
               final newLocale = Locale(lang['code']!);
               await context.setLocale(newLocale);
 
-              // Update user profile preference
               final currentProfile = ref.read(userProfileProvider);
               ref.read(userProfileProvider.notifier).updateProfile(
                 currentProfile.copyWith(preferredLanguage: lang['code']!),
