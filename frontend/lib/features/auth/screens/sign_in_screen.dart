@@ -52,21 +52,26 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             children: [
               const SizedBox(height: AppSpacing.xl),
 
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: const BoxDecoration(
-                  color: AppColors.terracotta,
-                  shape: BoxShape.circle,
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(AppRadii.lg),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.terracotta.withValues(alpha: 0.08),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    width: 160,
+                    fit: BoxFit.contain,
+                  ),
                 ),
-                child: const Icon(Icons.palette, size: 48, color: AppColors.textOnPrimary),
-              ),
-
-              const SizedBox(height: AppSpacing.lg),
-
-              Text(
-                'KalaSetu',
-                style: AppTextStyles.displayLarge.copyWith(color: AppColors.terracotta),
-                textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: AppSpacing.sm),
@@ -111,12 +116,47 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
               AppButton(
                 label: 'continue_btn'.tr(),
+                icon: Icons.login,
                 onPressed: _handleContinue,
+                isCompact: isCompact,
+              ),
+
+              const SizedBox(height: AppSpacing.lg),
+
+              // Divider with 'OR'
+              Row(
+                children: [
+                  const Expanded(child: Divider(color: AppColors.border)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                    child: Text(
+                      'new_artisan_prompt'.tr(),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: Divider(color: AppColors.border)),
+                ],
+              ),
+
+              const SizedBox(height: AppSpacing.lg),
+
+              // Register as New Artisan Button
+              AppButton(
+                label: 'new_artisan_register_btn'.tr(),
+                type: AppButtonType.secondary,
+                icon: Icons.person_add_alt_1,
+                onPressed: () {
+                  context.pushNamed(AppRouteConstants.register);
+                },
                 isCompact: isCompact,
               ),
 
               const SizedBox(height: AppSpacing.md),
 
+              // NGO Coordinator Assist Button
               AppButton(
                 label: 'ngo_assist_btn'.tr(),
                 type: AppButtonType.outlined,

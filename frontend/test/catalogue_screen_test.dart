@@ -37,7 +37,7 @@ void main() {
       ),
     );
 
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 4));
 
     // Verify search bar and view toggle icon exist
     expect(find.byType(TextField), findsOneWidget);

@@ -5,6 +5,7 @@ import 'app_route_constants.dart';
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/auth/screens/language_screen.dart';
 import '../../features/auth/screens/sign_in_screen.dart';
+import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/ngo_auth_screen.dart';
 import '../../features/auth/screens/otp_screen.dart';
 import '../../features/home/screens/home_shell.dart';
@@ -56,6 +57,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       final isOnSplash = state.matchedLocation == '/splash';
       final isOnLanguage = state.matchedLocation == '/language';
       final isOnAuth = state.matchedLocation == '/sign-in' ||
+                        state.matchedLocation == '/register' ||
                         state.matchedLocation == '/otp' ||
                         state.matchedLocation == '/ngo-auth';
 
@@ -102,6 +104,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/sign-in',
         name: AppRouteConstants.signIn,
         builder: (context, state) => const SignInScreen(),
+      ),
+      GoRoute(
+        path: '/register',
+        name: AppRouteConstants.register,
+        builder: (context, state) => const RegisterScreen(),
       ),
       GoRoute(
         path: '/ngo-auth',
