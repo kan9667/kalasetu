@@ -35,8 +35,13 @@ E-commerce Canvas (centered, consistent size)
     ↓
 Resize + Compression
     ↓
-Final E-commerce Image
-```
+---
+
+## Deployment & Model Caching Note
+
+> [!NOTE]
+> **Model Weight Caching in Multi-Worker Environments:**
+> The background removal step relies on neural segmentation models (`rembg` / `bria-rmbg` or `u2net`), which are loaded into RAM upon first invocation (~1GB footprint). If the backend is deployed with multiple workers or replicas (e.g. `uvicorn --workers 4`), each worker process will independently initialize and cache its own model instance on its first request.
 
 ---
 

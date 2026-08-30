@@ -26,3 +26,8 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Backend runtime files & uploads
+backend/uploads/
+*.db
+*.sqlite3

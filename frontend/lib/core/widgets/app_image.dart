@@ -36,15 +36,27 @@ class AppImage extends StatelessWidget {
       return fallback;
     }
 
-    final isNetwork = imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
-    final isBlobOrLocalhost = imageUrl.startsWith('blob:') ||
-        imageUrl.startsWith('http://localhost') ||
-        imageUrl.startsWith('http://127.0.0.1');
+    String resolvedUrl = imageUrl;
+    if (resolvedUrl.startsWith('/uploads/')) {
+      final host = (!kIsWeb && Platform.isAndroid) ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
+      resolvedUrl = '$host$resolvedUrl';
+    } else if (!kIsWeb && Platform.isAndroid) {
+      if (resolvedUrl.startsWith('http://localhost:8000')) {
+        resolvedUrl = resolvedUrl.replaceFirst('http://localhost:8000', 'http://10.0.2.2:8000');
+      } else if (resolvedUrl.startsWith('http://127.0.0.1:8000')) {
+        resolvedUrl = resolvedUrl.replaceFirst('http://127.0.0.1:8000', 'http://10.0.2.2:8000');
+      }
+    }
 
-    // Local file from camera/gallery capture — the common case for
-    // ProductListing.photoPath / aiEnhancedPhotoPath.
+    final isNetwork = resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://');
+    final isBlobOrLocalhost = resolvedUrl.startsWith('blob:') ||
+        resolvedUrl.startsWith('http://localhost') ||
+        resolvedUrl.startsWith('http://127.0.0.1') ||
+        resolvedUrl.startsWith('http://10.0.2.2');
+
+    // Local file from camera/gallery capture
     if (!kIsWeb && !isNetwork && !isBlobOrLocalhost) {
-      final file = File(imageUrl);
+      final file = File(resolvedUrl);
       if (file.existsSync()) {
         return Image.file(
           file,
@@ -59,17 +71,20 @@ class AppImage extends StatelessWidget {
 
     if (isBlobOrLocalhost) {
       return Image.network(
-        imageUrl,
+        resolvedUrl,
         width: width,
         height: height,
         fit: fit,
-        errorBuilder: (context, error, stackTrace) => fallback,
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('AppImage failed to load network image: $resolvedUrl ($error)');
+          return fallback;
+        },
       );
     }
 
     if (isNetwork) {
       return CachedNetworkImage(
-        imageUrl: imageUrl,
+        imageUrl: resolvedUrl,
         width: width,
         height: height,
         fit: fit,
@@ -84,7 +99,7 @@ class AppImage extends StatelessWidget {
     }
 
     return Image.file(
-      File(imageUrl),
+      File(resolvedUrl),
       width: width,
       height: height,
       fit: fit,

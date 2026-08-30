@@ -49,6 +49,7 @@ void main() {
     );
 
     await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
 
     // Verify initial step title and capture icons exist
     expect(find.byIcon(Icons.camera_alt), findsWidgets);

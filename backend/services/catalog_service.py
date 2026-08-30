@@ -5,10 +5,13 @@ Provides AI-driven voice transcription (STT) and structured bilingual
 listing generation (English + Hindi) using Gemini.
 """
 
+import os
+import sys
 import json
 import logging
 from pathlib import Path
 from typing import Optional
+from starlette.concurrency import run_in_threadpool
 from google import genai
 from google.genai import types
 
@@ -19,15 +22,60 @@ from ..models.schemas import (
     ListingGenerateResponse,
 )
 
+# Note on Model Caching:
+# In multi-worker or multi-replica deployments (e.g. uvicorn with multiple workers),
+# each worker process will independently load and cache the rembg/U2-Net neural model (~1GB RAM)
+# on its first image enhancement request. This is a known architectural characteristic.
+
+# Setup path to import ML image_pipeline
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+_ML_IMAGE_DIR = _PROJECT_ROOT / "ML" / "image_pipeline"
+if str(_ML_IMAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(_ML_IMAGE_DIR))
+
+try:
+    from ML.image_pipeline.enhancer import enhance_image as run_ml_enhancer
+except ImportError:
+    try:
+        from enhancer import enhance_image as run_ml_enhancer
+    except ImportError:
+        run_ml_enhancer = None
+
 logger = logging.getLogger(__name__)
 
 
 class CatalogService:
-    """Provides speech-to-text and bilingual catalog listing generation."""
+    """Provides speech-to-text, image enhancement, and bilingual catalog listing generation."""
 
     def __init__(self):
         self.settings = get_settings()
-        self.client = genai.Client(api_key=self.settings.gemini_api_key)
+        self.client = genai.Client(api_key=self.settings.gemini_api_key) if self.settings.gemini_api_key else None
+
+    async def enhance_product_photo(
+        self,
+        input_path: str,
+        output_path: Optional[str] = None,
+    ) -> str:
+        """
+        Run the 11-stage AI image enhancement pipeline in a threadpool to prevent
+        blocking FastAPI's async event loop.
+        """
+        if run_ml_enhancer is None:
+            logger.warning("ML image enhancer is not available. Returning original path.")
+            return input_path
+
+        try:
+            enhanced_path = await run_in_threadpool(
+                run_ml_enhancer,
+                input_path=input_path,
+                output_path=output_path,
+            )
+            return enhanced_path
+        except Exception as e:
+            logger.error("Image enhancement execution failed: %s", e)
+            raise e
 
     async def transcribe_audio(
         self,
