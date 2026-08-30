@@ -1,0 +1,9 @@
+# Set default behavior to automatically normalize line endings (LF in git repo)
+* text=auto
+
+# Explicitly declare text files you always want to have LF line endings
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf

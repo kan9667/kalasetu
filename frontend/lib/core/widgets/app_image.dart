@@ -83,6 +83,12 @@ class AppImage extends StatelessWidget {
       );
     }
 
-    return fallback;
+    return Image.file(
+      File(imageUrl),
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => fallback,
+    );
   }
 }

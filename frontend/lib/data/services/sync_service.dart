@@ -12,6 +12,7 @@ class SyncService {
   
   final ValueNotifier<SyncState> syncState = ValueNotifier(SyncState.idle);
   final ValueNotifier<bool> isOnline = ValueNotifier(true);
+  bool _isSyncing = false;
 
   SyncService({
     required this.productRepository,
@@ -21,7 +22,12 @@ class SyncService {
   }
 
   void _initConnectivityListener() {
-    _connectivity.checkConnectivity().then(_updateConnectionStatus);
+    _connectivity.checkConnectivity().then((results) async {
+      _updateConnectionStatus(results);
+      if (isOnline.value) {
+        await triggerSync();
+      }
+    });
     _subscription = _connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
   }
 
@@ -37,8 +43,9 @@ class SyncService {
   }
 
   Future<int> triggerSync() async {
-    if (!isOnline.value) return 0;
+    if (!isOnline.value || _isSyncing) return 0;
 
+    _isSyncing = true;
     syncState.value = SyncState.syncing;
     try {
       final count = await productRepository.syncPendingQueue();
@@ -51,6 +58,8 @@ class SyncService {
       debugPrint('SyncService error during drain: $e');
       syncState.value = SyncState.error;
       return 0;
+    } finally {
+      _isSyncing = false;
     }
   }
 

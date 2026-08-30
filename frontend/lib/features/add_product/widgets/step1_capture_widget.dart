@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/offline_sync/models/queue_item.dart';
 
 class Step1CaptureWidget extends ConsumerStatefulWidget {
   const Step1CaptureWidget({super.key});
@@ -25,7 +28,7 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
         maxWidth: 1200,
       );
       if (picked != null) {
-        await ref.read(addProductFlowProvider.notifier).setImage(picked.path);
+        await ref.read(addProductFlowProvider.notifier).queueImage(File(picked.path));
       }
     } catch (_) {}
   }

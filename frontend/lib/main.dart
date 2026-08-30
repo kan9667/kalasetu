@@ -5,6 +5,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'app.dart';
 import 'data/models/product.dart';
 import 'data/models/user_profile.dart';
+import 'core/offline_sync/offline_sync_service.dart';
+import 'core/offline_sync/services/upload_api.dart';
 
 Future<Box<T>> _openSafeBox<T>(String boxName) async {
   try {
@@ -40,6 +42,11 @@ void main() async {
   await _openSafeBox('auth_box');
   await _openSafeBox('draft_box');
   await _openSafeBox('app_settings_box');
+
+  await OfflineSyncService.instance.init(
+    uploadApi: MockUploadApi(),
+    healthCheckUrl: null,
+  );
 
   runApp(
     EasyLocalization(

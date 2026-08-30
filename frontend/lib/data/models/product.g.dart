@@ -23,7 +23,7 @@ class ProductAdapter extends TypeAdapter<Product> {
       description: fields[3] as String,
       descriptionHi: fields[4] as String,
       price: fields[5] as double,
-      photoPath: fields[6] as String,
+      imageUrl: fields[6] as String,
       category: fields[7] as String,
       tags: (fields[8] as List).cast<String>(),
       status: fields[9] as ProductStatus,

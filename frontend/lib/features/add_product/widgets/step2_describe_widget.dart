@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/offline_sync/models/queue_item.dart';
 
 const double _kLowConfidenceThreshold = 0.75;
 
@@ -23,6 +27,7 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
   late AnimationController _pulseController;
   final TextEditingController _textController = TextEditingController();
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioRecorder _recorder = AudioRecorder();
   bool _isPlayingAudio = false;
 
   @override
@@ -39,37 +44,64 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
     _pulseController.dispose();
     _textController.dispose();
     _audioPlayer.dispose();
+    _recorder.dispose();
     super.dispose();
   }
 
   Future<void> _toggleRecording() async {
     if (_isRecording) {
+      // Stop recording and persist the file through the offline queue.
       setState(() => _isRecording = false);
-      String localeCode = 'en';
-      try {
-        localeCode = context.locale.languageCode;
-      } catch (_) {}
-      await ref.read(addProductFlowProvider.notifier).processVoiceRecording(
-            audioPath: 'mock_audio_rec.mp3',
-            languageCode: localeCode,
-          );
-      final draft = ref.read(addProductFlowProvider);
-      _textController.text = draft.voiceTranscript;
+      final path = await _recorder.stop();
+      if (path != null) {
+        await ref.read(addProductFlowProvider.notifier).queueVoiceRecording(File(path));
+      }
     } else {
+      if (!await _recorder.hasPermission()) return;
+      final appDir = await getApplicationDocumentsDirectory();
+      final recordingDir = Directory('${appDir.path}/offline_sync_recordings');
+      await recordingDir.create(recursive: true);
+      final path = '${recordingDir.path}/voice-${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc),
+        path: path,
+      );
       setState(() => _isRecording = true);
     }
   }
 
   Future<void> _playReplayAudio() async {
     try {
+      final draft = ref.read(addProductFlowProvider);
+      final localAudioPath = draft.recordedAudioPath;
+
+      if (localAudioPath.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No recorded audio to replay'.tr())),
+        );
+        return;
+      }
+
       setState(() => _isPlayingAudio = true);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('listening'.tr())),
       );
-      await Future.delayed(const Duration(seconds: 2));
-      if (mounted) setState(() => _isPlayingAudio = false);
+
+      final player = _audioPlayer;
+      await player.setFilePath(localAudioPath);
+      await player.play();
+      player.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.completed && mounted) {
+          setState(() => _isPlayingAudio = false);
+        }
+      });
     } catch (e) {
-      if (mounted) setState(() => _isPlayingAudio = false);
+      if (mounted) {
+        setState(() => _isPlayingAudio = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to play recording: $e')),
+        );
+      }
     }
   }
 
@@ -78,17 +110,15 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
     if (text.isNotEmpty) {
       ref.read(addProductFlowProvider.notifier).setManualDescription(text);
     }
-    final isOnline = ref.read(connectivityProvider).value ?? true;
-    if (isOnline) {
-      String localeCode = 'en';
-      try {
-        localeCode = context.locale.languageCode;
-      } catch (_) {}
-      ref.read(addProductFlowProvider.notifier).generateAiListing(localeCode);
+    final draft = ref.read(addProductFlowProvider);
+    final hasManualDescription = text.isNotEmpty || draft.manualDescription.isNotEmpty;
+    final hasRecordedAudio = draft.recordedAudioPath.isNotEmpty;
+    final hasTranscript = draft.voiceTranscript.isNotEmpty;
+    final voiceReady = hasRecordedAudio || hasTranscript || draft.voiceQueueItemId == null ||
+        draft.voiceQueueStatus == QueueStatus.completed;
+    if (hasManualDescription || voiceReady) {
+      ref.read(addProductFlowProvider.notifier).nextStep();
     }
-    // If offline, we skip generation here — Step 3 will detect there's no
-    // listing yet and wait for connectivity to come back on its own.
-    ref.read(addProductFlowProvider.notifier).nextStep();
   }
 
   @override
@@ -274,14 +304,7 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
                     icon: Icons.refresh,
                     onPressed: () {
                       _textController.clear();
-                      String localeCode = 'en';
-                      try {
-                        localeCode = context.locale.languageCode;
-                      } catch (_) {}
-                      ref.read(addProductFlowProvider.notifier).processVoiceRecording(
-                            audioPath: '',
-                            languageCode: localeCode,
-                          );
+                      ref.read(addProductFlowProvider.notifier).clearVoiceRecording();
                     },
                   ),
                 ),
@@ -291,19 +314,21 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
 
           const SizedBox(height: 24),
 
-          ElevatedButton.icon(
-            onPressed: _onNext,
-            icon: const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
-            label: Text(
-              'sounds_right'.tr(),
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFC86D51),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 0,
-            ),
+          AppButton(
+            label: 'sounds_right'.tr(),
+            icon: Icons.arrow_forward,
+            onPressed: () {
+              final draft = ref.read(addProductFlowProvider);
+              final hasManualDescription = _textController.text.trim().isNotEmpty ||
+                  draft.manualDescription.isNotEmpty;
+              final hasRecordedAudio = draft.recordedAudioPath.isNotEmpty;
+              final hasTranscript = draft.voiceTranscript.isNotEmpty;
+              final voiceReady = hasRecordedAudio || hasTranscript ||
+                  draft.voiceQueueItemId == null || draft.voiceQueueStatus == QueueStatus.completed;
+              if (hasManualDescription || voiceReady) {
+                _onNext();
+              }
+            },
           ),
           const SizedBox(height: 16),
         ],
