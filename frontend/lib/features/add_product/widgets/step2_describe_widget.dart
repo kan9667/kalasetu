@@ -12,6 +12,8 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/offline_sync/models/queue_item.dart';
 
+const double _kLowConfidenceThreshold = 0.75;
+
 class Step2DescribeWidget extends ConsumerStatefulWidget {
   const Step2DescribeWidget({super.key});
 
@@ -134,7 +136,10 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
               const SizedBox(height: AppSpacing.lg),
               Text(
                 'Transcribing audio & analyzing craft details...',
-                style: AppTextStyles.headlineMedium.copyWith(color: AppColors.terracotta),
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: AppColors.terracotta,
+                  fontWeight: FontWeight.w600,
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -144,19 +149,19 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.screenPadding),
+      physics: const ClampingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('describe_title'.tr(), style: AppTextStyles.headlineLarge),
-          const SizedBox(height: AppSpacing.xs),
+          Text('describe_title'.tr(), style: AppTextStyles.headlineMedium),
+          const SizedBox(height: 4),
           Text(
             'describe_subtitle'.tr(),
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: 20),
 
-          // Tap to Record Mic Button
           Center(
             child: GestureDetector(
               onTap: _toggleRecording,
@@ -167,17 +172,17 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
                   return Transform.scale(
                     scale: scale,
                     child: Container(
-                      width: 130,
-                      height: 130,
+                      width: 120,
+                      height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _isRecording ? AppColors.error : AppColors.terracotta,
+                        color: _isRecording ? const Color(0xFFB34A38) : const Color(0xFFC86D51),
                         boxShadow: [
                           BoxShadow(
-                            color: (_isRecording ? AppColors.error : AppColors.terracotta)
-                                .withValues(alpha: 0.4),
-                            blurRadius: _isRecording ? 20 : 10,
-                            spreadRadius: _isRecording ? 8 : 2,
+                            color: (_isRecording ? const Color(0xFFB34A38) : const Color(0xFFC86D51))
+                                .withOpacity(0.35),
+                            blurRadius: _isRecording ? 18 : 8,
+                            spreadRadius: _isRecording ? 6 : 1,
                           ),
                         ],
                       ),
@@ -186,14 +191,16 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
                         children: [
                           Icon(
                             _isRecording ? Icons.stop : Icons.mic,
-                            size: 48,
-                            color: AppColors.textOnPrimary,
+                            size: 42,
+                            color: Colors.white,
                           ),
-                          const SizedBox(height: AppSpacing.xs),
+                          const SizedBox(height: 4),
                           Text(
                             _isRecording ? 'stop_recording'.tr() : 'tap_to_speak'.tr(),
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.textOnPrimary,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -206,67 +213,93 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
           ),
 
           if (_isRecording) ...[
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: 12),
             Text(
               'recording'.tr(),
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.error,
+              style: const TextStyle(
+                color: Color(0xFFB34A38),
                 fontWeight: FontWeight.bold,
+                fontSize: 14,
               ),
               textAlign: TextAlign.center,
             ),
           ],
 
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: 20),
 
-          // Side-by-side First-Class Text Input
           Row(
             children: [
-              const Expanded(child: Divider()),
+              const Expanded(child: Divider(color: Color(0xFFE2D7C7))),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
                 child: Text(
                   'or_type_description'.tr(),
-                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF7A6E63), fontWeight: FontWeight.w500),
                 ),
               ),
-              const Expanded(child: Divider()),
+              const Expanded(child: Divider(color: Color(0xFFE2D7C7))),
             ],
           ),
 
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: 16),
 
           TextField(
             controller: _textController,
             maxLines: 4,
-            style: AppTextStyles.bodyLarge,
+            style: const TextStyle(fontSize: 15, color: Color(0xFF3F342B)),
             decoration: InputDecoration(
               hintText: 'type_desc_hint'.tr(),
               labelText: 'transcript_label'.tr(),
               alignLabelWithHint: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              filled: true,
+              fillColor: const Color(0xFFFAF7F2),
             ),
             onChanged: (val) {
               ref.read(addProductFlowProvider.notifier).setManualDescription(val);
             },
           ),
 
-          if (draft.voiceTranscript.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.md),
+          if (draft.voiceTranscript.isNotEmpty && draft.transcriptionConfidence < _kLowConfidenceThreshold) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFBF4E6),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE6CD9A)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Color(0xFFB07D2B), size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Some words might need review. You can edit the text above.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF5A4D41)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
+          if (draft.voiceTranscript.isNotEmpty) ...[
+            const SizedBox(height: 14),
             Row(
               children: [
                 Expanded(
                   child: AppButton(
-                    label: 'replay_audio'.tr(),
+                    label: 'Replay',
                     type: AppButtonType.outlined,
                     icon: _isPlayingAudio ? Icons.volume_up : Icons.play_arrow,
                     onPressed: _playReplayAudio,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: 12),
                 Expanded(
                   child: AppButton(
-                    label: 're_record'.tr(),
+                    label: 'Re-record',
                     type: AppButtonType.secondary,
                     icon: Icons.refresh,
                     onPressed: () {
@@ -279,7 +312,7 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
             ),
           ],
 
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: 24),
 
           AppButton(
             label: 'sounds_right'.tr(),
@@ -297,6 +330,7 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
               }
             },
           ),
+          const SizedBox(height: 16),
         ],
       ),
     );

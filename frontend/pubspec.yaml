@@ -66,6 +66,7 @@ flutter:
     - assets/icons/
     - assets/lottie/
     - assets/translations/
-  
 dependency_overrides:
+  record_platform_interface: 1.1.0
+  record_linux: 0.7.2
   permission_handler_windows: ^0.2.2

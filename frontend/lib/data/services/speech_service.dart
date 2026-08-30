@@ -1,4 +1,12 @@
 import 'dart:async';
+import 'dart:math';
+
+class TranscriptionResult {
+  final String transcript;
+  final double confidence; // 0.0–1.0
+
+  const TranscriptionResult({required this.transcript, required this.confidence});
+}
 
 class AiListingSuggestion {
   final String titleEn;
@@ -19,7 +27,7 @@ class AiListingSuggestion {
 }
 
 abstract class SpeechService {
-  Future<String> transcribeAudio({
+  Future<TranscriptionResult> transcribeAudio({
     required String audioPath,
     required String languageCode,
   });
@@ -32,24 +40,28 @@ abstract class SpeechService {
 }
 
 class MockSpeechService implements SpeechService {
+  final Random _random = Random();
+
   @override
-  Future<String> transcribeAudio({
+  Future<TranscriptionResult> transcribeAudio({
     required String audioPath,
     required String languageCode,
   }) async {
     await Future.delayed(const Duration(milliseconds: 1200));
 
-    switch (languageCode) {
-      case 'hi':
-        return 'यह मिट्टी का हस्तनिर्मित सुराहीदार फूलदान है, जिसे प्राकृतिक लाल मिट्टी से चाक पर बनाया गया है। इस पर पारंपरिक मधुबनी शैली के पुष्प डिजाइन उकेरे गए हैं।';
-      case 'ta':
-        return 'இது பாரம்பரிய கைவினை மண் பானை, இயற்கை களிமண்ணால் சக்கரத்தில் செய்யப்பட்டது. பாரம்பரிய கைவினை வடிவமைப்புடன் அழகாக மெருகூட்டப்பட்டது.';
-      case 'bn':
-        return 'এটি ঐতিহ্যবাহী হাতে তৈরি মাটির ফুলদানি, প্রাকৃতিক পোড়ামাটির ওপর সুন্দর নকশা খোদাই করা হয়েছে।';
-      case 'en':
-      default:
-        return 'This is a handcrafted terracotta floral vase sculpted on a traditional potter\'s wheel using natural river clay, with etched folk motifs and organic earthen polish.';
-    }
+    final transcript = switch (languageCode) {
+      'hi' => 'यह मिट्टी का हस्तनिर्मित सुराहीदार फूलदान है, जिसे प्राकृतिक लाल मिट्टी से चाक पर बनाया गया है। इस पर पारंपरिक मधुबनी शैली के पुष्प डिजाइन उकेरे गए हैं।',
+      'ta' => 'இது பாரம்பரிய கைவினை மண் பானை, இயற்கை களிமண்ணால் சக்கரத்தில் செய்யப்பட்டது. பாரம்பரிய கைவினை வடிவமைப்புடன் அழகாக மெருகூட்டப்பட்டது.',
+      'bn' => 'এটি ঐতিহ্যবাহী হাতে তৈরি মাটির ফুলদানি, প্রাকৃতিক পোড়ামাটির ওপর সুন্দর নকশা খোদাই করা হয়েছে।',
+      _ => 'This is a handcrafted terracotta floral vase sculpted on a traditional potter\'s wheel using natural river clay, with etched folk motifs and organic earthen polish.',
+    };
+
+    // Simulate real-world STT confidence variance — occasionally low, so the
+    // "try re-recording in a quiet place" hint actually gets exercised.
+    // Replace with the real API's confidence field later.
+    final confidence = 0.6 + _random.nextDouble() * 0.4; // 0.60–1.00
+
+    return TranscriptionResult(transcript: transcript, confidence: confidence);
   }
 
   @override
@@ -60,7 +72,6 @@ class MockSpeechService implements SpeechService {
   }) async {
     await Future.delayed(const Duration(milliseconds: 1300));
 
-    // Determine craft category and bilingual content based on transcript keywords
     final lower = transcript.toLowerCase();
 
     if (lower.contains('silk') || lower.contains('textile') || lower.contains('सिल्क') || lower.contains('दुपट्टा') || categoryHint == 'Textiles') {
@@ -82,7 +93,6 @@ class MockSpeechService implements SpeechService {
         tags: ['woodwork', 'sheesham', 'brass-inlay', 'handcarved', 'home-decor'],
       );
     } else {
-      // Default to Terracotta Pottery
       return const AiListingSuggestion(
         titleEn: 'Handcrafted Terracotta Ceramic Floral Vase with Folk Etchings',
         titleHi: 'लोक नक्काशीदार हस्तनिर्मित मिट्टी का सजावटी फूलदान',

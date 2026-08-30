@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/widgets/app_button.dart';
 import '../../../core/providers/app_providers.dart';
 
 class Step4PricingWidget extends ConsumerStatefulWidget {
@@ -15,288 +13,272 @@ class Step4PricingWidget extends ConsumerStatefulWidget {
 }
 
 class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
-  final TextEditingController _materialCostCtrl = TextEditingController();
-  final TextEditingController _laborHoursCtrl = TextEditingController();
-  final TextEditingController _hourlyRateCtrl = TextEditingController();
   bool _showCostBreakdown = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final draft = ref.read(addProductFlowProvider);
-    _materialCostCtrl.text = draft.rawMaterialCost.toStringAsFixed(0);
-    _laborHoursCtrl.text = draft.laborHours.toStringAsFixed(1);
-    _hourlyRateCtrl.text = draft.hourlyRate.toStringAsFixed(0);
-  }
-
-  @override
-  void dispose() {
-    _materialCostCtrl.dispose();
-    _laborHoursCtrl.dispose();
-    _hourlyRateCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onCostChanged() {
-    final mat = double.tryParse(_materialCostCtrl.text) ?? 0.0;
-    final hours = double.tryParse(_laborHoursCtrl.text) ?? 0.0;
-    final rate = double.tryParse(_hourlyRateCtrl.text) ?? 0.0;
-
-    ref.read(addProductFlowProvider.notifier).updateCostParameters(
-          materialCost: mat,
-          laborHours: hours,
-          hourlyRate: rate,
-        );
-  }
 
   @override
   Widget build(BuildContext context) {
     final draft = ref.watch(addProductFlowProvider);
-    bool isHindi = false;
-    try {
-      isHindi = context.locale.languageCode == 'hi';
-    } catch (_) {}
 
-    // Slider bounds: min price cannot drop below ethical floorPrice!
-    final sliderMin = draft.floorPrice;
-    final sliderMax = draft.maxPrice > sliderMin ? draft.maxPrice : (sliderMin + 1000.0);
-    final sliderValue = draft.finalPrice.clamp(sliderMin, sliderMax);
+    final minBound = (draft.floorPrice * 0.5).clamp(100.0, 5000.0);
+    final maxBound = (draft.suggestedPrice * 1.8).clamp(minBound + 200.0, 15000.0);
+    final currentPrice = draft.finalPrice.clamp(minBound, maxBound);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.screenPadding),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              const Icon(Icons.monetization_on, color: AppColors.terracotta),
-              const SizedBox(width: AppSpacing.xs),
-              Text('pricing_title'.tr(), style: AppTextStyles.headlineLarge),
+              const Icon(Icons.monetization_on_outlined, color: Color(0xFFC86D51), size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('pricing_title'.tr(), style: AppTextStyles.headlineMedium),
+              ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: 4),
           Text(
             'pricing_subtitle'.tr(),
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: 20),
 
-          // Price Display Hero Box
+          // Simple, clean price container without gradient
           Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.indigo, AppColors.indigoDark],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(AppRadii.card),
-              boxShadow: const [
-                BoxShadow(
-                  color: AppColors.shadow,
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
-                ),
-              ],
+              color: const Color(0xFFF5EFE6),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFDFD5C6), width: 1.5),
             ),
             child: Column(
               children: [
                 Text(
                   'price_slider_label'.tr(),
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.surfaceVariant),
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF7A6E63), fontWeight: FontWeight.w500),
                 ),
-                const SizedBox(height: AppSpacing.xs),
+                const SizedBox(height: 6),
                 Text(
-                  '₹${draft.finalPrice.toStringAsFixed(0)}',
-                  style: AppTextStyles.displayLarge.copyWith(
-                    color: AppColors.turmeric,
-                    fontSize: 42,
+                  '₹${currentPrice.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontSize: 40,
                     fontWeight: FontWeight.bold,
+                    color: Color(0xFF3F342B),
+                    fontFamily: 'serif',
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
+                const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.stars, color: AppColors.turmericLight, size: 18),
-                    const SizedBox(width: 4),
+                    const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFC86D51)),
+                    const SizedBox(width: 6),
                     Text(
                       '${'suggested_price'.tr()}: ₹${draft.suggestedPrice.toStringAsFixed(0)}',
-                      style: AppTextStyles.labelMedium.copyWith(color: AppColors.textOnPrimary),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFC86D51),
+                      ),
                     ),
                   ],
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 20),
 
-          const SizedBox(height: AppSpacing.lg),
-
-          // Interactive Price Slider (Ethical Hard Floor Guarded)
-          Column(
+          // Muted Gradient Slider: Red -> Green -> Yellow
+          Stack(
+            alignment: Alignment.center,
             children: [
+              Container(
+                height: 8,
+                margin: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFFD47A6A), // Muted red (below fair floor)
+                      Color(0xFF6F9D7C), // Muted green (fair pricing sweet spot)
+                      Color(0xFFE2B866), // Muted yellow/gold (premium margin)
+                    ],
+                  ),
+                ),
+              ),
               SliderTheme(
                 data: SliderTheme.of(context).copyWith(
-                  activeTrackColor: AppColors.terracotta,
-                  inactiveTrackColor: AppColors.border,
-                  thumbColor: AppColors.terracotta,
-                  overlayColor: AppColors.terracottaLight.withValues(alpha: 0.2),
-                  valueIndicatorShape: const PaddleSliderValueIndicatorShape(),
-                  valueIndicatorColor: AppColors.terracotta,
-                  valueIndicatorTextStyle: const TextStyle(color: Colors.white),
+                  trackHeight: 0,
+                  activeTrackColor: Colors.transparent,
+                  inactiveTrackColor: Colors.transparent,
+                  thumbColor: const Color(0xFF3F342B),
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                  overlayColor: const Color(0xFF3F342B).withOpacity(0.12),
                 ),
                 child: Slider(
-                  value: sliderValue,
-                  min: sliderMin,
-                  max: sliderMax,
+                  value: currentPrice,
+                  min: minBound,
+                  max: maxBound,
                   divisions: 50,
-                  label: '₹${sliderValue.toStringAsFixed(0)}',
                   onChanged: (val) {
                     ref.read(addProductFlowProvider.notifier).setFinalPrice(val);
                   },
                 ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${'calculated_floor_price'.tr()}: ₹${draft.floorPrice.toStringAsFixed(0)}',
-                    style: AppTextStyles.labelSmall.copyWith(color: AppColors.error),
-                  ),
-                  Text(
-                    'Max: ₹${sliderMax.toStringAsFixed(0)}',
-                    style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
             ],
           ),
 
-          const SizedBox(height: AppSpacing.lg),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${'calculated_floor_price'.tr()}: ₹${draft.floorPrice.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: currentPrice < draft.floorPrice ? const Color(0xFFB34A38) : const Color(0xFF7A6E63),
+                  ),
+                ),
+                Text(
+                  'Max: ₹${maxBound.toStringAsFixed(0)}',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF7A6E63)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
 
-          // AI Reasoning Card
+          // Pricing Reasoning
           Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.surfaceVariant,
-              borderRadius: BorderRadius.circular(AppRadii.card),
-              border: Border.all(color: AppColors.border),
+              color: const Color(0xFFFAF7F2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE8DFD3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.psychology, color: AppColors.indigo, size: 22),
-                    const SizedBox(width: AppSpacing.xs),
+                    const Icon(Icons.psychology_outlined, size: 18, color: Color(0xFF5A4D41)),
+                    const SizedBox(width: 6),
                     Text(
                       'ai_reasoning'.tr(),
-                      style: AppTextStyles.labelMedium.copyWith(color: AppColors.indigo),
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF5A4D41), fontSize: 13),
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.xs),
+                const SizedBox(height: 6),
                 Text(
-                  isHindi ? draft.pricingReasoningHi : draft.pricingReasoning,
-                  style: AppTextStyles.bodyMedium,
+                  draft.pricingReasoning,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF6F6358), height: 1.4),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 14),
 
-          const SizedBox(height: AppSpacing.md),
-
-          // Expandable Cost Breakdown & Ethical Floor Calculator
-          ExpansionTile(
-            title: Text(
-              'cost_breakdown_toggle'.tr(),
-              style: AppTextStyles.labelMedium.copyWith(color: AppColors.forestGreen),
-            ),
-            leading: const Icon(Icons.shield, color: AppColors.forestGreen),
-            initiallyExpanded: _showCostBreakdown,
-            onExpansionChanged: (val) => setState(() => _showCostBreakdown = val),
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _materialCostCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'raw_materials_cost'.tr(),
-                        prefixText: '₹ ',
-                      ),
-                      onChanged: (val) => _onCostChanged(),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _laborHoursCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: 'labour_hours'.tr(),
-                              suffixText: 'hrs',
-                            ),
-                            onChanged: (val) => _onCostChanged(),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: TextField(
-                            controller: _hourlyRateCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: 'hourly_rate'.tr(),
-                              prefixText: '₹ ',
-                            ),
-                            onChanged: (val) => _onCostChanged(),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.sm),
-                      decoration: BoxDecoration(
-                        color: AppColors.forestGreenLight.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(AppRadii.sm),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.verified, color: AppColors.forestGreen, size: 20),
-                          const SizedBox(width: AppSpacing.xs),
-                          Expanded(
-                            child: Text(
-                              '${'calculated_floor_price'.tr()}: ₹${draft.floorPrice.toStringAsFixed(0)} (Price slider cannot be dragged below this lower bound)',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.forestGreenDark,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+          // Cost Breakdown Accordion
+          InkWell(
+            onTap: () => setState(() => _showCostBreakdown = !_showCostBreakdown),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAF7F2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE8DFD3)),
               ),
-            ],
+              child: Row(
+                children: [
+                  const Icon(Icons.shield_outlined, size: 20, color: Color(0xFF437A57)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'cost_breakdown_toggle'.tr(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF437A57),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _showCostBreakdown ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    color: const Color(0xFF437A57),
+                  ),
+                ],
+              ),
+            ),
           ),
 
-          const SizedBox(height: AppSpacing.xl),
+          if (_showCostBreakdown) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3EDE2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  _CostItem(
+                    label: 'raw_materials_cost'.tr(),
+                    value: '₹${draft.rawMaterialCost.toStringAsFixed(0)}',
+                  ),
+                  const Divider(height: 16),
+                  _CostItem(
+                    label: 'labour_hours'.tr(),
+                    value: '${draft.laborHours} hrs',
+                  ),
+                  const Divider(height: 16),
+                  _CostItem(
+                    label: 'hourly_rate'.tr(),
+                    value: '₹${draft.hourlyRate.toStringAsFixed(0)}/hr',
+                  ),
+                ],
+              ),
+            ),
+          ],
 
-          AppButton(
-            label: 'next'.tr(),
-            icon: Icons.arrow_forward,
-            onPressed: () {
-              ref.read(addProductFlowProvider.notifier).nextStep();
-            },
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => ref.read(addProductFlowProvider.notifier).nextStep(),
+            icon: const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+            label: Text('next'.tr(), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFC86D51),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
           ),
+          const SizedBox(height: 20),
         ],
       ),
+    );
+  }
+}
+
+class _CostItem extends StatelessWidget {
+  final String label;
+  final String value;
+  const _CostItem({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: Color(0xFF6F6358), fontSize: 13)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF3F342B), fontSize: 13)),
+      ],
     );
   }
 }

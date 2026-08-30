@@ -78,7 +78,7 @@ class AppRadii {
   static const double xxl = 24.0;
 
   // Semantic radii
-  static const double button = 12.0;
+  static const double button = 16.0; // was 12 — spec wants 14-20px
   static const double card = 16.0;
   static const double chip = 20.0;
   static const double bottomSheet = 24.0;
