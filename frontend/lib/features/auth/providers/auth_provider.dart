@@ -75,6 +75,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return true;
   }
 
+  Future<void> signInWithCoordinator(String coordinatorId) async {
+    state = state.copyWith(isLoading: true);
+    // Mock: a real implementation would validate coordinatorId against an
+    // NGO-coordinator backend and link the artisan's account through them.
+    await Future.delayed(const Duration(seconds: 1));
+
+    final userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
+    await _authRepository.saveAuthData(userId, ''); // no phone captured in assisted flow
+    state = state.copyWith(
+      isAuthenticated: true,
+      userId: userId,
+      phoneNumber: '',
+      isLoading: false,
+    );
+  }
+
   Future<void> signOut() async {
     await _authRepository.clearAuthData();
     state = const AuthState();

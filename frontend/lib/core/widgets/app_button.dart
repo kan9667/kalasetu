@@ -31,188 +31,139 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final buttonHeight = height ?? (isCompact ? 40.0 : AppSpacing.minTouchTarget);
+    final minButtonHeight = height ?? AppSpacing.minTouchTarget;
 
     if (isLoading) {
-      return SizedBox(
-        width: width ?? double.infinity,
-        height: buttonHeight,
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: width ?? (type == AppButtonType.text ? 0.0 : double.infinity),
+          minHeight: minButtonHeight,
+        ),
         child: Center(
           child: SizedBox(
-            width: 24,
-            height: 24,
+            width: 22,
+            height: 22,
             child: CircularProgressIndicator(
               strokeWidth: 2.5,
               color: type == AppButtonType.primary
-                  ? AppColors.terracotta
-                  : AppColors.indigo,
+                  ? AppColors.textOnPrimary
+                  : (customColor ?? AppColors.terracotta),
             ),
           ),
         ),
       );
     }
 
+    final TextStyle baseTextStyle = isCompact
+        ? AppTextStyles.labelMedium
+        : AppTextStyles.labelLarge;
+
+    final EdgeInsets padding = EdgeInsets.symmetric(
+      horizontal: isCompact ? AppSpacing.md : AppSpacing.lg,
+      vertical: isCompact ? AppSpacing.sm : AppSpacing.md,
+    );
+
+    Widget buildButtonChild({required Color textColor, required Color iconColor}) {
+      if (icon == null) {
+        return Text(
+          label,
+          textAlign: TextAlign.center,
+          style: baseTextStyle.copyWith(color: textColor, height: 1.2),
+        );
+      }
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: isCompact ? 18 : AppSpacing.iconSize, color: iconColor),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: baseTextStyle.copyWith(color: textColor, height: 1.2),
+            ),
+          ),
+        ],
+      );
+    }
+
     Widget button;
-    final textStyle = isCompact
-        ? AppTextStyles.labelMedium.copyWith(color: AppColors.textOnPrimary)
-        : AppTextStyles.labelLarge.copyWith(color: AppColors.textOnPrimary);
 
     switch (type) {
       case AppButtonType.primary:
-        if (icon != null) {
-          button = ElevatedButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: isCompact ? 18 : AppSpacing.iconSize),
-            label: Text(
-              label,
-              style: textStyle,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
+        final Color bgColor = customColor ?? AppColors.terracotta;
+        final Color fgColor = AppColors.textOnPrimary;
+        button = ElevatedButton(
+          onPressed: onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: bgColor,
+            foregroundColor: fgColor,
+            elevation: 0,
+            padding: padding,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md),
             ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: customColor ?? AppColors.terracotta,
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompact ? AppSpacing.md : AppSpacing.lg,
-                vertical: isCompact ? AppSpacing.xs : AppSpacing.md,
-              ),
-            ),
-          );
-        } else {
-          button = ElevatedButton(
-            onPressed: onPressed,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: customColor ?? AppColors.terracotta,
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompact ? AppSpacing.md : AppSpacing.lg,
-                vertical: isCompact ? AppSpacing.xs : AppSpacing.md,
-              ),
-            ),
-            child: Text(
-              label,
-              style: textStyle,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          );
-        }
+          ),
+          child: buildButtonChild(textColor: fgColor, iconColor: fgColor),
+        );
         break;
 
       case AppButtonType.secondary:
-        final secondaryTextStyle = textStyle.copyWith(color: AppColors.textOnPrimary);
-        if (icon != null) {
-          button = ElevatedButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: isCompact ? 18 : AppSpacing.iconSize),
-            label: Text(
-              label,
-              style: secondaryTextStyle,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
+        final Color bgColor = customColor ?? AppColors.charcoal;
+        final Color fgColor = AppColors.textOnPrimary;
+        button = ElevatedButton(
+          onPressed: onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: bgColor,
+            foregroundColor: fgColor,
+            elevation: 0,
+            padding: padding,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md),
             ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: customColor ?? AppColors.indigo,
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompact ? AppSpacing.md : AppSpacing.lg,
-                vertical: isCompact ? AppSpacing.xs : AppSpacing.md,
-              ),
-            ),
-          );
-        } else {
-          button = ElevatedButton(
-            onPressed: onPressed,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: customColor ?? AppColors.indigo,
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompact ? AppSpacing.md : AppSpacing.lg,
-                vertical: isCompact ? AppSpacing.xs : AppSpacing.md,
-              ),
-            ),
-            child: Text(
-              label,
-              style: secondaryTextStyle,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          );
-        }
+          ),
+          child: buildButtonChild(textColor: fgColor, iconColor: fgColor),
+        );
         break;
 
       case AppButtonType.outlined:
-        final outlinedTextStyle = textStyle.copyWith(
-          color: customColor ?? AppColors.terracotta,
+        final Color fgColor = customColor ?? AppColors.charcoal;
+        button = OutlinedButton(
+          onPressed: onPressed,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: fgColor,
+            side: BorderSide(color: customColor ?? AppColors.oak, width: 1.5),
+            padding: padding,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md),
+            ),
+          ),
+          child: buildButtonChild(textColor: fgColor, iconColor: fgColor),
         );
-        if (icon != null) {
-          button = OutlinedButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: isCompact ? 18 : AppSpacing.iconSize, color: customColor ?? AppColors.terracotta),
-            label: Text(
-              label,
-              style: outlinedTextStyle,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: customColor ?? AppColors.terracotta,
-              side: BorderSide(color: customColor ?? AppColors.terracotta, width: 1.8),
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompact ? AppSpacing.md : AppSpacing.lg,
-                vertical: isCompact ? AppSpacing.xs : AppSpacing.md,
-              ),
-            ),
-          );
-        } else {
-          button = OutlinedButton(
-            onPressed: onPressed,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: customColor ?? AppColors.terracotta,
-              side: BorderSide(color: customColor ?? AppColors.terracotta, width: 1.8),
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompact ? AppSpacing.md : AppSpacing.lg,
-                vertical: isCompact ? AppSpacing.xs : AppSpacing.md,
-              ),
-            ),
-            child: Text(
-              label,
-              style: outlinedTextStyle,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          );
-        }
         break;
 
       case AppButtonType.text:
-        final textButtonStyle = AppTextStyles.labelMedium.copyWith(
-          color: customColor ?? AppColors.terracotta,
+        final Color fgColor = customColor ?? AppColors.terracotta;
+        button = TextButton(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(
+            foregroundColor: fgColor,
+            padding: padding,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.md),
+            ),
+          ),
+          child: buildButtonChild(textColor: fgColor, iconColor: fgColor),
         );
-        if (icon != null) {
-          button = TextButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: isCompact ? 18 : AppSpacing.iconSize),
-            label: Text(
-              label,
-              style: textButtonStyle,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          );
-        } else {
-          button = TextButton(
-            onPressed: onPressed,
-            child: Text(
-              label,
-              style: textButtonStyle,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          );
-        }
         break;
     }
 
-    return SizedBox(
-      width: width ?? (type == AppButtonType.text ? null : double.infinity),
-      height: type == AppButtonType.text ? null : buttonHeight,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: width ?? (type == AppButtonType.text ? 0.0 : double.infinity),
+        minHeight: type == AppButtonType.text ? 0.0 : minButtonHeight,
+      ),
       child: button,
     );
   }

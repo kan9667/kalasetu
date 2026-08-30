@@ -17,6 +17,36 @@ import '../../data/services/sync_service.dart';
 import '../offline_sync/models/queue_item.dart';
 import '../offline_sync/offline_sync_service.dart';
 
+// --- Language Selection Provider ---
+class HasSelectedLanguageNotifier extends StateNotifier<bool> {
+  static const String _boxName = 'app_settings_box';
+  static const String _keySelected = 'has_selected_language';
+
+  HasSelectedLanguageNotifier() : super(false) {
+    _loadState();
+  }
+
+  void _loadState() {
+    if (Hive.isBoxOpen(_boxName)) {
+      final box = Hive.box(_boxName);
+      state = box.get(_keySelected, defaultValue: false) as bool;
+    }
+  }
+
+  Future<void> markLanguageSelected() async {
+    state = true;
+    if (Hive.isBoxOpen(_boxName)) {
+      final box = Hive.box(_boxName);
+      await box.put(_keySelected, true);
+    }
+  }
+}
+
+final hasSelectedLanguageProvider =
+    StateNotifierProvider<HasSelectedLanguageNotifier, bool>((ref) {
+  return HasSelectedLanguageNotifier();
+});
+
 // --- Services Providers ---
 final apiServiceProvider = Provider<ApiService>((ref) {
   return MockApiService();
@@ -191,6 +221,7 @@ class AddProductDraft {
   final bool isEnhanced;
   final String recordedAudioPath;
   final String voiceTranscript;
+  final double transcriptionConfidence;
   final String manualDescription;
   final String titleEn;
   final String titleHi;
@@ -209,6 +240,8 @@ class AddProductDraft {
   final String pricingReasoning;
   final String pricingReasoningHi;
   final bool isAiProcessing;
+  final List<String> additionalImagePaths;
+  final bool isRetakeFlow;
   final String? imageQueueItemId;
   final String? voiceQueueItemId;
   final QueueStatus imageQueueStatus;
@@ -222,6 +255,7 @@ class AddProductDraft {
     this.isEnhanced = false,
     this.recordedAudioPath = '',
     this.voiceTranscript = '',
+    this.transcriptionConfidence = 1.0,
     this.manualDescription = '',
     this.titleEn = '',
     this.titleHi = '',
@@ -240,6 +274,8 @@ class AddProductDraft {
     this.pricingReasoning = 'Evaluated based on pure river clay sourcing, wheel sculpting time, and fair wage floor.',
     this.pricingReasoningHi = 'प्राकृतिक नदी की मिट्टी, चाक पर गढ़ने का समय और उचित पारिश्रमिक के आधार पर विश्लेषित।',
     this.isAiProcessing = false,
+    this.additionalImagePaths = const [],
+    this.isRetakeFlow = false,
     this.imageQueueItemId,
     this.voiceQueueItemId,
     this.imageQueueStatus = QueueStatus.completed,
@@ -254,6 +290,7 @@ class AddProductDraft {
     bool? isEnhanced,
     String? recordedAudioPath,
     String? voiceTranscript,
+    double? transcriptionConfidence,
     String? manualDescription,
     String? titleEn,
     String? titleHi,
@@ -272,6 +309,8 @@ class AddProductDraft {
     String? pricingReasoning,
     String? pricingReasoningHi,
     bool? isAiProcessing,
+    List<String>? additionalImagePaths,
+    bool? isRetakeFlow,
     String? imageQueueItemId,
     String? voiceQueueItemId,
     QueueStatus? imageQueueStatus,
@@ -285,6 +324,7 @@ class AddProductDraft {
       isEnhanced: isEnhanced ?? this.isEnhanced,
       recordedAudioPath: recordedAudioPath ?? this.recordedAudioPath,
       voiceTranscript: voiceTranscript ?? this.voiceTranscript,
+      transcriptionConfidence: transcriptionConfidence ?? this.transcriptionConfidence,
       manualDescription: manualDescription ?? this.manualDescription,
       titleEn: titleEn ?? this.titleEn,
       titleHi: titleHi ?? this.titleHi,
@@ -303,6 +343,8 @@ class AddProductDraft {
       pricingReasoning: pricingReasoning ?? this.pricingReasoning,
       pricingReasoningHi: pricingReasoningHi ?? this.pricingReasoningHi,
       isAiProcessing: isAiProcessing ?? this.isAiProcessing,
+      additionalImagePaths: additionalImagePaths ?? this.additionalImagePaths,
+      isRetakeFlow: isRetakeFlow ?? this.isRetakeFlow,
       imageQueueItemId: imageQueueItemId ?? this.imageQueueItemId,
       voiceQueueItemId: voiceQueueItemId ?? this.voiceQueueItemId,
       imageQueueStatus: imageQueueStatus ?? this.imageQueueStatus,
@@ -369,12 +411,16 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       final draftId = box.get('draft_id') as String?;
       final image = box.get('draft_image') as String?;
       final transcript = box.get('draft_transcript') as String?;
-      if (draftId != null || image != null || transcript != null) {
+      final additional = (box.get('draft_additional_images') as List?)
+          ?.map((e) => e.toString())
+          .toList();
+      if (draftId != null || image != null || transcript != null || additional != null) {
         state = state.copyWith(
           draftId: draftId,
           originalImagePath: image ?? '',
           enhancedImagePath: image ?? '',
           voiceTranscript: transcript ?? '',
+          additionalImagePaths: additional ?? [],
         );
       }
     }
@@ -386,6 +432,26 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       box.put('draft_id', state.draftId);
       box.put('draft_image', state.enhancedImagePath.isNotEmpty ? state.enhancedImagePath : state.originalImagePath);
       box.put('draft_transcript', state.voiceTranscript);
+      box.put('draft_additional_images', state.additionalImagePaths);
+    }
+  }
+
+  /// Called from "Retake Photo" on the AI Listing Review step. Sends the
+  /// user back to Step 1, but remembers to skip straight back to the
+  /// review step (not through voice/description again) once they accept
+  /// the new photo — the transcript/description they already gave is
+  /// still valid.
+  void startRetakePhoto() {
+    state = state.copyWith(currentStep: 0, isRetakeFlow: true);
+  }
+
+  /// Called when the user accepts a photo on Step 1. Normally advances to
+  /// Step 2; if we're mid-retake, jumps straight back to Step 3 instead.
+  void confirmPhoto() {
+    if (state.isRetakeFlow) {
+      state = state.copyWith(currentStep: 2, isRetakeFlow: false);
+    } else {
+      nextStep();
     }
   }
 
@@ -431,9 +497,43 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     return localId;
   }
 
+  Future<void> addAdditionalImage(String path) async {
+    if (state.additionalImagePaths.length >= 2) return;
+    state = state.copyWith(additionalImagePaths: [...state.additionalImagePaths, path]);
+    _persistDraft();
+  }
+
+  void removeAdditionalImage(String path) {
+    state = state.copyWith(
+      additionalImagePaths: state.additionalImagePaths.where((p) => p != path).toList(),
+    );
+    _persistDraft();
+  }
+
+  void addTag(String tag) {
+    final trimmed = tag.trim();
+    if (trimmed.isEmpty || state.tags.contains(trimmed)) return;
+    state = state.copyWith(tags: [...state.tags, trimmed]);
+    _persistDraft();
+  }
+
+  void removeTag(String tag) {
+    state = state.copyWith(tags: state.tags.where((t) => t != tag).toList());
+    _persistDraft();
+  }
+
   void setManualDescription(String desc) {
     state = state.copyWith(manualDescription: desc);
     _persistDraft();
+  }
+
+  void retakeDescription() {
+    state = state.copyWith(
+      recordedAudioPath: '',
+      voiceTranscript: '',
+      manualDescription: '',
+    );
+    setStep(1);
   }
 
   Future<void> processVoiceRecording({
@@ -519,9 +619,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   }
 
   void setFinalPrice(double price) {
-    // Ensure final price cannot go below ethical floor
-    final safePrice = price < state.floorPrice ? state.floorPrice : price;
-    state = state.copyWith(finalPrice: safePrice);
+    state = state.copyWith(finalPrice: price);
   }
 
   void updateListingDetails({
@@ -554,4 +652,51 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 final addProductFlowProvider =
     StateNotifierProvider<AddProductFlowNotifier, AddProductDraft>((ref) {
   return AddProductFlowNotifier(ref);
+});
+
+// --- Notifications Provider ---
+enum NotificationType { listingLive, pendingSync, buyerView, priceSuggestion }
+
+class NotificationItem {
+  final String id;
+  final NotificationType type;
+  final String messageKey;
+  final DateTime timestamp;
+
+  const NotificationItem({
+    required this.id,
+    required this.type,
+    required this.messageKey,
+    required this.timestamp,
+  });
+}
+
+final notificationsProvider = Provider<List<NotificationItem>>((ref) {
+  final now = DateTime.now();
+  return [
+    NotificationItem(
+      id: 'n1',
+      type: NotificationType.listingLive,
+      messageKey: 'notif_listing_live',
+      timestamp: now.subtract(const Duration(hours: 2)),
+    ),
+    NotificationItem(
+      id: 'n2',
+      type: NotificationType.buyerView,
+      messageKey: 'notif_buyer_viewed',
+      timestamp: now.subtract(const Duration(hours: 5)),
+    ),
+    NotificationItem(
+      id: 'n3',
+      type: NotificationType.pendingSync,
+      messageKey: 'notif_pending_sync',
+      timestamp: now.subtract(const Duration(days: 1)),
+    ),
+    NotificationItem(
+      id: 'n4',
+      type: NotificationType.priceSuggestion,
+      messageKey: 'notif_price_suggestion',
+      timestamp: now.subtract(const Duration(days: 2)),
+    ),
+  ];
 });

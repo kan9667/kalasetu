@@ -43,7 +43,10 @@ class ResponsiveContainer extends StatelessWidget {
   }
 }
 
-/// Responsive card widget with adaptive shadows and padding
+/// Responsive card widget — flat with a thin border by default (per the
+/// "no harsh drop shadows" design requirement), matching CardTheme.
+/// Pass [elevation] explicitly only when a screen genuinely needs to lift
+/// off the page (e.g. a modal-like card).
 class ResponsiveCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -67,13 +70,17 @@ class ResponsiveCard extends StatelessWidget {
     final responsivePadding = padding ?? const EdgeInsets.all(AppSpacing.cardPadding);
     final responsiveRadius =
         borderRadius ?? BorderRadius.circular(AppRadii.getCardRadius(context));
-    final responsiveElevation = elevation ?? AppElevation.low;
 
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        elevation: responsiveElevation,
-        shape: RoundedRectangleBorder(borderRadius: responsiveRadius),
+        elevation: elevation ?? AppElevation.none,
+        shape: RoundedRectangleBorder(
+          borderRadius: responsiveRadius,
+          side: elevation == null
+              ? const BorderSide(color: AppColors.oak, width: 0.6)
+              : BorderSide.none,
+        ),
         color: backgroundColor ?? AppColors.surface,
         child: Padding(
           padding: responsivePadding,

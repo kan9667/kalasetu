@@ -24,9 +24,7 @@ class ProfileScreen extends ConsumerWidget {
     final pendingCount = ref.read(productRepositoryProvider).getPendingCount();
 
     return AppScaffold(
-      appBar: AppBar(
-        title: Text('profile_title'.tr()),
-      ),
+      title: 'profile_title'.tr(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         child: Column(

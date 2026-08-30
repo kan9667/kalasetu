@@ -26,6 +26,9 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
     final draft = ref.read(addProductFlowProvider);
     final isOnline = ref.read(connectivityProvider).value ?? true;
 
+    const fallbackPhoto =
+        'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=600&q=80';
+
     final newProduct = Product(
       id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
       title: draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted ${draft.category}',
@@ -33,22 +36,20 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       description: draft.descriptionEn.isNotEmpty ? draft.descriptionEn : draft.voiceTranscript,
       descriptionHi: draft.descriptionHi,
       price: draft.finalPrice,
-      imageUrl: draft.enhancedImagePath.isNotEmpty
-          ? draft.enhancedImagePath
-          : 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=600&q=80',
+      photoPath: draft.originalImagePath.isNotEmpty ? draft.originalImagePath : fallbackPhoto,
+      aiEnhancedPhotoPath: draft.isEnhanced ? draft.enhancedImagePath : '',
+      additionalPhotoPaths: draft.additionalImagePaths,
       category: draft.category,
       tags: draft.tags,
       status: isOnline ? ProductStatus.live : ProductStatus.pendingSync,
       createdAt: DateTime.now(),
     );
 
-    // Save product via Riverpod productListProvider
     await ref.read(productListProvider.notifier).addProduct(newProduct);
 
     if (mounted) {
       setState(() => _isPublishing = false);
 
-      // Show success modal feedback
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -81,9 +82,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                 label: 'done'.tr(),
                 onPressed: () {
                   Navigator.pop(dialogCtx);
-                  // Reset Add Product flow draft
                   ref.read(addProductFlowProvider.notifier).reset();
-                  // Switch tab to Catalogue (index 1)
                   ref.read(homeTabIndexProvider.notifier).state = 1;
                 },
               ),
@@ -98,6 +97,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
   Widget build(BuildContext context) {
     final draft = ref.watch(addProductFlowProvider);
     final isOnline = ref.watch(connectivityProvider).value ?? true;
+    final displayImage = draft.isEnhanced ? draft.enhancedImagePath : draft.originalImagePath;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -118,13 +118,11 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
           ),
           const SizedBox(height: AppSpacing.lg),
 
-          // Product Summary Card
           Card(
-            elevation: 4,
+            elevation: 0,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Product Image
                 Container(
                   height: 220,
                   width: double.infinity,
@@ -132,15 +130,39 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                     color: AppColors.surfaceVariant,
                     borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.card)),
                   ),
-                  child: AppImage(imageUrl: draft.enhancedImagePath, fit: BoxFit.cover),
+                  child: AppImage(imageUrl: displayImage, fit: BoxFit.cover),
                 ),
+
+                if (draft.additionalImagePaths.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
+                    child: SizedBox(
+                      height: 56,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          for (final path in draft.additionalImagePaths)
+                            Padding(
+                              padding: const EdgeInsets.only(right: AppSpacing.xs),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(AppRadii.sm),
+                                child: SizedBox(
+                                  width: 56,
+                                  height: 56,
+                                  child: AppImage(imageUrl: path, fit: BoxFit.cover),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                 Padding(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Badge & Status
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -211,7 +233,6 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
 
                       const SizedBox(height: AppSpacing.md),
 
-                      // Ethical Floor Guarantee Badge
                       Container(
                         padding: const EdgeInsets.all(AppSpacing.sm),
                         decoration: BoxDecoration(
@@ -225,9 +246,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                             Expanded(
                               child: Text(
                                 'floor_price_guarantee'.tr(),
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.forestGreenDark,
-                                ),
+                                style: AppTextStyles.labelSmall.copyWith(color: AppColors.forestGreenDark),
                               ),
                             ),
                           ],
