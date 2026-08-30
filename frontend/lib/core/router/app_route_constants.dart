@@ -2,6 +2,7 @@ class AppRouteConstants {
   static const String splash = 'splash';
   static const String language = 'language';
   static const String signIn = 'signIn';
+  static const String register = 'register';
   static const String ngoAuth = 'ngoAuth';
   static const String otp = 'otp';
 

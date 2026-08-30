@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/router/app_route_constants.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/providers/app_providers.dart';
 import '../providers/auth_provider.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
@@ -47,6 +48,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       widget.phoneNumber.isEmpty ? '9876543210' : widget.phoneNumber,
       otp,
     );
+    await ref.read(userProfileProvider.notifier).reloadProfile();
     if (mounted) {
       context.goNamed(AppRouteConstants.home);
     }

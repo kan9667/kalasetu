@@ -25,6 +25,15 @@ class UserProfile extends HiveObject {
   @HiveField(6)
   final String preferredLanguage;
 
+  @HiveField(7)
+  final String state;
+
+  @HiveField(8)
+  final String? experienceYears;
+
+  @HiveField(9)
+  final String? pehchanId;
+
   UserProfile({
     required this.id,
     required this.name,
@@ -33,6 +42,9 @@ class UserProfile extends HiveObject {
     required this.craftType,
     required this.locationCluster,
     this.preferredLanguage = 'en',
+    this.state = '',
+    this.experienceYears,
+    this.pehchanId,
   });
 
   UserProfile copyWith({
@@ -43,6 +55,9 @@ class UserProfile extends HiveObject {
     String? craftType,
     String? locationCluster,
     String? preferredLanguage,
+    String? state,
+    String? experienceYears,
+    String? pehchanId,
   }) {
     return UserProfile(
       id: id ?? this.id,
@@ -52,6 +67,9 @@ class UserProfile extends HiveObject {
       craftType: craftType ?? this.craftType,
       locationCluster: locationCluster ?? this.locationCluster,
       preferredLanguage: preferredLanguage ?? this.preferredLanguage,
+      state: state ?? this.state,
+      experienceYears: experienceYears ?? this.experienceYears,
+      pehchanId: pehchanId ?? this.pehchanId,
     );
   }
 
@@ -64,6 +82,9 @@ class UserProfile extends HiveObject {
       'craftType': craftType,
       'locationCluster': locationCluster,
       'preferredLanguage': preferredLanguage,
+      'state': state,
+      'experienceYears': experienceYears,
+      'pehchanId': pehchanId,
     };
   }
 
@@ -76,6 +97,9 @@ class UserProfile extends HiveObject {
       craftType: json['craftType'] as String? ?? 'Handicraft',
       locationCluster: json['locationCluster'] as String? ?? 'Rural Cluster',
       preferredLanguage: json['preferredLanguage'] as String? ?? 'en',
+      state: json['state'] as String? ?? '',
+      experienceYears: json['experienceYears'] as String?,
+      pehchanId: json['pehchanId'] as String?,
     );
   }
 }

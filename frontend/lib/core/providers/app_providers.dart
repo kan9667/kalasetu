@@ -198,6 +198,10 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
     }
   }
 
+  Future<void> reloadProfile() async {
+    await _loadProfile();
+  }
+
   Future<void> updateProfile(UserProfile profile) async {
     state = profile;
     if (Hive.isBoxOpen(_boxName)) {
