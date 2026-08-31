@@ -152,12 +152,23 @@ class BhashiniTranscriber(BaseTranscriber):
         response.raise_for_status()
         data = response.json()
 
-        service_id = data["pipelineResponseConfig"][0]["config"][0]["serviceId"]
-        endpoint_config = data["pipelineInferenceAPIEndPoint"]
-        endpoint = endpoint_config["callbackUrl"]
-        auth_key = endpoint_config["inferenceApiKey"]
+        service_configs = data.get("pipelineResponseConfig", [])
+        if not service_configs or not service_configs[0].get("config"):
+            raise ValueError("Invalid pipeline response structure from Bhashini: missing service config")
 
-        return endpoint, service_id, {auth_key["name"]: auth_key["value"]}
+        service_id = service_configs[0]["config"][0].get("serviceId")
+        if not service_id:
+            raise ValueError("Invalid pipeline response structure from Bhashini: missing serviceId")
+
+        endpoint_config = data.get("pipelineInferenceAPIEndPoint")
+        if not endpoint_config or "callbackUrl" not in endpoint_config:
+            raise ValueError("Invalid pipeline response structure from Bhashini: missing endpoint")
+
+        endpoint = endpoint_config["callbackUrl"]
+        auth_key = endpoint_config.get("inferenceApiKey", {})
+        auth_header = {auth_key["name"]: auth_key["value"]} if "name" in auth_key and "value" in auth_key else {}
+
+        return endpoint, service_id, auth_header
 
     @staticmethod
     def _extract_transcript(payload: dict) -> str:
