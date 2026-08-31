@@ -1,0 +1,15 @@
+# Karigar Setu — Voice Pipeline Dependencies
+# Install: pip install -r requirements.txt
+
+# HTTP client for Bhashini ASR and translation APIs
+requests>=2.31.0
+
+# Data models & config
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Audio inspection (duration checks before spending an API call)
+mutagen>=1.47.0
