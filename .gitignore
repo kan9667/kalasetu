@@ -31,3 +31,6 @@ Thumbs.db
 backend/uploads/
 *.db
 *.sqlite3
+
+# Voice pipeline runtime data
+ML/voice_pipeline/data/

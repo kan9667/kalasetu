@@ -38,14 +38,7 @@ class AppImage extends StatelessWidget {
 
     String resolvedUrl = imageUrl;
     if (resolvedUrl.startsWith('/uploads/')) {
-      final host = (!kIsWeb && Platform.isAndroid) ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
-      resolvedUrl = '$host$resolvedUrl';
-    } else if (!kIsWeb && Platform.isAndroid) {
-      if (resolvedUrl.startsWith('http://localhost:8000')) {
-        resolvedUrl = resolvedUrl.replaceFirst('http://localhost:8000', 'http://10.0.2.2:8000');
-      } else if (resolvedUrl.startsWith('http://127.0.0.1:8000')) {
-        resolvedUrl = resolvedUrl.replaceFirst('http://127.0.0.1:8000', 'http://10.0.2.2:8000');
-      }
+      resolvedUrl = 'http://127.0.0.1:8000$resolvedUrl';
     }
 
     final isNetwork = resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://');
