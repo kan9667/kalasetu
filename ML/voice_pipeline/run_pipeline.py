@@ -10,7 +10,7 @@ Usage:
     # Transcribe in a specific language:
     python run_pipeline.py transcribe --audio input/saree.m4a --language ta
 
-    # Run the pipeline (transcribe → translate):
+    # Run the pipeline (validate → transcribe):
     python run_pipeline.py process --audio input/voice-note.m4a
 
     # Full pipeline with a category hint:
@@ -106,7 +106,7 @@ def cmd_process(args) -> None:
     print("\n✅ Pipeline complete!")
     print(f"   Elapsed:    {result.get('elapsed_seconds')}s")
     print(f"   Language:   {transcript['language_code']}")
-    print(f"   Translated: {result.get('translation') is not None}")
+    print(f"   Provider:   {transcript['provider']}")
     print()
     print("   Transcript:")
     print(f"   {transcript['text']}")
@@ -125,24 +125,22 @@ def cmd_process(args) -> None:
 
 def cmd_status(args) -> None:
     """Show configuration and language routing."""
-    from ML.voice_pipeline.config import get_settings, needs_translation
+    from ML.voice_pipeline.config import get_settings
 
     settings = get_settings()
 
     print("\n⚙️  Voice pipeline configuration\n")
     print(f"   STT provider:      {settings.stt_provider}")
+    print(f"   Model:             {settings.whisper_model}")
+    print(f"   Endpoint:          {settings.whisper_base_url}")
     print(f"   Default language:  {settings.default_language}")
     print(f"   Max duration:      {settings.max_audio_duration_seconds}s")
     print(f"   Glossary terms:    {settings.glossary_terms_in_prompt}")
     print()
     print("   Credentials:")
-    print(f"     Bhashini user ID:  {'set' if settings.bhashini_user_id else 'MISSING'}")
-    print(f"     Bhashini API key:  {'set' if settings.bhashini_api_key else 'MISSING'}")
+    print(f"     Whisper API key:   {'set' if settings.whisper_api_key else 'MISSING'}")
     print()
-    print("   Language routing:")
-    for code in settings.supported_languages:
-        route = "translate → English" if needs_translation(code) else "direct"
-        print(f"     {code:<4} {route}")
+    print(f"   Supported languages: {', '.join(settings.supported_languages)}")
     print()
 
 

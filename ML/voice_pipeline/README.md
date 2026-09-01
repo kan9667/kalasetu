@@ -8,7 +8,7 @@ Built for artisans who create handmade products (textiles, sarees, handicrafts, 
 
 ## What It Does
 
-Takes a voice recording of an artisan describing their product — in Hindi or a regional language, often code-mixed with English — and produces a transcript ready for cataloging. Regional languages are translated to English on the way through; Hindi is passed straight along.
+Takes a voice recording of an artisan describing their product — in Hindi or a regional language, often code-mixed with English — and produces a transcript ready for cataloging.
 
 The module stops at the transcript. Listing generation belongs to the backend catalog service, and read-back belongs to the mobile app.
 
@@ -17,7 +17,7 @@ Artisan says:      "yeh mitti ka phooldaan hai, chaak pe banaya, natural clay se
 
 Pipeline returns:  text_for_listing → handed to the backend catalog service
                    language_code    → hi
-                   translated       → false
+                   provider         → whisper
 ```
 
 ## Pipeline
@@ -27,11 +27,11 @@ Flutter App — Voice Recording (.m4a, saved to the offline queue)
     ↓
 Input Validation (file exists, size and duration check)
     ↓
-Speech-to-Text (Bhashini ASR, transcript in the source language)
+Craft Glossary Prompt (handicraft vocabulary offered to the recogniser)
+    ↓
+Speech-to-Text (Whisper, transcript in the source language)
     ↓
 Transcript Check (reject empty or failed transcriptions)
-    ↓
-Translation (Bhashini NMT, regional languages only — Hindi skips this)
     ↓
 Transcript ready for cataloging
     ↓
@@ -71,7 +71,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> **Note:** Bhashini credentials must be set in the project root `.env` before the pipeline can run. Verify with `python run_pipeline.py status` — it prints which credentials are missing.
+> **Note:** A Whisper API key must be set in the project root `.env` before the pipeline can run. Any OpenAI-compatible host works — set `WHISPER_BASE_URL` to match. Verify with `python run_pipeline.py status`, which prints whether the key was found.
 
 ---
 
@@ -115,21 +115,19 @@ All settings are in **`config.py`**. Key settings:
 
 | Setting | Default | Description |
 |---|---|---|
-| `stt_provider` | `bhashini` | Transcription backend to use |
+| `stt_provider` | `whisper` | Transcription backend to use |
+| `whisper_model` | `whisper-large-v3` | Model requested from the endpoint |
+| `whisper_base_url` | OpenAI | Any OpenAI-compatible transcription API |
 | `default_language` | `hi` | Source language when none is given |
 | `supported_languages` | 10 codes | Languages the pipeline accepts |
-| `languages_needing_translation` | 9 codes | Languages translated before listing generation |
-| `translation_target` | `en` | Target language for the translation stage |
 | `max_audio_duration_seconds` | 180 | Reject longer recordings before making a request |
 | `stt_request_timeout` | 60 | Request timeout in seconds |
 | `stt_retry_attempts` | 3 | Retries for a failed transcription |
-| `sampling_rate` | 16000 | Sampling rate declared to the ASR service |
-| `declare_audio_format` | `True` | Send the detected format in the request |
-| `glossary_terms_in_prompt` | 40 | Craft terms exposed to the catalog service |
+| `glossary_terms_in_prompt` | 40 | Craft terms offered to the recogniser |
 
 Supported languages: Hindi (`hi`), Tamil (`ta`), Bengali (`bn`), Marathi (`mr`), Telugu (`te`), Gujarati (`gu`), Kannada (`kn`), Malayalam (`ml`), Punjabi (`pa`), and Odia (`or`).
 
-Hindi is deliberately absent from `languages_needing_translation`. The listing model writes Hindi natively, so translating first would make the Hindi output a back-translation of English rather than an original. Change the routing by editing that list — no code changes required.
+The backend is chosen by `stt_provider` and resolved through a registry in `transcription/runner.py`. Adding another transcriber means one class and one registry entry — no other module changes.
 
 ---
 
@@ -146,18 +144,15 @@ voice_pipeline/
 ├── README.md
 ├── .gitattributes
 │
-├── transcription/         ── STEP 1  audio  →  text
-│   ├── bhashini_transcriber.py    calls Bhashini ASR
+├── transcription/         ── audio  →  text
+│   ├── whisper_transcriber.py     calls the Whisper endpoint
 │   ├── base_transcriber.py        the contract any transcriber must follow
 │   └── runner.py                  picks which transcriber to use
 │
-├── translation/           ── STEP 2  text  →  English  (regional languages only)
-│   └── bhashini_translator.py     calls Bhashini NMT
-│
-├── orchestrator/          ── Runs step 1 and 2 in order, handles failures
+├── orchestrator/          ── Runs the stages in order, handles failures
 │   └── processor.py
 │
-├── glossary/              ── Craft words the backend uses to fix misheard terms
+├── glossary/              ── Craft words fed to the recogniser and the backend
 │   └── craft_terms.py             Bandhani, Dhokra, Pattachitra, ...
 │
 ├── tests/                 ── Offline test suite (no API key needed)
@@ -168,8 +163,8 @@ voice_pipeline/
 ```
 
 **Reading it top to bottom:** `run_pipeline.py` calls `orchestrator/`, which calls
-`transcription/` and then `translation/`. `config.py` and `models.py` are used by
-everything. `glossary/` is handed to the backend, not used inside this module.
+`transcription/`. `config.py` and `models.py` are used by everything. `glossary/`
+is used at transcription time and also exposed for the backend's listing prompt.
 
 
 ---
@@ -181,7 +176,7 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-37 tests, all offline — no API key, no network, and no audio files needed. Recordings are synthesised with the standard library, so the suite passes on a fresh clone.
+35 tests, all offline — no API key, no network, and no audio files needed. Recordings are synthesised with the standard library, so the suite passes on a fresh clone.
 
 Covered: language routing, craft glossary ordering, fallback-transcript rejection, audio validation, format detection, backend selection, and the handoff contract.
 
@@ -191,7 +186,7 @@ Covered: language routing, craft glossary ordering, fallback-transcript rejectio
 
 | Package | Purpose |
 |---|---|
-| `requests` | HTTP client for Bhashini ASR and translation |
+| `requests` | HTTP client for the Whisper transcription endpoint |
 | `pydantic` | Structured data models for every pipeline stage |
 | `pydantic-settings` | Environment-based configuration |
 | `python-dotenv` | Loads credentials from `.env` |
@@ -207,30 +202,27 @@ The Flutter app records the artisan's description as an `.m4a` file and writes i
 ### 2. Input Validation
 Checks that the audio file exists, is non-empty, and falls within the duration limit. Runs before any network call so a broken recording fails instantly instead of costing a request.
 
-### 3. Speech-to-Text
-Sends the recording to Bhashini ASR through its pipeline API. The service is resolved per language, then the audio is submitted base64-encoded. Failed requests are retried up to three times. The transcript stays in the source language — it is not translated here.
+### 3. Craft Glossary Prompt
+Whisper accepts a prompt that biases recognition toward expected vocabulary. The glossary in `glossary/craft_terms.py` is passed there, category-first, so pottery terms are offered for a pottery listing rather than being cut by the limit.
 
-### 4. Transcript Check
-A failed transcription returns a transcript flagged as a fallback rather than raising. The processor checks that flag and aborts before generating anything.
+This is where *Dhokra* stops becoming "doctor" and *Chikankari* stops becoming "chicken curry". Speech models trained on news and broadcast audio have barely encountered these words, and since they are frequently the product name itself, that failure is expensive.
+
+### 4. Speech-to-Text
+Posts the recording to the configured Whisper endpoint with the source language and the glossary prompt. Failed requests are retried up to three times.
+
+Whisper is multilingual by training, so code-mixed speech — an artisan saying *"yeh handmade pottery hai"* in one breath — survives better than it does under single-language models. It also accepts the `.m4a` the mobile client records, so no conversion step is needed.
+
+### 5. Transcript Check
+A failed transcription returns a transcript flagged as a fallback rather than raising. The processor checks that flag and aborts before anything downstream runs.
 
 This matters more than it looks: a silent fallback that resembles a successful transcript produces a confident, well-formatted listing for a product the artisan never described, with no way to tell it apart from a real one.
 
-### 5. Translation
-For regional languages the listing model does not handle natively, the transcript is translated to English via Bhashini NMT. Hindi skips this stage entirely.
-
-If translation fails, the source text is passed through unchanged rather than stalling the run — a listing generated from the original language is better than none.
-
 ### 6. Handoff
-The transcript — translated where required — is returned as `text_for_listing`. The backend catalog service consumes it and generates the bilingual listing: title, description, category, and tags in both English and Hindi.
+The transcript is returned as `text_for_listing`. The backend catalog service consumes it and generates the bilingual listing: title, description, category, and tags in both English and Hindi.
 
-Listing generation is deliberately not implemented here. It already exists in `backend/services/catalog_service.py`, and duplicating it would mean two prompts and two schemas drifting apart.
+Listing generation is deliberately not implemented here. It already exists in `backend/services/catalog_service.py`, and duplicating it would mean two prompts and two schemas drifting apart. The glossary is also exposed via `build_prompt_hint()` so the catalog service can apply the same vocabulary to its own prompt.
 
-### 7. Craft Term Correction
-Speech recognition trained on news and broadcast audio has barely encountered words like *Dhokra*, *Bandhani*, or *Chikankari*, so it substitutes the nearest common word it knows. Since these terms are frequently the product name itself, that failure is expensive.
-
-This module ships the vocabulary in `glossary/craft_terms.py` and exposes it via `get_glossary_terms()` and `build_prompt_hint()`. The catalog service injects it into its prompt so the misheard term can be recovered.
-
-### 8. Voice Read-Back
+### 7. Voice Read-Back
 The Flutter app speaks the generated listing back to the artisan using the phone's built-in speech engine, and they confirm or re-record.
 
 This is the correctness gate. Many artisans cannot read the draft, so hearing it is the only way they can verify what was written about their product. Text-to-speech is deliberately absent from this module — it runs on the device so it works with no connectivity and no server call.
@@ -267,13 +259,18 @@ The format is detected from the file extension and declared in the request. If t
 - Add the missing term to the appropriate list in `glossary/craft_terms.py`
 - Raise `glossary_terms_in_prompt` if the vocabulary is being truncated
 
-### Hindi is being translated when it should not be
-- Confirm `hi` is not in `languages_needing_translation`
-- If it is, the catalog service receives English and writes back-translated Hindi
+### 401 or 403 from the endpoint
+- The key is missing, expired, or belongs to a different host than `whisper_base_url`
+- Run `python run_pipeline.py status` to confirm the key was picked up
 
-### Pipeline is slow
-- The service configuration is resolved before each call; cache it per language if throughput matters
-- Long recordings cost proportionally more — `max_audio_duration_seconds` caps this
+### 429 rate limited
+- The endpoint's request or audio quota for the period is exhausted
+- Limits usually apply per organisation, so additional keys do not raise them
+
+### Accuracy is poor on a regional language
+- Whisper's training data is weighted toward English, so smaller Indian languages transcribe less accurately than Hindi
+- Pass `--category` so craft vocabulary is prioritised in the prompt
+- For a substantial improvement, swap in a model fine-tuned on Indian speech — the backend is chosen by `stt_provider`, so this is a registry entry rather than a rewrite
 
 ---
 
@@ -305,7 +302,7 @@ The `process_voice_note()` function is the single entry point — no changes nee
 
 ## Limitations
 
-- Transcription quality depends on Bhashini's ASR models. Code-mixed speech — an artisan saying *"yeh handmade pottery hai"* in one breath — is the hardest case, because single-language models tend to render the English words phonetically in the source script.
+- Transcription quality varies by language. Whisper's training data is weighted toward English, so Hindi transcribes well while the smaller Indian languages are noticeably weaker. Models fine-tuned on Indian speech close much of that gap and can be swapped in through the backend registry.
 - Regional dialects filed under a single language code (Marwari, Bhojpuri, and Awadhi all sent as `hi`) transcribe less accurately than the standard form the models were trained on.
 - Recording conditions are rarely clean. Workshop noise — a potter's wheel, a loom, hammering — measurably reduces accuracy, and the pipeline has no noise-reduction stage.
 - Every stage requires connectivity. The Flutter app queues recordings offline and drains the queue when signal returns, so the artisan is never blocked, but nothing in this module runs without a network.
