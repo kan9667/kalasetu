@@ -16,18 +16,18 @@ import pytest
 # Add the project root to sys.path so `ML.voice_pipeline` resolves
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from ML.voice_pipeline.config import get_settings, needs_translation
+from ML.voice_pipeline.config import get_settings
 from ML.voice_pipeline.glossary import build_prompt_hint, get_glossary_terms
 from ML.voice_pipeline.models import (
     JobStatus,
     STTProvider,
-    TranslatedTranscript,
     Transcript,
     VoiceNote,
     VoicePipelineResult,
 )
 from ML.voice_pipeline.transcription.base_transcriber import BaseTranscriber
-from ML.voice_pipeline.transcription.runner import TranscriptionRunner
+from ML.voice_pipeline.transcription.runner import TRANSCRIBERS, TranscriptionRunner
+from ML.voice_pipeline.transcription.whisper_transcriber import WhisperTranscriber
 
 
 # ---- Helpers: Create synthetic audio and stub transcribers ----
@@ -63,27 +63,24 @@ def voice_note(tmp_path):
     return VoiceNote(id="test-1", audio_path=str(audio), language_code="hi")
 
 
-# ---- Language routing ----
-
-
-def test_hindi_is_not_translated():
-    """Hindi must reach the catalog service untranslated, or the Hindi
-    listing becomes a back-translation of English."""
-    assert needs_translation("hi") is False
-
-
-@pytest.mark.parametrize("code", ["ta", "bn", "mr", "te", "gu", "kn", "ml", "pa", "or"])
-def test_regional_languages_are_translated(code):
-    assert needs_translation(code) is True
-
-
-def test_unknown_language_is_not_translated():
-    """An unrecognised code falls through untranslated rather than erroring."""
-    assert needs_translation("xx") is False
+# ---- Configuration ----
 
 
 def test_supported_languages_include_hindi():
     assert "hi" in get_settings().supported_languages
+
+
+def test_default_language_is_hindi():
+    assert get_settings().default_language == "hi"
+
+
+def test_whisper_is_the_configured_backend():
+    assert get_settings().stt_provider == "whisper"
+
+
+def test_endpoint_is_configured():
+    """A blank base URL would post to a relative path and fail confusingly."""
+    assert get_settings().whisper_base_url.startswith("http")
 
 
 # ---- Craft glossary ----
@@ -117,10 +114,26 @@ def test_glossary_has_no_duplicates():
     assert len(terms) == len(set(terms))
 
 
-def test_prompt_hint_contains_terms():
+def test_prompt_hint_is_a_bare_term_list():
+    """Whisper reads the prompt as context, not instruction. An English
+    sentence wrapped around the terms dilutes the bias — measured on a Hindi
+    sample, the wrapped form failed to recover a craft word the bare list did."""
     hint = build_prompt_hint(category="Pottery", limit=5)
     assert "Terracotta" in hint
-    assert hint.endswith(".")
+    assert "Transcribe" not in hint
+    assert hint.count(",") == 4
+
+
+def test_hindi_gets_devanagari_terms():
+    """A Hindi transcript comes back in Devanagari, so Latin hints cannot
+    match it."""
+    hint = build_prompt_hint(limit=10, language_code="hi")
+    assert "मिट्टी" in hint
+
+
+def test_non_devanagari_language_gets_latin_terms():
+    hint = build_prompt_hint(category="Pottery", limit=10, language_code="ta")
+    assert "Terracotta" in hint
 
 
 # ---- Transcript usability ----
@@ -128,7 +141,7 @@ def test_prompt_hint_contains_terms():
 
 def test_usable_transcript():
     t = Transcript(text="यह मिट्टी का बर्तन है", language_code="hi",
-                   provider=STTProvider.BHASHINI)
+                   provider=STTProvider.WHISPER)
     assert t.is_usable() is True
 
 
@@ -136,12 +149,12 @@ def test_fallback_transcript_is_rejected():
     """A fallback must never reach listing generation — it would produce a
     confident listing for a product the artisan never described."""
     t = Transcript(text="anything", language_code="hi",
-                   provider=STTProvider.BHASHINI, is_fallback=True)
+                   provider=STTProvider.WHISPER, is_fallback=True)
     assert t.is_usable() is False
 
 
 def test_empty_transcript_is_rejected():
-    t = Transcript(text="   ", language_code="hi", provider=STTProvider.BHASHINI)
+    t = Transcript(text="   ", language_code="hi", provider=STTProvider.WHISPER)
     assert t.is_usable() is False
 
 
@@ -208,7 +221,53 @@ def test_runner_defaults_to_configured_provider():
 def test_runner_rejects_unknown_provider():
     """A typo in STT_PROVIDER must fail immediately with a clear message."""
     with pytest.raises(ValueError, match="Unknown STT provider"):
-        TranscriptionRunner(provider="bashini")
+        TranscriptionRunner(provider="wisper")
+
+
+# ---- Whisper backend ----
+
+
+def test_whisper_is_registered():
+    assert TRANSCRIBERS["whisper"] is WhisperTranscriber
+
+
+def test_whisper_satisfies_the_contract():
+    """Whisper must be usable anywhere a transcriber is expected."""
+    from ML.voice_pipeline.transcription.base_transcriber import BaseTranscriber
+
+    assert issubclass(WhisperTranscriber, BaseTranscriber)
+
+
+def test_whisper_without_a_key_fails_safely(voice_note):
+    """No key must produce a flagged fallback, never a silent bad transcript
+    that reaches the catalog service looking real.
+
+    The key is blanked on this instance rather than read from the environment,
+    so the test behaves the same whether or not one is configured locally.
+    """
+    transcriber = WhisperTranscriber()
+    original = transcriber.settings.whisper_api_key
+    transcriber.settings.whisper_api_key = ""
+    try:
+        t = transcriber.transcribe(voice_note)
+    finally:
+        # get_settings() is lru_cached, so this instance is shared across the
+        # whole suite — leaving it blank would break every later test.
+        transcriber.settings.whisper_api_key = original
+
+    assert t.is_fallback is True
+    assert t.is_usable() is False
+
+
+def test_whisper_reports_itself_as_provider():
+    assert WhisperTranscriber.provider == STTProvider.WHISPER
+
+
+def test_glossary_reaches_the_transcription_prompt():
+    """Craft terms must be offered to Whisper at recognition time, which is
+    where "Dhokra" stops becoming "doctor"."""
+    hint = build_prompt_hint(category="Textiles", limit=10)
+    assert "Bandhani" in hint or "Ajrakh" in hint
 
 
 # ---- Handoff to the catalog service ----
@@ -219,25 +278,9 @@ def test_handoff_uses_transcript_when_not_translated():
         voice_note_id="1",
         status=JobStatus.COMPLETED,
         transcript=Transcript(text="मिट्टी का बर्तन", language_code="hi",
-                              provider=STTProvider.BHASHINI),
+                              provider=STTProvider.WHISPER),
     )
     assert result.text_for_listing == "मिट्टी का बर्तन"
-
-
-def test_handoff_uses_translation_when_present():
-    result = VoicePipelineResult(
-        voice_note_id="1",
-        status=JobStatus.COMPLETED,
-        transcript=Transcript(text="மண் பானை", language_code="ta",
-                              provider=STTProvider.BHASHINI),
-        translation=TranslatedTranscript(
-            source_text="மண் பானை",
-            source_language="ta",
-            translated_text="clay pot",
-            target_language="en",
-        ),
-    )
-    assert result.text_for_listing == "clay pot"
 
 
 def test_handoff_is_empty_when_transcription_failed():
