@@ -1,0 +1,6 @@
+# Artisan voice recordings — a person's voice must never reach a shared repo
+input/*
+!input/.gitkeep
+
+# Runtime output: audit log, working files
+data/

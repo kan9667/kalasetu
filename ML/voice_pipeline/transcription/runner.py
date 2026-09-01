@@ -17,7 +17,7 @@ import logging
 from ..config import get_settings
 from ..models import Transcript, VoiceNote
 from .base_transcriber import BaseTranscriber
-from .bhashini_transcriber import BhashiniTranscriber
+from .whisper_transcriber import WhisperTranscriber
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ── Backend Registry ─────────────────────────────────────────────────────────
 
 TRANSCRIBERS: dict[str, type[BaseTranscriber]] = {
-    "bhashini": BhashiniTranscriber,
+    "whisper": WhisperTranscriber,
 }
 
 

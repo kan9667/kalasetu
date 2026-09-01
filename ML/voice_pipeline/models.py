@@ -1,8 +1,8 @@
 """
 Voice Pipeline — Data Models.
 
-All structured data types used across transcription, translation, listing
-generation, and artisan processing are defined here for consistency.
+All structured data types used across transcription and artisan processing
+are defined here for consistency.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 class STTProvider(str, Enum):
     """Backends capable of transcribing an artisan voice note."""
 
-    BHASHINI = "bhashini"
+    WHISPER = "whisper"
     MANUAL = "manual"
 
 
@@ -29,7 +29,6 @@ class PipelineStage(str, Enum):
 
     INGESTION = "ingestion"
     TRANSCRIPTION = "transcription"
-    TRANSLATION = "translation"
     HANDOFF = "handoff"
 
 
@@ -99,16 +98,6 @@ class Transcript(BaseModel):
         return not self.is_fallback and len(self.text.strip()) > 0
 
 
-class TranslatedTranscript(BaseModel):
-    """A transcript rendered into a second language by the translation stage."""
-
-    source_text: str = Field(description="Original transcript text.")
-    source_language: str = Field(description="Language of the original.")
-    translated_text: str = Field(description="Translated text.")
-    target_language: str = Field(description="Language of the translation.")
-    translated_at: datetime = Field(default_factory=datetime.now)
-
-
 # ── Pipeline Result ──────────────────────────────────────────────────────────
 
 
@@ -123,7 +112,6 @@ class VoicePipelineResult(BaseModel):
     voice_note_id: str = Field(description="Identifier of the source recording.")
     status: JobStatus = Field(description="Terminal status of this run.")
     transcript: Optional[Transcript] = Field(default=None)
-    translation: Optional[TranslatedTranscript] = Field(default=None)
     failed_stage: Optional[PipelineStage] = Field(
         default=None, description="Stage that failed, when status is failed."
     )
@@ -136,12 +124,5 @@ class VoicePipelineResult(BaseModel):
 
     @property
     def text_for_listing(self) -> str:
-        """
-        The text the backend should send to the catalog service.
-
-        Returns the translated text where translation ran, otherwise the
-        original transcript.
-        """
-        if self.translation:
-            return self.translation.translated_text
+        """The text the backend should send to the catalog service."""
         return self.transcript.text if self.transcript else ""

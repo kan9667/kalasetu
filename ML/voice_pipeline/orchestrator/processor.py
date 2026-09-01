@@ -2,12 +2,12 @@
 Artisan Voice Processor.
 
 The main entry point for processing an artisan's voice note:
-1. Transcribes the recording in its source language
-2. Optionally translates the transcript to English
+1. Validates the recording
+2. Transcribes it in its source language
 
-The pipeline stops here. Listing generation is owned by the backend catalog
-service, which consumes the transcript this module produces — see the README
-for the handoff contract.
+The pipeline stops at the transcript. Listing generation is owned by the
+backend catalog service, which consumes the transcript this module produces —
+see the README for the handoff contract.
 
 This is triggered when the mobile app drains its offline queue and uploads a
 recording. The artisan is never blocked waiting on it — the recording is saved
@@ -22,10 +22,9 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from ..config import DATA_DIR, ensure_data_dirs, get_settings, needs_translation
+from ..config import DATA_DIR, ensure_data_dirs, get_settings
 from ..models import JobStatus, PipelineStage, VoiceNote, VoicePipelineResult
 from ..transcription.runner import TranscriptionRunner
-from ..translation.bhashini_translator import BhashiniTranslator
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +32,12 @@ logger = logging.getLogger(__name__)
 class ArtisanVoiceProcessor:
     """
     Processes an artisan's voice note through the pipeline:
-    transcribe → optionally translate → return text ready for the catalog service.
+    transcribe → return text ready for the catalog service.
     """
 
     def __init__(self):
         self.settings = get_settings()
         self.transcriber = TranscriptionRunner()
-        self.translator = BhashiniTranslator()
 
     def process_voice_note(
         self,
@@ -55,14 +53,14 @@ class ArtisanVoiceProcessor:
         Args:
             audio_path: Path to the recorded audio file (.m4a, .wav, .mp3).
             language_code: Language the artisan selected before recording.
-            category_hint: Optional craft category, passed through to the caller.
+            category_hint: Craft category, used to prioritise glossary terms.
             note_id: Idempotency key from the client. Generated if absent.
             product_draft_id: Draft this recording belongs to.
 
         Returns:
-            VoicePipelineResult carrying the transcript and optional translation.
-            Failures are reported in the result rather than raised, so a queued
-            job can be retried without losing context.
+            VoicePipelineResult carrying the transcript. Failures are reported
+            in the result rather than raised, so a queued job can be retried
+            without losing context.
         """
         ensure_data_dirs()
         started = time.perf_counter()
@@ -89,26 +87,11 @@ class ArtisanVoiceProcessor:
                 transcript=transcript,
             )
 
-        logger.info("Transcript: %d characters", len(transcript.text))
-
-        # ── Step 2: Translate (only where required) ──────────────────────
-        translation = None
-
-        if needs_translation(language_code):
-            logger.info("Step 2: Translating '%s' → English...", language_code)
-            translation = self.translator.translate(transcript)
-        else:
-            logger.info(
-                "Step 2: Skipping translation — the catalog service handles '%s' natively.",
-                language_code,
-            )
-
         elapsed = time.perf_counter() - started
         result = VoicePipelineResult(
             voice_note_id=note.id,
             status=JobStatus.COMPLETED,
             transcript=transcript,
-            translation=translation,
             elapsed_seconds=round(elapsed, 2),
         )
 
@@ -158,14 +141,12 @@ class ArtisanVoiceProcessor:
         error: str,
         started: float,
         transcript=None,
-        translation=None,
     ) -> VoicePipelineResult:
         """Build a failed result, preserving whatever the run produced."""
         return VoicePipelineResult(
             voice_note_id=note.id,
             status=JobStatus.FAILED,
             transcript=transcript,
-            translation=translation,
             failed_stage=stage,
             error=error,
             elapsed_seconds=round(time.perf_counter() - started, 2),
@@ -179,10 +160,10 @@ class ArtisanVoiceProcessor:
             "voice_note_id": result.voice_note_id,
             "status": result.status.value,
             "language": result.transcript.language_code if result.transcript else None,
+            "provider": result.transcript.provider.value if result.transcript else None,
             "transcript_preview": (
                 result.transcript.text[:100] if result.transcript else None
             ),
-            "was_translated": result.translation is not None,
             "elapsed_seconds": result.elapsed_seconds,
         }
 
