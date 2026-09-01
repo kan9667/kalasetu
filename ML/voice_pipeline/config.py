@@ -5,6 +5,7 @@ All settings are loaded from environment variables / .env file.
 """
 
 import os
+from functools import lru_cache
 from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import Field
@@ -95,6 +96,7 @@ class Settings(BaseSettings):
     }
 
 
+@lru_cache()
 def get_settings() -> Settings:
     """Return a cached Settings instance."""
     return Settings()

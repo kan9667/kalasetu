@@ -246,9 +246,15 @@ def test_whisper_without_a_key_fails_safely(voice_note):
     so the test behaves the same whether or not one is configured locally.
     """
     transcriber = WhisperTranscriber()
+    original = transcriber.settings.whisper_api_key
     transcriber.settings.whisper_api_key = ""
+    try:
+        t = transcriber.transcribe(voice_note)
+    finally:
+        # get_settings() is lru_cached, so this instance is shared across the
+        # whole suite — leaving it blank would break every later test.
+        transcriber.settings.whisper_api_key = original
 
-    t = transcriber.transcribe(voice_note)
     assert t.is_fallback is True
     assert t.is_usable() is False
 

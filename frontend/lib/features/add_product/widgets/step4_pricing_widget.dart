@@ -24,7 +24,7 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
     final currentPrice = draft.finalPrice.clamp(minBound, maxBound);
 
     return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

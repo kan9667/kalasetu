@@ -36,8 +36,6 @@ class HttpImageEnhancerService implements ImageEnhancerService {
   final Future<void> Function(File file, String? draftId)? onFallbackQueue;
 
   static String _defaultBaseUrl() {
-    if (kIsWeb) return 'http://127.0.0.1:8000';
-    if (Platform.isAndroid) return 'http://10.0.2.2:8000';
     return 'http://127.0.0.1:8000';
   }
 
