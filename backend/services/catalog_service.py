@@ -1,40 +1,38 @@
 """
 Catalog Service.
 
-Provides AI-driven voice transcription (STT) and structured bilingual
-listing generation (English + Hindi) using Gemini.
+Integrates:
+1. Speech-to-Text (STT) via ML.voice_pipeline (Whisper + Craft Glossary biasing).
+2. Bilingual AI Catalog Listing Generation (English + Hindi) with craft vocabulary injection.
+3. Cost Cue Extraction from artisan speech.
+4. Non-blocking AI Image Enhancement (rembg / CV pipeline).
+5. Complete Voice-to-Product Pipeline orchestration (Voice -> Listing -> Pricing -> Draft).
 """
+
+from __future__ import annotations
 
 import os
 import sys
 import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from starlette.concurrency import run_in_threadpool
 from google import genai
 from google.genai import types
+from sqlalchemy.orm import Session
 
-from ..config import get_settings
-from ..models.schemas import (
-    AudioTranscribeResponse,
-    ListingGenerateRequest,
-    ListingGenerateResponse,
-)
-
-# Note on Model Caching:
-# In multi-worker or multi-replica deployments (e.g. uvicorn with multiple workers),
-# each worker process will independently load and cache the rembg/U2-Net neural model (~1GB RAM)
-# on its first image enhancement request. This is a known architectural characteristic.
-
-# Setup path to import ML image_pipeline
+# Setup path to import ML pipelines
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
-_ML_IMAGE_DIR = _PROJECT_ROOT / "ML" / "image_pipeline"
-if str(_ML_IMAGE_DIR) not in sys.path:
-    sys.path.insert(0, str(_ML_IMAGE_DIR))
 
+# Import Voice Pipeline
+from ML.voice_pipeline.orchestrator.processor import ArtisanVoiceProcessor
+from ML.voice_pipeline.glossary import build_prompt_hint, get_glossary_terms
+from ML.voice_pipeline.models import JobStatus
+
+# Import Image Pipeline Enhancer
 try:
     from ML.image_pipeline.enhancer import enhance_image as run_ml_enhancer
 except ImportError:
@@ -42,6 +40,19 @@ except ImportError:
         from enhancer import enhance_image as run_ml_enhancer
     except ImportError:
         run_ml_enhancer = None
+
+from ..config import get_settings
+from ..models.schemas import (
+    AudioTranscribeResponse,
+    ListingGenerateRequest,
+    ListingGenerateResponse,
+    PriceSuggestRequest,
+    PriceSuggestResponse,
+    CostInputsSchema,
+    ProductCreate,
+    VoiceToProductResponse,
+    VoiceGlossaryResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +63,9 @@ class CatalogService:
     def __init__(self):
         self.settings = get_settings()
         self.client = genai.Client(api_key=self.settings.gemini_api_key) if self.settings.gemini_api_key else None
+        self.voice_processor = ArtisanVoiceProcessor()
+
+    # ── Image Enhancement ───────────────────────────────────────────────────
 
     async def enhance_product_photo(
         self,
@@ -77,51 +91,47 @@ class CatalogService:
             logger.error("Image enhancement execution failed: %s", e)
             raise e
 
+    # ── Voice Transcription (ML Voice Pipeline) ─────────────────────────────
+
     async def transcribe_audio(
         self,
         audio_file_path: str,
         language_code: str = "hi",
+        category_hint: Optional[str] = None,
+        note_id: Optional[str] = None,
     ) -> AudioTranscribeResponse:
         """
-        Transcribe an artisan's voice note into text using Gemini multimodal audio.
-
-        Args:
-            audio_file_path: Path to the recorded audio file (.wav, .m4a, .mp3, .ogg)
-            language_code: Expected regional language code (hi, ta, te, bn, mr, etc.)
+        Transcribe an artisan's regional voice note using the ML voice pipeline
+        (Whisper with craft glossary prompt biasing).
         """
         path = Path(audio_file_path)
         if not path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
 
-        try:
-            audio_bytes = path.read_bytes()
-            mime_type = "audio/wav" if path.suffix.lower() == ".wav" else "audio/mp3"
+        result = await run_in_threadpool(
+            self.voice_processor.process_voice_note,
+            audio_path=str(path),
+            language_code=language_code,
+            category_hint=category_hint,
+            note_id=note_id,
+        )
 
-            prompt = (
-                f"Transcribe the spoken audio precisely. The speaker is an Indian artisan speaking "
-                f"in language code '{language_code}' (or code-mixed with Hindi/English). "
-                f"Return ONLY the transcribed text without timestamps or metadata."
-            )
+        if result.status == JobStatus.FAILED or not result.transcript or not result.transcript.is_usable():
+            error_msg = result.error or "Voice transcription failed or returned empty transcript."
+            logger.error("Voice pipeline transcription failure: %s", error_msg)
+            raise ValueError(error_msg)
 
-            response = self.client.models.generate_content(
-                model=self.settings.llm_model,
-                contents=[
-                    types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
-                    types.Part.from_text(text=prompt),
-                ],
-            )
-            transcript = response.text.strip()
-            return AudioTranscribeResponse(
-                transcript=transcript,
-                language_code=language_code,
-            )
-        except Exception as e:
-            logger.error("Audio transcription failed: %s", e)
-            # Fallback transcript for demo reliability
-            return AudioTranscribeResponse(
-                transcript="यह मिट्टी का हस्तनिर्मित सुराहीदार फूलदान है, जिसे प्राकृतिक लाल मिट्टी से चाक पर बनाया गया है।",
-                language_code=language_code,
-            )
+        return AudioTranscribeResponse(
+            transcript=result.transcript.text,
+            language_code=result.transcript.language_code,
+            detected_language=result.transcript.language_code,
+            duration_seconds=result.transcript.duration_seconds,
+            provider=result.transcript.provider.value if hasattr(result.transcript.provider, "value") else str(result.transcript.provider),
+            is_fallback=result.transcript.is_fallback,
+            status=result.status.value,
+        )
+
+    # ── Bilingual Listing Generation ────────────────────────────────────────
 
     async def generate_listing(
         self,
@@ -129,27 +139,50 @@ class CatalogService:
     ) -> ListingGenerateResponse:
         """
         Generate SEO-friendly, bilingual e-commerce product titles, descriptions,
-        category, and search tags from an artisan's raw transcript or voice description.
+        category, and search tags from an artisan's voice transcript.
+        Enriches the prompt with domain craft glossary terms.
         """
-        system_prompt = """You are an expert handicraft cataloger for Indian artisans.
-Transform raw voice descriptions into professional, engaging, bilingual e-commerce product listings.
+        # Inject craft glossary hints for accurate terminology
+        glossary_prompt = build_prompt_hint(
+            category=request.category_hint,
+            limit=30,
+            language_code=request.language_code,
+        )
+
+        system_prompt = f"""You are an expert handicraft cataloger and market specialist for Indian artisans (KalaSetu).
+Transform raw spoken voice descriptions into professional, engaging, bilingual e-commerce product listings.
+
+Domain Handicraft Vocabulary Reference:
+[{glossary_prompt}]
 
 Rules:
-1. Generate title_en (English title) and title_hi (Hindi title in Devanagari script).
-2. Generate description_en (capturing craft authenticity, materials, and artisan value) and description_hi.
-3. Identify the accurate craft category (e.g., Pottery, Textiles, Woodwork, Jewelry, Paintings, Bamboo Craft, Brass, Leather).
-4. Generate 5-8 relevant SEO tags in English (lowercase).
+1. Generate title_en (Engaging English e-commerce title) and title_hi (Hindi title in Devanagari script).
+2. Generate description_en (capturing craft heritage, materials, technique, and artisan value) and description_hi.
+3. Identify the accurate craft category (e.g., Pottery, Textiles, Woodwork, Jewelry, Paintings, Bamboo Craft, Brass, Leather, Stone Craft).
+4. Generate 5-8 relevant SEO tags in English (lowercase, hyphenated).
 5. Output ONLY valid JSON matching the schema."""
 
-        user_prompt = f"""Raw Artisan Voice Transcript / Description:
+        user_prompt = f"""Raw Artisan Voice Transcript:
 "{request.transcript}"
 
 Category Hint (if provided): {request.category_hint or 'None'}
 
-Please generate the bilingual catalog listing."""
+Please generate the structured bilingual catalog listing."""
+
+        if not self.client:
+            # Fallback if Gemini key is not configured
+            return ListingGenerateResponse(
+                title_en="Handcrafted Terracotta Ceramic Floral Vase with Folk Etchings",
+                title_hi="लोक नक्काशीदार हस्तनिर्मित मिट्टी का सजावटी फूलदान",
+                description_en=request.transcript or "Authentic handcrafted artisanal product made with traditional techniques.",
+                description_hi="पारंपरिक तकनीक से बना हस्तनिर्मित उत्कृष्ट उत्पाद।",
+                category=request.category_hint or "Pottery",
+                tags=["handcrafted", "artisan", "traditional", "heritage", "sustainable"],
+            )
 
         try:
-            response = self.client.models.generate_content(
+            response = await run_in_threadpool(
+                self.client.models.generate_content,
                 model=self.settings.llm_model,
                 contents=user_prompt,
                 config=types.GenerateContentConfig(
@@ -192,12 +225,209 @@ Please generate the bilingual catalog listing."""
             )
         except Exception as e:
             logger.error("Listing generation failed: %s", e)
-            # Fallback based on keywords
             return ListingGenerateResponse(
                 title_en="Handcrafted Terracotta Ceramic Floral Vase with Folk Etchings",
                 title_hi="लोक नक्काशीदार हस्तनिर्मित मिट्टी का सजावटी फूलदान",
-                description_en="Authentic handcrafted terracotta vase molded on a traditional potter wheel from pure riverbed clay.",
-                description_hi="पारंपरिक चाक पर शुद्ध नदी की मिट्टी से बना असली हस्तनिर्मित मिट्टी का फूलदान।",
+                description_en=request.transcript or "Authentic handcrafted artisanal creation with traditional craft value.",
+                description_hi="पारंपरिक कला व कारीगरी से बना प्रामाणिक हस्तशिल्प उत्पाद।",
                 category=request.category_hint or "Pottery",
                 tags=["terracotta", "pottery", "folk-art", "handcrafted", "eco-friendly"],
             )
+
+    # ── Voice Cost Cue Extractor ────────────────────────────────────────────
+
+    async def extract_cost_cues(self, transcript: str) -> CostInputsSchema:
+        """
+        Extract cost cues (raw materials cost, labor hours, wages) spoken by the artisan
+        in their natural voice note description.
+        """
+        default_costs = CostInputsSchema(
+            materials=0.0,
+            labor_hours=0.0,
+            hourly_rate=50.0,
+            transport=0.0,
+            overhead=0.0,
+        )
+
+        if not self.client or not transcript:
+            return default_costs
+
+        prompt = f"""Analyze the following artisan voice transcript and extract any mentioned cost, labor, or time details:
+"{transcript}"
+
+Extract:
+- materials: Cost of raw materials in INR (number, default 0 if not mentioned)
+- labor_hours: Hours spent crafting the product (number, default 0 if not mentioned, e.g. 2 days = 16 hours)
+- hourly_rate: Hourly wage rate in INR (default 50.0 if not mentioned)
+- transport: Transport/shipping cost in INR (default 0 if not mentioned)
+- overhead: Additional overhead cost in INR (default 0 if not mentioned)
+
+Return ONLY JSON matching the schema."""
+
+        try:
+            response = await run_in_threadpool(
+                self.client.models.generate_content,
+                model=self.settings.llm_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    response_mime_type="application/json",
+                    response_schema={
+                        "type": "object",
+                        "properties": {
+                            "materials": {"type": "number"},
+                            "labor_hours": {"type": "number"},
+                            "hourly_rate": {"type": "number"},
+                            "transport": {"type": "number"},
+                            "overhead": {"type": "number"},
+                        },
+                    },
+                ),
+            )
+            data = json.loads(response.text)
+            return CostInputsSchema(
+                materials=float(data.get("materials", 0.0) or 0.0),
+                labor_hours=float(data.get("labor_hours", 0.0) or 0.0),
+                hourly_rate=float(data.get("hourly_rate", 50.0) or 50.0),
+                transport=float(data.get("transport", 0.0) or 0.0),
+                overhead=float(data.get("overhead", 0.0) or 0.0),
+            )
+        except Exception as e:
+            logger.warning("Could not extract cost cues from transcript: %s", e)
+            return default_costs
+
+    # ── Voice-to-Product Pipeline Orchestrator ──────────────────────────────
+
+    async def process_voice_to_product(
+        self,
+        audio_file_path: str,
+        language_code: str = "hi",
+        category_hint: Optional[str] = None,
+        image_url: Optional[str] = None,
+        audio_url: Optional[str] = None,
+        cost_inputs_override: Optional[CostInputsSchema] = None,
+        db: Optional[Session] = None,
+    ) -> VoiceToProductResponse:
+        """
+        Complete end-to-end voice pipeline:
+        Audio Upload -> Speech-to-Text -> Listing Generation (Description, Tags) ->
+        Cost Cue Extraction -> AI Pricing Calculation -> Ready Product Draft.
+        """
+        from .pricing_service import PricingService
+        pricing_service = PricingService()
+
+        # Step 1: Transcribe Audio using ML Voice Pipeline
+        transcribe_res = await self.transcribe_audio(
+            audio_file_path=audio_file_path,
+            language_code=language_code,
+            category_hint=category_hint,
+        )
+        transcript = transcribe_res.transcript
+
+        # Step 2: Generate Bilingual Listing (Description, Tags, Title, Category)
+        listing_req = ListingGenerateRequest(
+            transcript=transcript,
+            language_code=language_code,
+            category_hint=category_hint,
+            image_url=image_url,
+        )
+        listing_res = await self.generate_listing(listing_req)
+
+        # Step 3: Extract or Merge Cost Inputs
+        extracted_costs = await self.extract_cost_cues(transcript)
+        final_materials = (
+            cost_inputs_override.materials
+            if cost_inputs_override and cost_inputs_override.materials > 0
+            else extracted_costs.materials
+        )
+        final_hours = (
+            cost_inputs_override.labor_hours
+            if cost_inputs_override and cost_inputs_override.labor_hours > 0
+            else extracted_costs.labor_hours
+        )
+        final_rate = (
+            cost_inputs_override.hourly_rate
+            if cost_inputs_override and cost_inputs_override.hourly_rate > 0
+            else extracted_costs.hourly_rate
+        )
+        final_transport = (
+            cost_inputs_override.transport
+            if cost_inputs_override and cost_inputs_override.transport > 0
+            else extracted_costs.transport
+        )
+        final_overhead = (
+            cost_inputs_override.overhead
+            if cost_inputs_override and cost_inputs_override.overhead > 0
+            else extracted_costs.overhead
+        )
+
+        # Step 4: Calculate Base Price & AI Pricing Recommendation
+        pricing_req = PriceSuggestRequest(
+            description=listing_res.description_en,
+            category=listing_res.category,
+            image_url=image_url,
+            materials=final_materials,
+            labor_hours=final_hours,
+            hourly_rate=final_rate,
+            transport=final_transport,
+            overhead=final_overhead,
+            tags=listing_res.tags,
+        )
+        pricing_res = await run_in_threadpool(
+            pricing_service.suggest_price,
+            request=pricing_req,
+            db=db,
+        )
+
+        # Step 5: Construct Product Draft
+        product_draft = ProductCreate(
+            title=listing_res.title_en,
+            title_hi=listing_res.title_hi,
+            description=listing_res.description_en,
+            description_hi=listing_res.description_hi,
+            price=pricing_res.suggested_price,
+            image_url=image_url or "/uploads/default.jpg",
+            category=listing_res.category,
+            tags=listing_res.tags,
+            status="draft",
+        )
+
+        return VoiceToProductResponse(
+            transcript=transcript,
+            language_code=language_code,
+            title_en=listing_res.title_en,
+            title_hi=listing_res.title_hi,
+            description_en=listing_res.description_en,
+            description_hi=listing_res.description_hi,
+            category=listing_res.category,
+            tags=listing_res.tags,
+            pricing=pricing_res,
+            audio_url=audio_url,
+            image_url=image_url,
+            product_draft=product_draft,
+            status="completed",
+        )
+
+    # ── Craft Glossary Lookup ───────────────────────────────────────────────
+
+    def get_craft_glossary(self, category: Optional[str] = None, limit: int = 50) -> VoiceGlossaryResponse:
+        """Fetch craft glossary terms and all available categories."""
+        terms = get_glossary_terms(category=category, limit=limit)
+        all_categories = [
+            "Pottery",
+            "Textiles",
+            "Woodwork",
+            "Jewelry",
+            "Paintings",
+            "Metal Craft",
+            "Stone Carving",
+            "Bamboo Craft",
+            "Leather Craft",
+            "Glass Craft",
+        ]
+        return VoiceGlossaryResponse(
+            category=category,
+            total_terms=len(terms),
+            terms=terms,
+            categories=all_categories,
+        )

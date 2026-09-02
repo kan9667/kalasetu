@@ -31,7 +31,33 @@ class Settings(BaseSettings):
     # API Keys
     gemini_api_key: str = Field(
         default="",
-        description="Google Gemini API key for multimodal embeddings, STT, and LLM pricing.",
+        description="Google Gemini API key for multimodal embeddings and LLM pricing/cataloging.",
+    )
+    whisper_api_key: str = Field(
+        default="",
+        description="API key for Whisper speech-to-text transcription endpoint.",
+    )
+
+    # Voice Pipeline / Speech-to-Text Settings
+    whisper_base_url: str = Field(
+        default="https://api.openai.com/v1",
+        description="Base URL of OpenAI-compatible Whisper transcription API.",
+    )
+    whisper_model: str = Field(
+        default="whisper-large-v3",
+        description="Whisper model identifier for audio transcription.",
+    )
+    stt_provider: str = Field(
+        default="whisper",
+        description="Transcription backend provider (whisper).",
+    )
+    default_language: str = Field(
+        default="hi",
+        description="Default source language code for voice notes.",
+    )
+    supported_languages: List[str] = Field(
+        default=["hi", "ta", "bn", "mr", "te", "gu", "kn", "ml", "pa", "or"],
+        description="Language codes accepted by the voice pipeline.",
     )
 
     # Models

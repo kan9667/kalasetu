@@ -34,7 +34,7 @@ class RouterNotifier extends ChangeNotifier {
     );
     _ref.listen<bool>(
       hasSelectedLanguageProvider,
-      (_, _) => notifyListeners(),
+      (_, __) => notifyListeners(),
     );
   }
 }

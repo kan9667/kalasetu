@@ -142,6 +142,16 @@ def test_catalog_listing_generation():
     print(f"✅ Catalog Listing Generation Passed: {data['title_en']}")
 
 
+def test_voice_glossary_api():
+    """Test /api/v1/voice/glossary endpoint."""
+    response = client.get("/api/v1/voice/glossary?category=Pottery")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_terms"] > 0
+    assert "Terracotta" in data["terms"]
+    print("✅ Voice Glossary API Passed")
+
+
 if __name__ == "__main__":
     print("\n🚀 Running KalaSetu Backend Integration Tests...\n")
     test_health()
@@ -149,4 +159,6 @@ if __name__ == "__main__":
     test_products_crud_and_sync()
     test_catalog_listing_generation()
     test_pricing_suggest()
+    test_voice_glossary_api()
     print("\n🎉 ALL BACKEND TESTS PASSED SUCCESSFULLY!\n")
+
