@@ -30,6 +30,7 @@ from backend.routers import (
     products_router,
     catalog_router,
     auth_router,
+    voice_router,
 )
 
 settings = get_settings()
@@ -48,6 +49,7 @@ async def lifespan(app: FastAPI):
     print(f"  ✨ {settings.app_name} v{settings.app_version} Started")
     print(f"  📖 Swagger UI Docs: http://localhost:{settings.port}/docs")
     print(f"  🔍 Health Status:   http://localhost:{settings.port}/api/v1/health")
+    print(f"  🎙️ Voice Pipeline:  http://localhost:{settings.port}/api/v1/voice/process")
     print(f"  💰 Pricing Endpoint: http://localhost:{settings.port}/api/v1/pricing/suggest")
     print(f"  📦 Products API:    http://localhost:{settings.port}/api/v1/products")
     print("=" * 60 + "\n")
@@ -79,6 +81,7 @@ app.mount(settings.static_url_prefix, StaticFiles(directory=str(upload_path)), n
 
 # ── Register Routers ─────────────────────────────────────────────────────────
 app.include_router(health_router)
+app.include_router(voice_router)
 app.include_router(pricing_router)
 app.include_router(products_router)
 app.include_router(catalog_router)
@@ -93,6 +96,7 @@ async def root():
         "version": settings.app_version,
         "docs": "/docs",
         "health": "/api/v1/health",
+        "voice_pipeline": "/api/v1/voice/process",
         "pricing_status": "/api/v1/pricing/status",
         "products": "/api/v1/products",
     }
