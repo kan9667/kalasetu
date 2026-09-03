@@ -166,7 +166,7 @@ class RealUploadApi implements UploadApi {
               baseUrl: baseUrl,
               connectTimeout: const Duration(seconds: 15),
               sendTimeout: const Duration(minutes: 2), // large images on slow uplinks
-              receiveTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(minutes: 3),
             ));
 
   final String baseUrl;

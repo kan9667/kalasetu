@@ -22,7 +22,8 @@ class AppImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fallback = fallbackWidget ??
+    final fallback =
+        fallbackWidget ??
         Container(
           width: width,
           height: height,
@@ -38,11 +39,19 @@ class AppImage extends StatelessWidget {
 
     String resolvedUrl = imageUrl;
     if (resolvedUrl.startsWith('/uploads/')) {
-      resolvedUrl = 'http://127.0.0.1:8000$resolvedUrl';
+      const configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
+      final baseUrl = configuredBaseUrl.isNotEmpty
+          ? configuredBaseUrl
+          : (Platform.isAndroid
+                ? 'http://10.0.2.2:8000'
+                : 'http://127.0.0.1:8000');
+      resolvedUrl = '$baseUrl$resolvedUrl';
     }
 
-    final isNetwork = resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://');
-    final isBlobOrLocalhost = resolvedUrl.startsWith('blob:') ||
+    final isNetwork =
+        resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://');
+    final isBlobOrLocalhost =
+        resolvedUrl.startsWith('blob:') ||
         resolvedUrl.startsWith('http://localhost') ||
         resolvedUrl.startsWith('http://127.0.0.1') ||
         resolvedUrl.startsWith('http://10.0.2.2');
@@ -69,7 +78,9 @@ class AppImage extends StatelessWidget {
         height: height,
         fit: fit,
         errorBuilder: (context, error, stackTrace) {
-          debugPrint('AppImage failed to load network image: $resolvedUrl ($error)');
+          debugPrint(
+            'AppImage failed to load network image: $resolvedUrl ($error)',
+          );
           return fallback;
         },
       );

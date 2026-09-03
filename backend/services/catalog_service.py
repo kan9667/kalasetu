@@ -77,8 +77,9 @@ class CatalogService:
         blocking FastAPI's async event loop.
         """
         if run_ml_enhancer is None:
-            logger.warning("ML image enhancer is not available. Returning original path.")
-            return input_path
+            raise RuntimeError(
+                "ML image enhancer is unavailable. Install the image_pipeline dependencies."
+            )
 
         try:
             enhanced_path = await run_in_threadpool(
@@ -86,6 +87,8 @@ class CatalogService:
                 input_path=input_path,
                 output_path=output_path,
             )
+            if not enhanced_path or not Path(enhanced_path).is_file():
+                raise RuntimeError("Image enhancer did not create an output file")
             return enhanced_path
         except Exception as e:
             logger.error("Image enhancement execution failed: %s", e)
