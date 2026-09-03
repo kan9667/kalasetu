@@ -5,6 +5,7 @@ Handles photo enhancement, speech-to-text audio transcription via ML voice pipel
 bilingual listing generation, and complete voice-to-product draft creation.
 """
 
+from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
@@ -48,10 +49,12 @@ async def enhance_image(
         enhanced_path = enhanced_dir / enhanced_filename
 
         # 3. Execute non-blocking AI image enhancement
-        await catalog_service.enhance_product_photo(
+        result_path = await catalog_service.enhance_product_photo(
             input_path=str(raw_path),
             output_path=str(enhanced_path),
         )
+        if Path(result_path) != enhanced_path or not enhanced_path.is_file():
+            raise RuntimeError("Image enhancer returned an invalid output path")
 
         enhanced_url = f"{storage_service.settings.static_url_prefix}/enhanced/{enhanced_filename}" if hasattr(storage_service, 'settings') else f"/uploads/enhanced/{enhanced_filename}"
 

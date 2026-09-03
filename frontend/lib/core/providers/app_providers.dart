@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../data/models/product.dart';
 import '../../data/models/user_profile.dart';
 import '../../data/repositories/product_repository.dart';
@@ -44,8 +45,8 @@ class HasSelectedLanguageNotifier extends StateNotifier<bool> {
 
 final hasSelectedLanguageProvider =
     StateNotifierProvider<HasSelectedLanguageNotifier, bool>((ref) {
-  return HasSelectedLanguageNotifier();
-});
+      return HasSelectedLanguageNotifier();
+    });
 
 // --- Services Providers ---
 final apiServiceProvider = Provider<ApiService>((ref) {
@@ -89,6 +90,21 @@ final connectivityProvider = StreamProvider<bool>((ref) async* {
   }
 });
 
+const _unset = Object();
+
+List<String> _stringList(dynamic value) =>
+    value is List ? value.map((item) => item.toString()).toList() : <String>[];
+
+List<String>? _stringListOrNull(dynamic value) =>
+    value is List ? value.map((item) => item.toString()).toList() : null;
+
+QueueStatus? _queueStatus(dynamic value) {
+  if (value is int && value >= 0 && value < QueueStatus.values.length) {
+    return QueueStatus.values[value];
+  }
+  return null;
+}
+
 // --- Product List State Notifier ---
 class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   final ProductRepository _repository;
@@ -97,8 +113,8 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   late final VoidCallback _syncListener;
 
   ProductListNotifier(this._repository, this._ref)
-      : _syncService = _ref.read(syncServiceProvider),
-        super(const AsyncValue.loading()) {
+    : _syncService = _ref.read(syncServiceProvider),
+      super(const AsyncValue.loading()) {
     _syncListener = () {
       final syncState = _syncService.syncState.value;
       if (syncState == SyncState.completed || syncState == SyncState.idle) {
@@ -132,7 +148,10 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
 
   Future<Product> updateProduct(Product product) async {
     final isOnline = _ref.read(connectivityProvider).value ?? true;
-    final updated = await _repository.updateProduct(product, isOnline: isOnline);
+    final updated = await _repository.updateProduct(
+      product,
+      isOnline: isOnline,
+    );
     await loadProducts();
     return updated;
   }
@@ -157,17 +176,19 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
 }
 
 final productListProvider =
-    StateNotifierProvider<ProductListNotifier, AsyncValue<List<Product>>>((ref) {
-  final repository = ref.watch(productRepositoryProvider);
-  final notifier = ProductListNotifier(repository, ref);
-  ref.watch(syncServiceProvider);
-  ref.listen<AsyncValue<bool>>(connectivityProvider, (previous, next) {
-    if (next.value == true && previous?.value != true) {
-      unawaited(notifier.syncQueue());
-    }
-  });
-  return notifier;
-});
+    StateNotifierProvider<ProductListNotifier, AsyncValue<List<Product>>>((
+      ref,
+    ) {
+      final repository = ref.watch(productRepositoryProvider);
+      final notifier = ProductListNotifier(repository, ref);
+      ref.watch(syncServiceProvider);
+      ref.listen<AsyncValue<bool>>(connectivityProvider, (previous, next) {
+        if (next.value == true && previous?.value != true) {
+          unawaited(notifier.syncQueue());
+        }
+      });
+      return notifier;
+    });
 
 // --- User Profile Provider ---
 class UserProfileNotifier extends StateNotifier<UserProfile> {
@@ -175,16 +196,16 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
   static const String _keyProfile = 'current_profile';
 
   UserProfileNotifier()
-      : super(
-          UserProfile(
-            id: 'artisan_01',
-            name: 'Rameshwar Lal Kumhar',
-            phone: '+91 98765 43210',
-            craftType: 'Terracotta Pottery',
-            locationCluster: 'Kumhar Gram, Delhi NCR',
-            preferredLanguage: 'en',
-          ),
-        ) {
+    : super(
+        UserProfile(
+          id: 'artisan_01',
+          name: 'Rameshwar Lal Kumhar',
+          phone: '+91 98765 43210',
+          craftType: 'Terracotta Pottery',
+          locationCluster: 'Kumhar Gram, Delhi NCR',
+          preferredLanguage: 'en',
+        ),
+      ) {
     _loadProfile();
   }
 
@@ -213,8 +234,8 @@ class UserProfileNotifier extends StateNotifier<UserProfile> {
 
 final userProfileProvider =
     StateNotifierProvider<UserProfileNotifier, UserProfile>((ref) {
-  return UserProfileNotifier();
-});
+      return UserProfileNotifier();
+    });
 
 // --- Add Product Flow Draft Model & Notifier ---
 class AddProductDraft {
@@ -246,6 +267,8 @@ class AddProductDraft {
   final bool isAiProcessing;
   final List<String> additionalImagePaths;
   final bool isRetakeFlow;
+  final bool hasExistingDraft;
+  final bool resumePromptHandled;
   final String? imageQueueItemId;
   final String? voiceQueueItemId;
   final QueueStatus imageQueueStatus;
@@ -275,11 +298,15 @@ class AddProductDraft {
     this.minPrice = 510.0,
     this.maxPrice = 1100.0,
     this.finalPrice = 750.0,
-    this.pricingReasoning = 'Evaluated based on pure river clay sourcing, wheel sculpting time, and fair wage floor.',
-    this.pricingReasoningHi = 'प्राकृतिक नदी की मिट्टी, चाक पर गढ़ने का समय और उचित पारिश्रमिक के आधार पर विश्लेषित।',
+    this.pricingReasoning =
+        'Evaluated based on pure river clay sourcing, wheel sculpting time, and fair wage floor.',
+    this.pricingReasoningHi =
+        'प्राकृतिक नदी की मिट्टी, चाक पर गढ़ने का समय और उचित पारिश्रमिक के आधार पर विश्लेषित।',
     this.isAiProcessing = false,
     this.additionalImagePaths = const [],
     this.isRetakeFlow = false,
+    this.hasExistingDraft = false,
+    this.resumePromptHandled = false,
     this.imageQueueItemId,
     this.voiceQueueItemId,
     this.imageQueueStatus = QueueStatus.completed,
@@ -315,8 +342,10 @@ class AddProductDraft {
     bool? isAiProcessing,
     List<String>? additionalImagePaths,
     bool? isRetakeFlow,
-    String? imageQueueItemId,
-    String? voiceQueueItemId,
+    bool? hasExistingDraft,
+    bool? resumePromptHandled,
+    Object? imageQueueItemId = _unset,
+    Object? voiceQueueItemId = _unset,
     QueueStatus? imageQueueStatus,
     QueueStatus? voiceQueueStatus,
   }) {
@@ -328,7 +357,8 @@ class AddProductDraft {
       isEnhanced: isEnhanced ?? this.isEnhanced,
       recordedAudioPath: recordedAudioPath ?? this.recordedAudioPath,
       voiceTranscript: voiceTranscript ?? this.voiceTranscript,
-      transcriptionConfidence: transcriptionConfidence ?? this.transcriptionConfidence,
+      transcriptionConfidence:
+          transcriptionConfidence ?? this.transcriptionConfidence,
       manualDescription: manualDescription ?? this.manualDescription,
       titleEn: titleEn ?? this.titleEn,
       titleHi: titleHi ?? this.titleHi,
@@ -349,8 +379,14 @@ class AddProductDraft {
       isAiProcessing: isAiProcessing ?? this.isAiProcessing,
       additionalImagePaths: additionalImagePaths ?? this.additionalImagePaths,
       isRetakeFlow: isRetakeFlow ?? this.isRetakeFlow,
-      imageQueueItemId: imageQueueItemId ?? this.imageQueueItemId,
-      voiceQueueItemId: voiceQueueItemId ?? this.voiceQueueItemId,
+      hasExistingDraft: hasExistingDraft ?? this.hasExistingDraft,
+      resumePromptHandled: resumePromptHandled ?? this.resumePromptHandled,
+      imageQueueItemId: identical(imageQueueItemId, _unset)
+          ? this.imageQueueItemId
+          : imageQueueItemId as String?,
+      voiceQueueItemId: identical(voiceQueueItemId, _unset)
+          ? this.voiceQueueItemId
+          : voiceQueueItemId as String?,
       imageQueueStatus: imageQueueStatus ?? this.imageQueueStatus,
       voiceQueueStatus: voiceQueueStatus ?? this.voiceQueueStatus,
     );
@@ -359,74 +395,199 @@ class AddProductDraft {
 
 class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   final Ref _ref;
-  StreamSubscription<List<QueueItem>>? _queueSubscription;
+  StreamSubscription<List<QueueItem>>? _imageQueueSubscription;
+  bool _processingSubmissionInProgress = false;
+  Map<String, dynamic>? _pendingDraft;
 
   AddProductFlowNotifier(this._ref)
-      : super(AddProductDraft(draftId: 'draft_${DateTime.now().microsecondsSinceEpoch}')) {
+    : super(
+        AddProductDraft(
+          draftId: 'draft_${DateTime.now().microsecondsSinceEpoch}',
+        ),
+      ) {
     _loadDraft();
-    if (OfflineSyncService.instance.isInitialized) {
-      _queueSubscription = OfflineSyncService.instance.watchQueue().listen(_handleQueueItems);
-    }
-  }
-
-  void _handleQueueItems(List<QueueItem> items) {
-    for (final item in items.where((item) => item.productDraftId == state.draftId)) {
-      if (item.type == QueueItemType.imageEnhance) {
-        state = state.copyWith(imageQueueStatus: item.status);
-      } else {
-        state = state.copyWith(voiceQueueStatus: item.status);
-      }
-
-      if (item.status != QueueStatus.completed || item.resultJson == null) continue;
-
-      final result = jsonDecode(item.resultJson!) as Map<String, dynamic>;
-      if (item.type == QueueItemType.imageEnhance) {
-        final enhancedUrl = result['enhancedImageUrl'] as String?;
-        if (enhancedUrl != null && enhancedUrl.isNotEmpty) {
-          state = state.copyWith(
-            enhancedImagePath: enhancedUrl,
-            isEnhanced: true,
-          );
-        }
-      } else {
-        state = state.copyWith(
-          voiceTranscript: result['transcript'] as String? ?? state.voiceTranscript,
-          titleEn: result['titleEn'] as String? ?? state.titleEn,
-          titleHi: result['titleHi'] as String? ?? state.titleHi,
-          descriptionEn: result['descriptionEn'] as String? ?? state.descriptionEn,
-          descriptionHi: result['descriptionHi'] as String? ?? state.descriptionHi,
-          category: result['category'] as String? ?? state.category,
-          tags: (result['tags'] as List<dynamic>?)?.map((tag) => tag.toString()).toList() ?? state.tags,
-        );
-      }
-      _persistDraft();
-    }
   }
 
   @override
   void dispose() {
-    _queueSubscription?.cancel();
+    _imageQueueSubscription?.cancel();
     super.dispose();
   }
 
   void _loadDraft() {
     if (Hive.isBoxOpen('draft_box')) {
       final box = Hive.box('draft_box');
-      final draftId = box.get('draft_id') as String?;
-      final image = box.get('draft_image') as String?;
-      final transcript = box.get('draft_transcript') as String?;
-      final additional = (box.get('draft_additional_images') as List?)
-          ?.map((e) => e.toString())
-          .toList();
-      if (draftId != null || image != null || transcript != null || additional != null) {
+      final values = <String, dynamic>{
+        for (final key in box.keys) key.toString(): box.get(key),
+      };
+      if (values.isNotEmpty &&
+          (values['draft_id'] != null ||
+              values['draft_original_image'] != null ||
+              values['draft_image'] != null)) {
+        _pendingDraft = values;
         state = state.copyWith(
-          draftId: draftId,
-          originalImagePath: image ?? '',
-          enhancedImagePath: image ?? '',
-          voiceTranscript: transcript ?? '',
-          additionalImagePaths: additional ?? [],
+          hasExistingDraft: true,
+          resumePromptHandled: false,
         );
       }
+    }
+  }
+
+  void loadSavedDraftState({
+    required String draftId,
+    required String originalImagePath,
+    required String enhancedImagePath,
+    required String transcript,
+    String manualDescription = '',
+    String titleEn = '',
+    String titleHi = '',
+    String descriptionEn = '',
+    String descriptionHi = '',
+    List<String> additionalImagePaths = const [],
+    int? savedStep,
+    String? recordedAudioPath,
+    double? transcriptionConfidence,
+    String? category,
+    List<String>? tags,
+    double? rawMaterialCost,
+    double? laborHours,
+    double? hourlyRate,
+    double? floorPrice,
+    double? suggestedPrice,
+    double? minPrice,
+    double? maxPrice,
+    double? finalPrice,
+    String? pricingReasoning,
+    String? pricingReasoningHi,
+    String? imageQueueItemId,
+    String? voiceQueueItemId,
+    QueueStatus? imageQueueStatus,
+    QueueStatus? voiceQueueStatus,
+  }) {
+    final hasImage =
+        (originalImagePath.isNotEmpty || enhancedImagePath.isNotEmpty);
+    final hasCompletedListing =
+        titleEn.isNotEmpty ||
+        titleHi.isNotEmpty ||
+        descriptionEn.isNotEmpty ||
+        descriptionHi.isNotEmpty;
+
+    int computedStep;
+    if (!hasImage) {
+      computedStep = 0;
+    } else if (hasCompletedListing) {
+      computedStep = 2;
+    } else if (transcript.isNotEmpty || manualDescription.isNotEmpty) {
+      computedStep = 1;
+    } else {
+      computedStep = 0;
+    }
+
+    final resolvedStep = savedStep != null && savedStep >= 0 && savedStep <= 4
+        ? savedStep
+        : computedStep;
+
+    state = state.copyWith(
+      draftId: draftId,
+      originalImagePath: originalImagePath,
+      enhancedImagePath: enhancedImagePath,
+      isEnhanced:
+          enhancedImagePath.isNotEmpty &&
+          enhancedImagePath != originalImagePath,
+      voiceTranscript: transcript,
+      recordedAudioPath: recordedAudioPath ?? '',
+      transcriptionConfidence: transcriptionConfidence ?? 1.0,
+      manualDescription: manualDescription,
+      titleEn: titleEn,
+      titleHi: titleHi,
+      descriptionEn: descriptionEn,
+      descriptionHi: descriptionHi,
+      category: category ?? state.category,
+      tags: tags ?? state.tags,
+      rawMaterialCost: rawMaterialCost ?? state.rawMaterialCost,
+      laborHours: laborHours ?? state.laborHours,
+      hourlyRate: hourlyRate ?? state.hourlyRate,
+      floorPrice: floorPrice ?? state.floorPrice,
+      suggestedPrice: suggestedPrice ?? state.suggestedPrice,
+      minPrice: minPrice ?? state.minPrice,
+      maxPrice: maxPrice ?? state.maxPrice,
+      finalPrice: finalPrice ?? state.finalPrice,
+      pricingReasoning: pricingReasoning ?? state.pricingReasoning,
+      pricingReasoningHi: pricingReasoningHi ?? state.pricingReasoningHi,
+      currentStep: resolvedStep,
+      additionalImagePaths: additionalImagePaths,
+      imageQueueItemId: imageQueueItemId,
+      voiceQueueItemId: voiceQueueItemId,
+      imageQueueStatus: imageQueueStatus ?? QueueStatus.completed,
+      voiceQueueStatus: voiceQueueStatus ?? QueueStatus.completed,
+      hasExistingDraft: true,
+      resumePromptHandled: false,
+      isAiProcessing: false,
+    );
+  }
+
+  void markResumePromptVisible() {
+    state = state.copyWith(resumePromptHandled: true);
+  }
+
+  void resumeExistingDraft() {
+    final pending = _pendingDraft;
+    if (pending != null) {
+      final legacyImage = pending['draft_image'] as String? ?? '';
+      loadSavedDraftState(
+        draftId:
+            pending['draft_id'] as String? ??
+            'draft_${DateTime.now().microsecondsSinceEpoch}',
+        originalImagePath:
+            pending['draft_original_image'] as String? ?? legacyImage,
+        enhancedImagePath: pending['draft_enhanced_image'] as String? ?? '',
+        transcript: pending['draft_transcript'] as String? ?? '',
+        recordedAudioPath: pending['draft_audio'] as String? ?? '',
+        manualDescription: pending['draft_manual_description'] as String? ?? '',
+        titleEn: pending['draft_title_en'] as String? ?? '',
+        titleHi: pending['draft_title_hi'] as String? ?? '',
+        descriptionEn: pending['draft_description_en'] as String? ?? '',
+        descriptionHi: pending['draft_description_hi'] as String? ?? '',
+        additionalImagePaths: _stringList(pending['draft_additional_images']),
+        savedStep: pending['draft_step'] as int?,
+        category: pending['draft_category'] as String?,
+        tags: _stringListOrNull(pending['draft_tags']),
+        rawMaterialCost: (pending['draft_raw_material_cost'] as num?)
+            ?.toDouble(),
+        laborHours: (pending['draft_labor_hours'] as num?)?.toDouble(),
+        hourlyRate: (pending['draft_hourly_rate'] as num?)?.toDouble(),
+        floorPrice: (pending['draft_floor_price'] as num?)?.toDouble(),
+        suggestedPrice: (pending['draft_suggested_price'] as num?)?.toDouble(),
+        minPrice: (pending['draft_min_price'] as num?)?.toDouble(),
+        maxPrice: (pending['draft_max_price'] as num?)?.toDouble(),
+        finalPrice: (pending['draft_final_price'] as num?)?.toDouble(),
+        pricingReasoning: pending['draft_pricing_reasoning'] as String?,
+        pricingReasoningHi: pending['draft_pricing_reasoning_hi'] as String?,
+        imageQueueItemId: pending['draft_image_queue_id'] as String?,
+        voiceQueueItemId: pending['draft_voice_queue_id'] as String?,
+        imageQueueStatus: _queueStatus(pending['draft_image_queue_status']),
+        voiceQueueStatus: _queueStatus(pending['draft_voice_queue_status']),
+      );
+      _hydrateQueueState();
+    }
+    _pendingDraft = null;
+    state = state.copyWith(
+      hasExistingDraft: false,
+      resumePromptHandled: true,
+      isAiProcessing: false,
+    );
+  }
+
+  void discardPreviousDraft() {
+    _pendingDraft = null;
+    state = AddProductDraft(
+      draftId: 'draft_${DateTime.now().microsecondsSinceEpoch}',
+      hasExistingDraft: false,
+      resumePromptHandled: true,
+      isAiProcessing: false,
+    );
+    if (Hive.isBoxOpen('draft_box')) {
+      Hive.box('draft_box').clear();
     }
   }
 
@@ -434,9 +595,34 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     if (Hive.isBoxOpen('draft_box')) {
       final box = Hive.box('draft_box');
       box.put('draft_id', state.draftId);
-      box.put('draft_image', state.enhancedImagePath.isNotEmpty ? state.enhancedImagePath : state.originalImagePath);
+      box.put('draft_step', state.currentStep);
+      box.put('draft_image', state.originalImagePath);
+      box.put('draft_original_image', state.originalImagePath);
+      box.put('draft_enhanced_image', state.enhancedImagePath);
+      box.put('draft_audio', state.recordedAudioPath);
       box.put('draft_transcript', state.voiceTranscript);
+      box.put('draft_manual_description', state.manualDescription);
+      box.put('draft_title_en', state.titleEn);
+      box.put('draft_title_hi', state.titleHi);
+      box.put('draft_description_en', state.descriptionEn);
+      box.put('draft_description_hi', state.descriptionHi);
+      box.put('draft_category', state.category);
+      box.put('draft_tags', state.tags);
+      box.put('draft_raw_material_cost', state.rawMaterialCost);
+      box.put('draft_labor_hours', state.laborHours);
+      box.put('draft_hourly_rate', state.hourlyRate);
+      box.put('draft_floor_price', state.floorPrice);
+      box.put('draft_suggested_price', state.suggestedPrice);
+      box.put('draft_min_price', state.minPrice);
+      box.put('draft_max_price', state.maxPrice);
+      box.put('draft_final_price', state.finalPrice);
+      box.put('draft_pricing_reasoning', state.pricingReasoning);
+      box.put('draft_pricing_reasoning_hi', state.pricingReasoningHi);
       box.put('draft_additional_images', state.additionalImagePaths);
+      box.put('draft_image_queue_id', state.imageQueueItemId);
+      box.put('draft_voice_queue_id', state.voiceQueueItemId);
+      box.put('draft_image_queue_status', state.imageQueueStatus.index);
+      box.put('draft_voice_queue_status', state.voiceQueueStatus.index);
     }
   }
 
@@ -461,92 +647,283 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 
   void setStep(int step) {
     state = state.copyWith(currentStep: step);
+    _persistDraft();
   }
 
   void nextStep() {
     if (state.currentStep < 4) {
       state = state.copyWith(currentStep: state.currentStep + 1);
+      _persistDraft();
     }
   }
 
   void previousStep() {
     if (state.currentStep > 0) {
       state = state.copyWith(currentStep: state.currentStep - 1);
+      _persistDraft();
     }
   }
 
   Future<void> setImage(String path) async {
+    _processingSubmissionInProgress = false;
     state = state.copyWith(
       originalImagePath: path,
       enhancedImagePath: path,
-      isEnhanced: true,
+      isEnhanced: false,
+      isAiProcessing: false,
+      imageQueueItemId: null,
     );
     _persistDraft();
   }
 
   Future<String> queueImage(File imageFile) async {
+    _processingSubmissionInProgress = false;
+    final durablePath = await _copyImageToDraftStorage(imageFile);
     state = state.copyWith(
-      originalImagePath: imageFile.path,
-      enhancedImagePath: imageFile.path,
+      originalImagePath: durablePath,
+      enhancedImagePath: durablePath,
       isEnhanced: false,
-      isAiProcessing: true,
-      imageQueueStatus: QueueStatus.pending,
+      isAiProcessing: false,
+      imageQueueItemId: null,
     );
-
-    String localId = '';
-    if (OfflineSyncService.instance.isInitialized) {
-      try {
-        localId = await OfflineSyncService.instance.enqueueImage(
-          imageFile: imageFile,
-          productDraftId: state.draftId,
-        );
-      } catch (_) {}
-    }
-    state = state.copyWith(imageQueueItemId: localId);
     _persistDraft();
+    return '';
+  }
 
-    // Trigger HTTP AI Image Enhancement
-    unawaited(_enhanceProductImage(imageFile));
+  Future<String> _copyImageToDraftStorage(File imageFile) async {
+    if (!imageFile.existsSync()) return imageFile.path;
+    final appDir = await getApplicationDocumentsDirectory();
+    final draftDir = Directory('${appDir.path}/draft_media');
+    await draftDir.create(recursive: true);
+    final extension = imageFile.path.contains('.')
+        ? imageFile.path.split('.').last
+        : 'jpg';
+    final target = File(
+      '${draftDir.path}/${state.draftId}-${DateTime.now().microsecondsSinceEpoch}.$extension',
+    );
+    await imageFile.copy(target.path);
+    return target.path;
+  }
 
-    return localId;
+  Future<void> submitForAiProcessing(
+    bool isOnline, {
+    String languageCode = 'en',
+  }) async {
+    if (_processingSubmissionInProgress) return;
+    _processingSubmissionInProgress = true;
+
+    try {
+      final hasPendingAi = !state.isEnhanced || state.titleEn.isEmpty;
+      state = state.copyWith(isAiProcessing: isOnline && hasPendingAi);
+
+      if (state.imageQueueItemId != null &&
+          state.imageQueueItemId!.isNotEmpty) {
+        _watchImageQueue(state.imageQueueItemId!);
+      }
+
+      // 1. Enqueue image if present and not yet queued in Drift
+      if (!isOnline &&
+          state.originalImagePath.isNotEmpty &&
+          (state.imageQueueItemId == null || state.imageQueueItemId!.isEmpty)) {
+        final imgFile = File(state.originalImagePath);
+        if (imgFile.existsSync() && OfflineSyncService.instance.isInitialized) {
+          try {
+            final localId = await OfflineSyncService.instance.enqueueImage(
+              imageFile: imgFile,
+              productDraftId: state.draftId,
+            );
+            state = state.copyWith(
+              imageQueueItemId: localId,
+              imageQueueStatus: QueueStatus.pending,
+            );
+            _watchImageQueue(localId);
+          } catch (e) {
+            debugPrint('[AddProductFlow] Error enqueuing image: $e');
+          }
+        }
+      }
+
+      // 2. Enqueue voice note if present and not yet queued in Drift
+      if (state.recordedAudioPath.isNotEmpty &&
+          (state.voiceQueueItemId == null || state.voiceQueueItemId!.isEmpty)) {
+        final voiceFile = File(state.recordedAudioPath);
+        if (voiceFile.existsSync() &&
+            OfflineSyncService.instance.isInitialized) {
+          try {
+            final localId = await OfflineSyncService.instance.enqueueVoiceNote(
+              audioFile: voiceFile,
+              productDraftId: state.draftId,
+            );
+            state = state.copyWith(
+              voiceQueueItemId: localId,
+              voiceQueueStatus: QueueStatus.pending,
+            );
+          } catch (e) {
+            debugPrint('[AddProductFlow] Error enqueuing voice note: $e');
+          }
+        }
+      }
+
+      _persistDraft();
+
+      // 3. Dispatch processing if online
+      if (isOnline) {
+        if (!state.isEnhanced && state.originalImagePath.isNotEmpty) {
+          final imageFile = File(state.originalImagePath);
+          if (imageFile.existsSync()) {
+            unawaited(_enhanceProductImage(imageFile));
+          }
+        }
+
+        if (OfflineSyncService.instance.isInitialized) {
+          unawaited(OfflineSyncService.instance.triggerSyncNow());
+        }
+
+        // If manual description was provided instead of voice, generate listing
+        if (state.titleEn.isEmpty &&
+            state.manualDescription.isNotEmpty &&
+            state.recordedAudioPath.isEmpty) {
+          unawaited(_generateListingFromManualDescription(languageCode));
+        }
+      } else {
+        // Offline: keep items saved in draft and queue, wait for connectivity
+        state = state.copyWith(isAiProcessing: false);
+      }
+    } finally {
+      _processingSubmissionInProgress = false;
+    }
   }
 
   Future<void> _enhanceProductImage(File imageFile) async {
     try {
-      debugPrint('[AddProductFlow] Triggering AI Enhancer for: ${imageFile.path}');
       final enhancer = _ref.read(imageEnhancerServiceProvider);
       final enhancedUrl = await enhancer.enhanceImage(
         imageFile.path,
         draftId: state.draftId,
       );
-      debugPrint('[AddProductFlow] Received enhancedUrl: $enhancedUrl (original: ${imageFile.path})');
-      if (enhancedUrl.isNotEmpty && enhancedUrl != imageFile.path) {
-        state = state.copyWith(
-          enhancedImagePath: enhancedUrl,
-          isEnhanced: true,
-          isAiProcessing: false,
-          imageQueueStatus: QueueStatus.completed,
-        );
-        _persistDraft();
-        debugPrint('[AddProductFlow] State updated: isEnhanced=true, enhancedImagePath=$enhancedUrl');
-      } else {
-        state = state.copyWith(isAiProcessing: false);
-      }
+      if (enhancedUrl.isEmpty || enhancedUrl == imageFile.path) return;
+
+      state = state.copyWith(
+        enhancedImagePath: enhancedUrl,
+        isEnhanced: true,
+        isAiProcessing: false,
+        imageQueueStatus: QueueStatus.completed,
+      );
+      _persistDraft();
     } catch (e, st) {
       debugPrint('[AddProductFlow] AI enhancement error: $e\n$st');
-      state = state.copyWith(isAiProcessing: false);
+    }
+  }
+
+  void _watchImageQueue(String localId) {
+    _imageQueueSubscription?.cancel();
+    if (!OfflineSyncService.instance.isInitialized) return;
+
+    _imageQueueSubscription = OfflineSyncService.instance.watchQueue().listen((
+      items,
+    ) {
+      for (final item in items) {
+        if (item.localId == localId || item.productDraftId == state.draftId) {
+          _applyQueueItem(item);
+        }
+      }
+    });
+  }
+
+  Future<void> _hydrateQueueState() async {
+    if (!OfflineSyncService.instance.isInitialized) return;
+    final items = await OfflineSyncService.instance.getAllQueueItems();
+    for (final item in items.where(
+      (item) => item.productDraftId == state.draftId,
+    )) {
+      _applyQueueItem(item);
+    }
+    final imageId = state.imageQueueItemId;
+    if (imageId != null && imageId.isNotEmpty) _watchImageQueue(imageId);
+  }
+
+  void _applyQueueItem(QueueItem item) {
+    final result = item.resultJson == null
+        ? null
+        : jsonDecode(item.resultJson!) as Map<String, dynamic>;
+    if (item.type == QueueItemType.imageEnhance) {
+      final enhancedUrl =
+          result?['enhancedImageUrl'] as String? ??
+          result?['enhanced_url'] as String?;
+      state = state.copyWith(
+        imageQueueItemId: item.localId,
+        imageQueueStatus: item.status,
+        enhancedImagePath: enhancedUrl ?? state.enhancedImagePath,
+        isEnhanced:
+            enhancedUrl != null && enhancedUrl != state.originalImagePath,
+        isAiProcessing:
+            item.status != QueueStatus.completed || state.titleEn.isEmpty,
+      );
+    } else {
+      state = state.copyWith(
+        voiceQueueItemId: item.localId,
+        voiceQueueStatus: item.status,
+        voiceTranscript:
+            result?['transcript'] as String? ?? state.voiceTranscript,
+        titleEn: result?['titleEn'] as String? ?? state.titleEn,
+        titleHi: result?['titleHi'] as String? ?? state.titleHi,
+        descriptionEn:
+            result?['descriptionEn'] as String? ?? state.descriptionEn,
+        descriptionHi:
+            result?['descriptionHi'] as String? ?? state.descriptionHi,
+        category: result?['category'] as String? ?? state.category,
+        tags: _stringListOrNull(result?['tags']) ?? state.tags,
+        isAiProcessing:
+            item.status != QueueStatus.completed || !state.isEnhanced,
+      );
+    }
+    _persistDraft();
+  }
+
+  Future<void> _generateListingFromManualDescription(
+    String languageCode,
+  ) async {
+    try {
+      state = state.copyWith(isAiProcessing: true);
+      final speechService = _ref.read(speechServiceProvider);
+      final suggestion = await speechService.generateListingFromTranscript(
+        transcript: state.manualDescription,
+        languageCode: languageCode,
+        categoryHint: state.category,
+      );
+      state = state.copyWith(
+        titleEn: suggestion.titleEn,
+        titleHi: suggestion.titleHi,
+        descriptionEn: suggestion.descriptionEn,
+        descriptionHi: suggestion.descriptionHi,
+        category: suggestion.category,
+        tags: suggestion.tags,
+        isAiProcessing: !state.isEnhanced && state.originalImagePath.isNotEmpty,
+      );
+      _persistDraft();
+    } catch (_) {
+      state = state.copyWith(
+        titleEn: state.manualDescription,
+        descriptionEn: state.manualDescription,
+        isAiProcessing: !state.isEnhanced && state.originalImagePath.isNotEmpty,
+      );
+      _persistDraft();
     }
   }
 
   Future<void> addAdditionalImage(String path) async {
     if (state.additionalImagePaths.length >= 2) return;
-    state = state.copyWith(additionalImagePaths: [...state.additionalImagePaths, path]);
+    state = state.copyWith(
+      additionalImagePaths: [...state.additionalImagePaths, path],
+    );
     _persistDraft();
   }
 
   void removeAdditionalImage(String path) {
     state = state.copyWith(
-      additionalImagePaths: state.additionalImagePaths.where((p) => p != path).toList(),
+      additionalImagePaths: state.additionalImagePaths
+          .where((p) => p != path)
+          .toList(),
     );
     _persistDraft();
   }
@@ -573,6 +950,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       recordedAudioPath: '',
       voiceTranscript: '',
       manualDescription: '',
+      voiceQueueItemId: null,
     );
     setStep(1);
   }
@@ -581,22 +959,20 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     required String audioPath,
     required String languageCode,
   }) async {
-    await queueVoiceRecording(File(audioPath));
+    state = state.copyWith(
+      recordedAudioPath: audioPath,
+      voiceQueueItemId: null,
+    );
+    _persistDraft();
   }
 
   Future<String> queueVoiceRecording(File audioFile) async {
     state = state.copyWith(
       recordedAudioPath: audioFile.path,
-      voiceQueueStatus: QueueStatus.pending,
+      voiceQueueItemId: null,
     );
-
-    final localId = await OfflineSyncService.instance.enqueueVoiceNote(
-      audioFile: audioFile,
-      productDraftId: state.draftId,
-    );
-    state = state.copyWith(voiceQueueItemId: localId);
     _persistDraft();
-    return localId;
+    return '';
   }
 
   void clearVoiceRecording() {
@@ -610,9 +986,25 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   }
 
   Future<void> generateAiListing(String languageCode) async {
-    // The queued voice job owns listing generation. A result coordinator will
-    // populate this draft when the backend completes the job.
-    state = state.copyWith(isAiProcessing: false);
+    state = state.copyWith(isAiProcessing: true);
+    if (state.recordedAudioPath.isNotEmpty &&
+        OfflineSyncService.instance.isInitialized) {
+      final audioFile = File(state.recordedAudioPath);
+      if (audioFile.existsSync()) {
+        try {
+          final localId = await OfflineSyncService.instance.enqueueVoiceNote(
+            audioFile: audioFile,
+            productDraftId: state.draftId,
+          );
+          state = state.copyWith(voiceQueueItemId: localId);
+          await OfflineSyncService.instance.triggerSyncNow();
+        } catch (_) {}
+      }
+    } else if (state.manualDescription.isNotEmpty) {
+      await _generateListingFromManualDescription(languageCode);
+    } else {
+      state = state.copyWith(isAiProcessing: false);
+    }
   }
 
   Future<void> calculatePriceSuggestion() async {
@@ -683,7 +1075,11 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   }
 
   void reset() {
-    state = AddProductDraft(draftId: 'draft_${DateTime.now().microsecondsSinceEpoch}');
+    state = AddProductDraft(
+      draftId: 'draft_${DateTime.now().microsecondsSinceEpoch}',
+      hasExistingDraft: false,
+      resumePromptHandled: true,
+    );
     if (Hive.isBoxOpen('draft_box')) {
       Hive.box('draft_box').clear();
     }
@@ -692,8 +1088,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 
 final addProductFlowProvider =
     StateNotifierProvider<AddProductFlowNotifier, AddProductDraft>((ref) {
-  return AddProductFlowNotifier(ref);
-});
+      return AddProductFlowNotifier(ref);
+    });
 
 // --- Notifications Provider ---
 enum NotificationType { listingLive, pendingSync, buyerView, priceSuggestion }

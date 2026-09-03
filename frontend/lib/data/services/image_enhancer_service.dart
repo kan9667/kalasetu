@@ -18,17 +18,20 @@ class HttpImageEnhancerService implements ImageEnhancerService {
     Dio? dio,
     this.maxRetries = 1,
     this.onFallbackQueue,
-  })  : baseUrl = baseUrl ?? _defaultBaseUrl(),
-        _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: baseUrl ?? _defaultBaseUrl(),
-                connectTimeout: const Duration(seconds: 20),
-                sendTimeout: const Duration(minutes: 2), // Large payload over 2G/3G
-                receiveTimeout: const Duration(minutes: 2),
-                headers: {'Accept': 'application/json'},
-              ),
-            );
+  }) : baseUrl = baseUrl ?? _defaultBaseUrl(),
+       _dio =
+           dio ??
+           Dio(
+             BaseOptions(
+               baseUrl: baseUrl ?? _defaultBaseUrl(),
+               connectTimeout: const Duration(seconds: 20),
+               sendTimeout: const Duration(
+                 minutes: 2,
+               ), // Large payload over 2G/3G
+               receiveTimeout: const Duration(minutes: 5),
+               headers: {'Accept': 'application/json'},
+             ),
+           );
 
   final String baseUrl;
   final Dio _dio;
@@ -36,6 +39,10 @@ class HttpImageEnhancerService implements ImageEnhancerService {
   final Future<void> Function(File file, String? draftId)? onFallbackQueue;
 
   static String _defaultBaseUrl() {
+    const configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
+    if (configuredBaseUrl.isNotEmpty) return configuredBaseUrl;
+
+    if (Platform.isAndroid) return 'http://10.0.2.2:8000';
     return 'http://127.0.0.1:8000';
   }
 
@@ -54,7 +61,8 @@ class HttpImageEnhancerService implements ImageEnhancerService {
     }
 
     // If already a web URL, return directly
-    if (inputPathOrUrl.startsWith('http://') || inputPathOrUrl.startsWith('https://')) {
+    if (inputPathOrUrl.startsWith('http://') ||
+        inputPathOrUrl.startsWith('https://')) {
       return inputPathOrUrl;
     }
 
@@ -70,7 +78,9 @@ class HttpImageEnhancerService implements ImageEnhancerService {
     while (attempts <= maxRetries) {
       try {
         attempts++;
-        debugPrint('[ImageEnhancer] Attempt $attempts: POST $baseUrl/api/v1/catalog/enhance-image (${compressedFile.path})');
+        debugPrint(
+          '[ImageEnhancer] Attempt $attempts: POST $baseUrl/api/v1/catalog/enhance-image (${compressedFile.path})',
+        );
         final formData = FormData.fromMap({
           'image': await MultipartFile.fromFile(
             compressedFile.path,
@@ -85,14 +95,20 @@ class HttpImageEnhancerService implements ImageEnhancerService {
 
         if (response.statusCode == 200 && response.data != null) {
           final data = response.data as Map<String, dynamic>;
-          final enhancedPath = (data['enhanced_url'] ?? data['enhanced_image_url']) as String?;
+          final enhancedPath =
+              (data['enhanced_url'] ?? data['enhanced_image_url']) as String?;
           if (enhancedPath != null && enhancedPath.isNotEmpty) {
             String fullUrl;
-            if (enhancedPath.startsWith('http://') || enhancedPath.startsWith('https://')) {
+            if (enhancedPath.startsWith('http://') ||
+                enhancedPath.startsWith('https://')) {
               fullUrl = enhancedPath;
             } else {
-              final cleanPrefix = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
-              final cleanPath = enhancedPath.startsWith('/') ? enhancedPath : '/$enhancedPath';
+              final cleanPrefix = baseUrl.endsWith('/')
+                  ? baseUrl.substring(0, baseUrl.length - 1)
+                  : baseUrl;
+              final cleanPath = enhancedPath.startsWith('/')
+                  ? enhancedPath
+                  : '/$enhancedPath';
               fullUrl = '$cleanPrefix$cleanPath';
             }
             debugPrint('[ImageEnhancer] Success: $fullUrl');
@@ -123,7 +139,8 @@ class HttpImageEnhancerService implements ImageEnhancerService {
       if (OfflineSyncService.instance.isInitialized) {
         await OfflineSyncService.instance.enqueueImage(
           imageFile: file,
-          productDraftId: draftId ?? 'draft_${DateTime.now().millisecondsSinceEpoch}',
+          productDraftId:
+              draftId ?? 'draft_${DateTime.now().millisecondsSinceEpoch}',
         );
       }
     } catch (_) {

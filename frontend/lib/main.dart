@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -16,6 +18,13 @@ Future<Box<T>> _openSafeBox<T>(String boxName) async {
     await Hive.deleteBoxFromDisk(boxName);
     return await Hive.openBox<T>(boxName);
   }
+}
+
+String _apiBaseUrl() {
+  const configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
+  if (configuredBaseUrl.isNotEmpty) return configuredBaseUrl;
+  if (Platform.isAndroid) return 'http://10.0.2.2:8000';
+  return 'http://127.0.0.1:8000';
 }
 
 void main() async {
@@ -44,8 +53,8 @@ void main() async {
   await _openSafeBox('app_settings_box');
 
   await OfflineSyncService.instance.init(
-    uploadApi: MockUploadApi(),
-    healthCheckUrl: null,
+    uploadApi: RealUploadApi(baseUrl: _apiBaseUrl()),
+    healthCheckUrl: '${_apiBaseUrl()}/api/v1/health',
   );
 
   runApp(
