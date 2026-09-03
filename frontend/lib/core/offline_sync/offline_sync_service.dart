@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'database/database.dart';
 import 'models/queue_item.dart';
 import 'services/connectivity_service.dart';
 import 'services/sync_manager.dart';
@@ -23,32 +23,45 @@ class OfflineSyncService {
   OfflineSyncService._();
   static final OfflineSyncService instance = OfflineSyncService._();
 
-  late Isar _isar;
+  late OfflineSyncDatabase _db;
   late SyncManager _syncManager;
   bool _initialized = false;
 
   bool get isInitialized => _initialized;
+
+  /// Visible for testing to access database directly if needed
+  OfflineSyncDatabase get db {
+    _assertInitialized();
+    return _db;
+  }
 
   /// Call once, before `runApp()`. Safe to call again — no-ops after the
   /// first successful call.
   Future<void> init({
     required UploadApi uploadApi,
     String? healthCheckUrl = 'https://your-backend.example.com/health',
+    OfflineSyncDatabase? db,
   }) async {
     if (_initialized) return;
 
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open([QueueItemSchema], directory: dir.path, inspector: false);
+    _db = db ?? OfflineSyncDatabase();
 
     final connectivityService = ConnectivityService(healthCheckUrl: healthCheckUrl);
     _syncManager = SyncManager(
-      isar: _isar,
+      db: _db,
       uploadApi: uploadApi,
       connectivityService: connectivityService,
     );
     _syncManager.startListening();
 
     _initialized = true;
+  }
+
+  Future<void> dispose() async {
+    if (!_initialized) return;
+    _syncManager.dispose();
+    await _db.close();
+    _initialized = false;
   }
 
   /// Instantly saves the image locally and queues it for AI enhancement.
@@ -83,18 +96,14 @@ class OfflineSyncService {
   /// off this directly, no manual refresh needed.
   Stream<List<QueueItem>> watchQueue() {
     _assertInitialized();
-    return _isar.queueItems.where().watch(fireImmediately: true);
+    return _db.watchQueue();
   }
 
   /// Live stream of a single item — drive a per-product status icon
   /// (clock / spinner / sparkle / check / retry) off this.
   Stream<QueueItem?> watchItem(String localId) {
     _assertInitialized();
-    return _isar.queueItems
-        .filter()
-        .localIdEqualTo(localId)
-        .watch(fireImmediately: true)
-        .map((results) => results.isEmpty ? null : results.first);
+    return _db.watchItem(localId);
   }
 
   Future<void> retryItem(String localId) {
@@ -115,19 +124,12 @@ class OfflineSyncService {
 
   Future<int> pendingCount() {
     _assertInitialized();
-    return _isar.queueItems
-        .filter()
-        .statusEqualTo(QueueStatus.pending)
-        .or()
-        .statusEqualTo(QueueStatus.uploading)
-        .or()
-        .statusEqualTo(QueueStatus.processing)
-        .count();
+    return _db.countPendingOrProcessing();
   }
 
   Future<List<QueueItem>> getAllQueueItems() async {
     _assertInitialized();
-    return _isar.queueItems.where().findAll();
+    return _db.getAllQueueItems();
   }
 
   Future<Map<String, dynamic>> getLocalMediaLocations() async {
@@ -145,7 +147,7 @@ class OfflineSyncService {
     return {
       'queue_files': queueFiles,
       'recording_files': recordingFiles,
-      'isar_directory': docDir.path,
+      'app_doc_directory': docDir.path,
     };
   }
 
@@ -158,7 +160,7 @@ class OfflineSyncService {
     }
 
     final media = await getLocalMediaLocations();
-    debugPrint('Local media directories: ${media['isar_directory']}');
+    debugPrint('Local media directories: ${media['app_doc_directory']}');
     debugPrint('Queued files: ${media['queue_files']}');
     debugPrint('Recording files: ${media['recording_files']}');
   }

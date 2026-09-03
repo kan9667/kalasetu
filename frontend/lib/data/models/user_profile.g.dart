@@ -23,8 +23,8 @@ class UserProfileAdapter extends TypeAdapter<UserProfile> {
       avatarUrl: fields[3] as String?,
       craftType: fields[4] as String,
       locationCluster: fields[5] as String,
-      preferredLanguage: fields[6] as String? ?? 'en',
-      state: fields[7] as String? ?? '',
+      preferredLanguage: fields[6] as String,
+      state: fields[7] as String,
       experienceYears: fields[8] as String?,
       pehchanId: fields[9] as String?,
     );

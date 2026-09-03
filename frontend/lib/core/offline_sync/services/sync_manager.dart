@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
-import '../models/queue_item.dart';
+import '../database/database.dart';
 import 'connectivity_service.dart';
 import 'upload_api.dart';
 
@@ -15,15 +15,15 @@ import 'upload_api.dart';
 /// enqueue -> upload -> poll -> complete/fail -> retry.
 ///
 /// Nothing in here knows about widgets, screens, or navigation — it only
-/// talks to Isar, the connectivity service, and the upload API.
+/// talks to the Drift database, the connectivity service, and the upload API.
 class SyncManager {
   SyncManager({
-    required this.isar,
+    required this.db,
     required this.uploadApi,
     required this.connectivityService,
   });
 
-  final Isar isar;
+  final OfflineSyncDatabase db;
   final UploadApi uploadApi;
   final ConnectivityService connectivityService;
 
@@ -43,7 +43,9 @@ class SyncManager {
 
   void dispose() {
     _connectivitySub?.cancel();
+    _connectivitySub = null;
     _processingPollTimer?.cancel();
+    _processingPollTimer = null;
   }
 
   /// Copies [file] into app-private storage and writes a PENDING queue
@@ -64,15 +66,16 @@ class SyncManager {
     final localPath = '${queueDir.path}/$localId.$ext';
     await file.copy(localPath);
 
-    final item = QueueItem()
-      ..localId = localId
-      ..type = type
-      ..localFilePath = localPath
-      ..productDraftId = productDraftId
-      ..status = QueueStatus.pending
-      ..createdAt = DateTime.now();
-
-    await isar.writeTxn(() => isar.queueItems.put(item));
+    await db.insertQueueItem(
+      QueueItemsCompanion(
+        localId: Value(localId),
+        type: Value(type),
+        localFilePath: Value(localPath),
+        productDraftId: Value(productDraftId),
+        status: const Value(QueueStatus.pending),
+        createdAt: Value(DateTime.now()),
+      ),
+    );
 
     unawaited(triggerSyncIfOnline());
     return localId;
@@ -95,21 +98,18 @@ class SyncManager {
   }
 
   Future<void> _uploadPendingItems() async {
-    final items = await isar.queueItems
-        .filter()
-        .statusEqualTo(QueueStatus.pending)
-        .or()
-        .statusEqualTo(QueueStatus.failed)
-        .sortByCreatedAt()
-        .findAll();
+    final items = await db.getPendingAndFailedItems();
 
     for (final item in items) {
       if (item.status == QueueStatus.failed && !item.isRetryable) continue;
 
       if (!File(item.localFilePath).existsSync()) {
-        item.status = QueueStatus.failed;
-        item.errorMessage = 'Local file no longer exists on device';
-        await isar.writeTxn(() => isar.queueItems.put(item));
+        await db.updateQueueItem(
+          item.copyWith(
+            status: QueueStatus.failed,
+            errorMessage: const Value('Local file no longer exists on device'),
+          ),
+        );
         continue;
       }
 
@@ -122,43 +122,59 @@ class SyncManager {
   }
 
   Future<void> _uploadSingleItem(QueueItem item) async {
-    item.status = QueueStatus.uploading;
-    item.lastAttemptAt = DateTime.now();
-    await isar.writeTxn(() => isar.queueItems.put(item));
+    var currentItem = item.copyWith(
+      status: QueueStatus.uploading,
+      lastAttemptAt: Value(DateTime.now()),
+    );
+    await db.updateQueueItem(currentItem);
 
     try {
-      final file = File(item.localFilePath);
-      final result = item.type == QueueItemType.imageEnhance
+      final file = File(currentItem.localFilePath);
+      final result = currentItem.type == QueueItemType.imageEnhance
           ? await uploadApi.uploadImage(
-              file: file, idempotencyKey: item.localId, productDraftId: item.productDraftId)
+              file: file,
+              idempotencyKey: currentItem.localId,
+              productDraftId: currentItem.productDraftId,
+            )
           : await uploadApi.uploadVoiceNote(
-              file: file, idempotencyKey: item.localId, productDraftId: item.productDraftId);
-
-      item.jobId = result.jobId;
-      item.errorMessage = null;
+              file: file,
+              idempotencyKey: currentItem.localId,
+              productDraftId: currentItem.productDraftId,
+            );
 
       if (result.immediatelyCompleted) {
-        item.status = QueueStatus.completed;
-        item.resultJson = jsonEncode(result.resultPayload ?? {});
+        currentItem = currentItem.copyWith(
+          status: QueueStatus.completed,
+          jobId: Value(result.jobId),
+          errorMessage: const Value(null),
+          resultJson: Value(jsonEncode(result.resultPayload ?? {})),
+        );
       } else {
-        item.status = QueueStatus.processing;
+        currentItem = currentItem.copyWith(
+          status: QueueStatus.processing,
+          jobId: Value(result.jobId),
+          errorMessage: const Value(null),
+        );
       }
     } catch (e) {
-      item.retryCount += 1;
-      item.status = QueueStatus.failed;
-      item.errorMessage = e.toString();
+      final newRetryCount = currentItem.retryCount + 1;
+      currentItem = currentItem.copyWith(
+        retryCount: newRetryCount,
+        status: QueueStatus.failed,
+        errorMessage: Value(e.toString()),
+      );
 
-      if (item.isRetryable) {
-        final delay = Duration(seconds: min(pow(2, item.retryCount).toInt(), 60));
+      if (currentItem.isRetryable) {
+        final delay = Duration(seconds: min(pow(2, currentItem.retryCount).toInt(), 60));
         Timer(delay, () => unawaited(triggerSyncIfOnline()));
       }
     }
 
-    await isar.writeTxn(() => isar.queueItems.put(item));
+    await db.updateQueueItem(currentItem);
   }
 
   Future<void> _pollProcessingItems() async {
-    final items = await isar.queueItems.filter().statusEqualTo(QueueStatus.processing).findAll();
+    final items = await db.getProcessingItems();
 
     for (final item in items) {
       if (item.jobId == null) continue;
@@ -166,19 +182,25 @@ class SyncManager {
       try {
         final status = await uploadApi.checkStatus(item.jobId!);
         if (status.isComplete) {
-          item.status = QueueStatus.completed;
-          item.resultJson = jsonEncode(status.resultPayload ?? {});
+          await db.updateQueueItem(
+            item.copyWith(
+              status: QueueStatus.completed,
+              resultJson: Value(jsonEncode(status.resultPayload ?? {})),
+            ),
+          );
         } else if (status.isFailed) {
-          item.retryCount += 1;
-          item.status = QueueStatus.failed;
-          item.errorMessage = status.errorMessage ?? 'Processing failed on the server';
+          await db.updateQueueItem(
+            item.copyWith(
+              retryCount: item.retryCount + 1,
+              status: QueueStatus.failed,
+              errorMessage: Value(status.errorMessage ?? 'Processing failed on the server'),
+            ),
+          );
         }
         // else still processing — leave as-is, we'll poll again shortly.
       } catch (_) {
         // Transient poll failure. Leave status untouched; next pass retries.
       }
-
-      await isar.writeTxn(() => isar.queueItems.put(item));
     }
   }
 
@@ -186,8 +208,7 @@ class SyncManager {
   /// seconds so the UI updates without the user needing to reopen the app.
   Future<void> _scheduleNextPollIfNeeded() async {
     _processingPollTimer?.cancel();
-    final stillProcessing =
-        await isar.queueItems.filter().statusEqualTo(QueueStatus.processing).count();
+    final stillProcessing = await db.countProcessing();
     if (stillProcessing > 0) {
       _processingPollTimer = Timer(const Duration(seconds: 8), () {
         unawaited(triggerSyncIfOnline());
@@ -196,26 +217,12 @@ class SyncManager {
   }
 
   Future<void> retryItem(String localId) async {
-    final item = await isar.queueItems.filter().localIdEqualTo(localId).findFirst();
-    if (item == null) return;
-
-    item.status = QueueStatus.pending;
-    item.retryCount = 0;
-    item.errorMessage = null;
-    await isar.writeTxn(() => isar.queueItems.put(item));
-
+    await db.retryItem(localId);
     unawaited(triggerSyncIfOnline());
   }
 
   Future<void> retryAll() async {
-    final items = await isar.queueItems.filter().statusEqualTo(QueueStatus.failed).findAll();
-    for (final item in items) {
-      item.status = QueueStatus.pending;
-      item.retryCount = 0;
-      item.errorMessage = null;
-    }
-    await isar.writeTxn(() => isar.queueItems.putAll(items));
-
+    await db.retryAllFailed();
     unawaited(triggerSyncIfOnline());
   }
 }

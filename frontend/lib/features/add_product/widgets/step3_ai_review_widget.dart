@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -13,12 +12,38 @@ class Step3AiReviewWidget extends ConsumerStatefulWidget {
   const Step3AiReviewWidget({super.key});
 
   @override
-  ConsumerState<Step3AiReviewWidget> createState() => _Step3AiReviewWidgetState();
+  ConsumerState<Step3AiReviewWidget> createState() =>
+      _Step3AiReviewWidgetState();
 }
 
 class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
   final TextEditingController _customTagController = TextEditingController();
   int _selectedLanguageIndex = 0; // 0 for EN, 1 for HI
+  String? _processingDraftId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initiateProcessing();
+    });
+  }
+
+  void _initiateProcessing() {
+    if (!mounted) return;
+    final draft = ref.read(addProductFlowProvider);
+    if (draft.originalImagePath.isEmpty || draft.currentStep != 2) return;
+    if (_processingDraftId == draft.draftId) return;
+    _processingDraftId = draft.draftId;
+    final isOnline = ref.read(connectivityProvider).value ?? true;
+    String localeCode = 'en';
+    try {
+      localeCode = context.locale.languageCode;
+    } catch (_) {}
+    ref
+        .read(addProductFlowProvider.notifier)
+        .submitForAiProcessing(isOnline, languageCode: localeCode);
+  }
 
   @override
   void dispose() {
@@ -31,6 +56,15 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
     final draft = ref.watch(addProductFlowProvider);
     final isOnline = ref.watch(connectivityProvider).value ?? true;
 
+    if (draft.currentStep == 2 &&
+        draft.originalImagePath.isNotEmpty &&
+        !draft.isEnhanced &&
+        _processingDraftId != draft.draftId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _initiateProcessing();
+      });
+    }
+
     // If Step 2 finished while offline, there's no listing yet. The moment
     // connectivity comes back, kick off generation automatically so the
     // user doesn't have to do anything else.
@@ -39,15 +73,20 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
       final nowOnline = next.value == true;
       if (!wasOffline || !nowOnline) return;
 
-      final current = ref.read(addProductFlowProvider);
-      if (current.titleEn.isEmpty && !current.isAiProcessing) {
-        String localeCode = 'en';
-        try {
-          localeCode = context.locale.languageCode;
-        } catch (_) {}
-        ref.read(addProductFlowProvider.notifier).generateAiListing(localeCode);
-      }
+      String localeCode = 'en';
+      try {
+        localeCode = context.locale.languageCode;
+      } catch (_) {}
+      ref
+          .read(addProductFlowProvider.notifier)
+          .submitForAiProcessing(true, languageCode: localeCode);
     });
+
+    if (draft.originalImagePath.isNotEmpty && !draft.isEnhanced) {
+      return isOnline
+          ? const _ImageProcessingView()
+          : const _OfflineWaitingView();
+    }
 
     if (draft.isAiProcessing && draft.titleEn.isEmpty) {
       return Center(
@@ -73,11 +112,12 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
     }
 
     // No listing yet and no internet to generate one — wait it out.
-    if (!isOnline && draft.titleEn.isEmpty) {
+    if (!isOnline && draft.titleEn.isEmpty && draft.originalImagePath.isEmpty) {
       return const _OfflineWaitingView();
     }
 
-    final hasEnhancedImage = draft.isEnhanced &&
+    final hasEnhancedImage =
+        draft.isEnhanced &&
         draft.enhancedImagePath.isNotEmpty &&
         draft.enhancedImagePath != draft.originalImagePath;
 
@@ -114,7 +154,10 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                             bottom: 12,
                             left: 12,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.black.withOpacity(0.7),
                                 borderRadius: BorderRadius.circular(20),
@@ -133,7 +176,10 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                                   SizedBox(width: 8),
                                   Text(
                                     'AI Enhancing image...',
-                                    style: TextStyle(color: Colors.white, fontSize: 12),
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -148,10 +194,18 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                 onPressed: () {
                   ref.read(addProductFlowProvider.notifier).startRetakePhoto();
                 },
-                icon: const Icon(Icons.camera_alt_outlined, size: 18, color: Color(0xFF8C533E)),
+                icon: const Icon(
+                  Icons.camera_alt_outlined,
+                  size: 18,
+                  color: Color(0xFF8C533E),
+                ),
                 label: const Text(
                   'Retake Photo',
-                  style: TextStyle(color: Color(0xFF8C533E), fontWeight: FontWeight.w600, fontSize: 13),
+                  style: TextStyle(
+                    color: Color(0xFF8C533E),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ),
@@ -160,17 +214,26 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
 
           Row(
             children: [
-              const Icon(Icons.auto_awesome, color: Color(0xFFC86D51), size: 22),
+              const Icon(
+                Icons.auto_awesome,
+                color: Color(0xFFC86D51),
+                size: 22,
+              ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('ai_review_title'.tr(), style: AppTextStyles.headlineMedium),
+                child: Text(
+                  'ai_review_title'.tr(),
+                  style: AppTextStyles.headlineMedium,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
             'ai_review_subtitle'.tr(),
-            style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: const Color(0xFF7A6E63),
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -189,10 +252,17 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: _selectedLanguageIndex == 0 ? Colors.white : Colors.transparent,
+                        color: _selectedLanguageIndex == 0
+                            ? Colors.white
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
                         boxShadow: _selectedLanguageIndex == 0
-                            ? [const BoxShadow(color: Colors.black12, blurRadius: 4)]
+                            ? [
+                                const BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 4,
+                                ),
+                              ]
                             : null,
                       ),
                       alignment: Alignment.center,
@@ -200,7 +270,9 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                         'tab_english'.tr(),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: _selectedLanguageIndex == 0 ? const Color(0xFFC86D51) : const Color(0xFF7A6E63),
+                          color: _selectedLanguageIndex == 0
+                              ? const Color(0xFFC86D51)
+                              : const Color(0xFF7A6E63),
                         ),
                       ),
                     ),
@@ -212,10 +284,17 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: _selectedLanguageIndex == 1 ? Colors.white : Colors.transparent,
+                        color: _selectedLanguageIndex == 1
+                            ? Colors.white
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
                         boxShadow: _selectedLanguageIndex == 1
-                            ? [const BoxShadow(color: Colors.black12, blurRadius: 4)]
+                            ? [
+                                const BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 4,
+                                ),
+                              ]
                             : null,
                       ),
                       alignment: Alignment.center,
@@ -223,7 +302,9 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                         'tab_hindi'.tr(),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: _selectedLanguageIndex == 1 ? const Color(0xFFC86D51) : const Color(0xFF7A6E63),
+                          color: _selectedLanguageIndex == 1
+                              ? const Color(0xFFC86D51)
+                              : const Color(0xFF7A6E63),
                         ),
                       ),
                     ),
@@ -235,39 +316,55 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
           const SizedBox(height: 16),
 
           TextFormField(
-            initialValue: _selectedLanguageIndex == 0 ? draft.titleEn : draft.titleHi,
+            initialValue: _selectedLanguageIndex == 0
+                ? draft.titleEn
+                : draft.titleHi,
             key: ValueKey('title_$_selectedLanguageIndex'),
             decoration: InputDecoration(
               labelText: 'product_title_label'.tr(),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               filled: true,
               fillColor: const Color(0xFFFAF7F2),
             ),
             onChanged: (val) {
               if (_selectedLanguageIndex == 0) {
-                ref.read(addProductFlowProvider.notifier).updateListingDetails(titleEn: val);
+                ref
+                    .read(addProductFlowProvider.notifier)
+                    .updateListingDetails(titleEn: val);
               } else {
-                ref.read(addProductFlowProvider.notifier).updateListingDetails(titleHi: val);
+                ref
+                    .read(addProductFlowProvider.notifier)
+                    .updateListingDetails(titleHi: val);
               }
             },
           ),
           const SizedBox(height: 14),
 
           TextFormField(
-            initialValue: _selectedLanguageIndex == 0 ? draft.descriptionEn : draft.descriptionHi,
+            initialValue: _selectedLanguageIndex == 0
+                ? draft.descriptionEn
+                : draft.descriptionHi,
             key: ValueKey('desc_$_selectedLanguageIndex'),
             maxLines: 3,
             decoration: InputDecoration(
               labelText: 'product_desc_label'.tr(),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               filled: true,
               fillColor: const Color(0xFFFAF7F2),
             ),
             onChanged: (val) {
               if (_selectedLanguageIndex == 0) {
-                ref.read(addProductFlowProvider.notifier).updateListingDetails(descriptionEn: val);
+                ref
+                    .read(addProductFlowProvider.notifier)
+                    .updateListingDetails(descriptionEn: val);
               } else {
-                ref.read(addProductFlowProvider.notifier).updateListingDetails(descriptionHi: val);
+                ref
+                    .read(addProductFlowProvider.notifier)
+                    .updateListingDetails(descriptionHi: val);
               }
             },
           ),
@@ -278,11 +375,20 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
             runSpacing: 8,
             children: draft.tags.map((tag) {
               return Chip(
-                label: Text('#$tag', style: const TextStyle(fontSize: 13, color: Color(0xFF4A3E35))),
+                label: Text(
+                  '#$tag',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF4A3E35),
+                  ),
+                ),
                 backgroundColor: const Color(0xFFEBE3D5),
                 deleteIconColor: const Color(0xFF7A6E63),
-                onDeleted: () => ref.read(addProductFlowProvider.notifier).removeTag(tag),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                onDeleted: () =>
+                    ref.read(addProductFlowProvider.notifier).removeTag(tag),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               );
             }).toList(),
           ),
@@ -295,8 +401,13 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                   controller: _customTagController,
                   decoration: InputDecoration(
                     hintText: 'add_custom_tag_hint'.tr(),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     filled: true,
                     fillColor: const Color(0xFFFAF7F2),
                   ),
@@ -306,17 +417,30 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
               ElevatedButton(
                 onPressed: () {
                   if (_customTagController.text.trim().isNotEmpty) {
-                    ref.read(addProductFlowProvider.notifier).addTag(_customTagController.text.trim());
+                    ref
+                        .read(addProductFlowProvider.notifier)
+                        .addTag(_customTagController.text.trim());
                     _customTagController.clear();
                   }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFC86D51),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
                   minimumSize: Size.zero,
                 ),
-                child: Text('add'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: Text(
+                  'add'.tr(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -327,16 +451,27 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
               Expanded(
                 flex: 6,
                 child: ElevatedButton.icon(
-                  onPressed: () => ref.read(addProductFlowProvider.notifier).nextStep(),
-                  icon: const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+                  onPressed: () =>
+                      ref.read(addProductFlowProvider.notifier).nextStep(),
+                  icon: const Icon(
+                    Icons.arrow_forward,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                   label: Text(
                     'looks_good'.tr(),
-                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFC86D51),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 0,
                   ),
                 ),
@@ -348,27 +483,47 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                   onPressed: () {
                     if (!isOnline) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("You're offline — reconnect to regenerate the listing.")),
+                        const SnackBar(
+                          content: Text(
+                            "You're offline — reconnect to regenerate the listing.",
+                          ),
+                        ),
                       );
                       return;
                     }
                     final lang = _selectedLanguageIndex == 0 ? 'en' : 'hi';
-                    ref.read(addProductFlowProvider.notifier).generateAiListing(lang);
+                    ref
+                        .read(addProductFlowProvider.notifier)
+                        .generateAiListing(lang);
                   },
-                  icon: Icon(Icons.refresh, color: isOnline ? const Color(0xFF4A3E35) : const Color(0xFFB3A99A), size: 18),
+                  icon: Icon(
+                    Icons.refresh,
+                    color: isOnline
+                        ? const Color(0xFF4A3E35)
+                        : const Color(0xFFB3A99A),
+                    size: 18,
+                  ),
                   label: Text(
                     'regenerate_btn'.tr(),
                     style: TextStyle(
-                      color: isOnline ? const Color(0xFF4A3E35) : const Color(0xFFB3A99A),
+                      color: isOnline
+                          ? const Color(0xFF4A3E35)
+                          : const Color(0xFFB3A99A),
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: isOnline ? const Color(0xFFD6C7B2) : const Color(0xFFE8E0D3)),
+                    side: BorderSide(
+                      color: isOnline
+                          ? const Color(0xFFD6C7B2)
+                          : const Color(0xFFE8E0D3),
+                    ),
                     backgroundColor: const Color(0xFFF7F2EA),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                 ),
               ),
@@ -399,7 +554,11 @@ class _OfflineWaitingView extends StatelessWidget {
                 color: Color(0xFFF3EDE2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.cloud_off_rounded, size: 42, color: Color(0xFF8C533E)),
+              child: const Icon(
+                Icons.cloud_off_rounded,
+                size: 42,
+                color: Color(0xFF8C533E),
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
             const Text(
@@ -415,11 +574,49 @@ class _OfflineWaitingView extends StatelessWidget {
             Text(
               "Your photo and description are saved on this device. We'll generate "
               "your AI listing automatically the moment you're back online — no need to redo anything.",
-              style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: const Color(0xFF7A6E63),
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.lg),
             const ConnectivityPill(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageProcessingView extends StatelessWidget {
+  const _ImageProcessingView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(color: AppColors.terracotta),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Processing your image...',
+              style: AppTextStyles.bodyLarge.copyWith(
+                color: AppColors.terracotta,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'The enhanced image will appear here when it is ready.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: const Color(0xFF7A6E63),
+              ),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -463,17 +660,25 @@ class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
 
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onHorizontalDragUpdate: (details) => _updatePosition(details.localPosition, width),
-              onTapDown: (details) => _updatePosition(details.localPosition, width),
+              onHorizontalDragUpdate: (details) =>
+                  _updatePosition(details.localPosition, width),
+              onTapDown: (details) =>
+                  _updatePosition(details.localPosition, width),
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: AppImage(imageUrl: widget.afterPath, fit: BoxFit.cover),
+                    child: AppImage(
+                      imageUrl: widget.afterPath,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                   Positioned.fill(
                     child: ClipRect(
                       clipper: _LeftEdgeClipper(width: handleX),
-                      child: AppImage(imageUrl: widget.beforePath, fit: BoxFit.cover),
+                      child: AppImage(
+                        imageUrl: widget.beforePath,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -494,9 +699,15 @@ class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
                         decoration: const BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
-                          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6)],
+                          boxShadow: [
+                            BoxShadow(color: Colors.black26, blurRadius: 6),
+                          ],
                         ),
-                        child: const Icon(Icons.drag_indicator, size: 18, color: Color(0xFF3F342B)),
+                        child: const Icon(
+                          Icons.drag_indicator,
+                          size: 18,
+                          color: Color(0xFF3F342B),
+                        ),
                       ),
                     ),
                   ),
@@ -504,14 +715,20 @@ class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
                     top: 10,
                     left: 10,
                     child: IgnorePointer(
-                      child: _SliderLabel(text: 'Before', dimmed: _sliderPosition < 0.15),
+                      child: _SliderLabel(
+                        text: 'Before',
+                        dimmed: _sliderPosition < 0.15,
+                      ),
                     ),
                   ),
                   Positioned(
                     top: 10,
                     right: 10,
                     child: IgnorePointer(
-                      child: _SliderLabel(text: 'After', dimmed: _sliderPosition > 0.85),
+                      child: _SliderLabel(
+                        text: 'After',
+                        dimmed: _sliderPosition > 0.85,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -526,7 +743,9 @@ class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: Colors.white.withOpacity(0.9),
-                          shadows: const [Shadow(color: Colors.black45, blurRadius: 4)],
+                          shadows: const [
+                            Shadow(color: Colors.black45, blurRadius: 4),
+                          ],
                         ),
                       ),
                     ),
@@ -549,7 +768,8 @@ class _LeftEdgeClipper extends CustomClipper<Rect> {
   Rect getClip(Size size) => Rect.fromLTWH(0, 0, width, size.height);
 
   @override
-  bool shouldReclip(covariant _LeftEdgeClipper oldClipper) => oldClipper.width != width;
+  bool shouldReclip(covariant _LeftEdgeClipper oldClipper) =>
+      oldClipper.width != width;
 }
 
 class _SliderLabel extends StatelessWidget {
@@ -571,7 +791,11 @@ class _SliderLabel extends StatelessWidget {
         ),
         child: Text(
           text,
-          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );

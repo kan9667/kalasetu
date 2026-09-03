@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/providers/app_providers.dart';
 import '../../catalogue/screens/catalogue_screen.dart';
 import '../../add_product/screens/add_product_flow_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
@@ -12,6 +13,40 @@ final homeTabIndexProvider = StateProvider<int>((ref) => 1); // Default to Catal
 
 class HomeShell extends ConsumerWidget {
   const HomeShell({super.key});
+
+  Future<void> _handleTabTap(int index, BuildContext context, WidgetRef ref) async {
+    if (index == 0) {
+      final draft = ref.read(addProductFlowProvider);
+      if (draft.hasExistingDraft && !draft.resumePromptHandled) {
+        final shouldResume = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Resume previous draft?'),
+            content: const Text('We found an unfinished product draft. Resume it or start fresh?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Start fresh'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Resume'),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldResume == true) {
+          ref.read(addProductFlowProvider.notifier).resumeExistingDraft();
+        } else {
+          ref.read(addProductFlowProvider.notifier).discardPreviousDraft();
+        }
+      }
+    }
+
+    ref.read(homeTabIndexProvider.notifier).state = index;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,7 +70,7 @@ class HomeShell extends ConsumerWidget {
         ),
         child: BottomNavigationBar(
           currentIndex: currentIndex,
-          onTap: (index) => ref.read(homeTabIndexProvider.notifier).state = index,
+          onTap: (index) => _handleTabTap(index, context, ref),
           backgroundColor: AppColors.surface,
           selectedItemColor: AppColors.terracotta,
           unselectedItemColor: AppColors.textSecondary,

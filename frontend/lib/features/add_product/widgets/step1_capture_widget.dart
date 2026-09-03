@@ -60,26 +60,6 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
         ? draft.enhancedImagePath
         : draft.originalImagePath;
 
-    if (draft.isAiProcessing) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(color: Color(0xFFC86D51)),
-              const SizedBox(height: 16),
-              Text(
-                'processing_image'.tr(),
-                style: AppTextStyles.bodyLarge.copyWith(color: const Color(0xFFC86D51)),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
