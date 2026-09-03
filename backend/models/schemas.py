@@ -142,6 +142,10 @@ class AudioTranscribeResponse(BaseModel):
     transcript: str
     language_code: str
     detected_language: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    provider: Optional[str] = "whisper"
+    is_fallback: bool = False
+    status: str = "completed"
 
 
 class ListingGenerateRequest(BaseModel):
@@ -164,3 +168,32 @@ class ImageEnhanceResponse(BaseModel):
     original_url: str
     enhanced_url: str
     status: str = "success"
+
+
+class VoiceToProductResponse(BaseModel):
+    """
+    Unified result for end-to-end voice pipeline:
+    audio -> transcript -> bilingual listing -> pricing recommendation -> product draft.
+    """
+    transcript: str
+    language_code: str
+    title_en: str
+    title_hi: str
+    description_en: str
+    description_hi: str
+    category: str
+    tags: List[str]
+    pricing: PriceSuggestResponse
+    audio_url: Optional[str] = None
+    image_url: Optional[str] = None
+    product_draft: ProductCreate
+    status: str = "completed"
+
+
+class VoiceGlossaryResponse(BaseModel):
+    """Craft glossary lookup response."""
+    category: Optional[str] = None
+    total_terms: int
+    terms: List[str]
+    categories: List[str]
+
