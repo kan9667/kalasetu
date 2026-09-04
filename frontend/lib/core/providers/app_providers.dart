@@ -289,7 +289,7 @@ class AddProductDraft {
     this.descriptionEn = '',
     this.descriptionHi = '',
     this.category = 'Pottery',
-    this.tags = const ['terracotta', 'handcrafted', 'sustainable'],
+    this.tags = const ['handcrafted', 'artisan', 'made-in-india'],
     this.rawMaterialCost = 150.0,
     this.laborHours = 3.0,
     this.hourlyRate = 120.0,
@@ -1078,20 +1078,50 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   Future<void> transcribeVoiceDirectly(File audioFile, {String languageCode = 'hi'}) async {
     try {
       final speechService = _ref.read(speechServiceProvider);
+
+      // Step 1: Transcribe audio via Whisper
       final result = await speechService.transcribeAudio(
         audioPath: audioFile.path,
         languageCode: languageCode,
       );
-      if (result.transcript.isNotEmpty &&
-          !HttpSpeechService.isSilenceHallucination(result.transcript)) {
-        state = state.copyWith(
-          voiceTranscript: result.transcript,
-          transcriptionConfidence: result.confidence,
-        );
-        _persistDraft();
+      final transcript = result.transcript;
+
+      if (transcript.isEmpty ||
+          HttpSpeechService.isSilenceHallucination(transcript)) {
+        debugPrint('[AddProductFlow] Transcription empty or hallucination — skipping listing generation.');
+        return;
       }
+
+      state = state.copyWith(
+        voiceTranscript: transcript,
+        transcriptionConfidence: result.confidence,
+        isAiProcessing: true, // spinner stays on while LLM generates listing
+      );
+      _persistDraft();
+
+      // Step 2: Generate bilingual SEO listing from transcript via Gemini
+      debugPrint('[AddProductFlow] Transcript ready — calling generate-listing...');
+      final suggestion = await speechService.generateListingFromTranscript(
+        transcript: transcript,
+        languageCode: languageCode,
+        categoryHint: state.category,
+      );
+
+      state = state.copyWith(
+        titleEn: suggestion.titleEn,
+        titleHi: suggestion.titleHi,
+        descriptionEn: suggestion.descriptionEn,
+        descriptionHi: suggestion.descriptionHi,
+        category: suggestion.category,
+        tags: suggestion.tags,
+        // Keep spinner on only if image enhancement is still pending
+        isAiProcessing: !state.isEnhanced && state.originalImagePath.isNotEmpty,
+      );
+      _persistDraft();
+      debugPrint('[AddProductFlow] Listing generation complete: "${suggestion.titleEn}"');
     } catch (e) {
-      debugPrint('[AddProductFlow] Error during direct voice transcription: $e');
+      debugPrint('[AddProductFlow] Error during voice transcription/listing: $e');
+      state = state.copyWith(isAiProcessing: false);
     }
   }
 

@@ -98,12 +98,12 @@ class MockSpeechService implements SpeechService {
       );
     } else {
       return const AiListingSuggestion(
-        titleEn: 'Handcrafted Terracotta Ceramic Floral Vase with Folk Etchings',
-        titleHi: 'लोक नक्काशीदार हस्तनिर्मित मिट्टी का सजावटी फूलदान',
-        descriptionEn: 'Authentic handcrafted terracotta vase molded on a traditional potter wheel from pure riverbed clay. Features hand-etched folk patterns and wood-kiln fired for durability.',
-        descriptionHi: 'पारंपरिक चाक पर शुद्ध नदी की मिट्टी से बना असली हस्तनिर्मित मिट्टी का फूलदान। लोक कला की नक्काशी और भट्टी में पकाया गया मजबूत ढांचा।',
-        category: 'Pottery',
-        tags: ['terracotta', 'pottery', 'folk-art', 'handcrafted', 'eco-friendly'],
+        titleEn: 'Handcrafted Artisan Product',
+        titleHi: 'हस्तनिर्मित कारीगर उत्पाद',
+        descriptionEn: 'A beautifully crafted artisan product made with traditional techniques and natural materials.',
+        descriptionHi: 'पारंपरिक तकनीक और प्राकृतिक सामग्री से बना एक सुंदर हस्तशिल्प उत्पाद।',
+        category: 'Handicrafts',
+        tags: ['handcrafted', 'artisan', 'traditional', 'made-in-india'],
       );
     }
   }
@@ -254,13 +254,75 @@ class HttpSpeechService implements SpeechService {
     String? categoryHint,
   }) async {
     final cleanTranscript = transcript.trim();
-    return AiListingSuggestion(
-      titleEn: cleanTranscript.isNotEmpty ? cleanTranscript : 'Handcrafted Artisan Product',
-      titleHi: cleanTranscript.isNotEmpty ? cleanTranscript : 'हस्तनिर्मित उत्पाद',
-      descriptionEn: cleanTranscript,
-      descriptionHi: cleanTranscript,
-      category: categoryHint ?? 'Handicrafts',
-      tags: ['handcrafted', 'artisan', 'kalasetu'],
-    );
+
+    AiListingSuggestion fallback() => AiListingSuggestion(
+          titleEn: cleanTranscript.isNotEmpty
+              ? cleanTranscript
+              : 'Handcrafted Artisan Product',
+          titleHi: cleanTranscript.isNotEmpty
+              ? cleanTranscript
+              : 'हस्तनिर्मित उत्पाद',
+          descriptionEn: cleanTranscript,
+          descriptionHi: cleanTranscript,
+          category: categoryHint ?? 'Handicrafts',
+          tags: ['handcrafted', 'artisan', 'kalasetu'],
+        );
+
+    if (cleanTranscript.isEmpty) return fallback();
+
+    try {
+      final activeUrl = ApiConfig.baseUrl;
+      _dio.options.baseUrl = activeUrl;
+
+      debugPrint(
+        '[HttpSpeechService] POST $activeUrl/api/v1/catalog/generate-listing'
+        ' (lang: $languageCode, category: $categoryHint)',
+      );
+
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/catalog/generate-listing',
+        data: {
+          'transcript': cleanTranscript,
+          'language_code': languageCode.isNotEmpty ? languageCode : 'hi',
+          if (categoryHint != null && categoryHint.isNotEmpty)
+            'category_hint': categoryHint,
+        },
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data!;
+        final tags = (data['tags'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            ['handcrafted', 'artisan', 'kalasetu'];
+
+        debugPrint(
+          '[HttpSpeechService] Listing generated:'
+          ' title="${data['title_en']}" category="${data['category']}" tags=$tags',
+        );
+
+        return AiListingSuggestion(
+          titleEn: (data['title_en'] as String?)?.trim().isNotEmpty == true
+              ? data['title_en'] as String
+              : cleanTranscript,
+          titleHi: (data['title_hi'] as String?)?.trim().isNotEmpty == true
+              ? data['title_hi'] as String
+              : cleanTranscript,
+          descriptionEn:
+              (data['description_en'] as String?)?.trim().isNotEmpty == true
+                  ? data['description_en'] as String
+                  : cleanTranscript,
+          descriptionHi: data['description_hi'] as String? ?? '',
+          category: (data['category'] as String?)?.trim().isNotEmpty == true
+              ? data['category'] as String
+              : (categoryHint ?? 'Handicrafts'),
+          tags: tags,
+        );
+      }
+    } catch (e) {
+      debugPrint('[HttpSpeechService] Listing generation failed: $e');
+    }
+
+    return fallback();
   }
 }
