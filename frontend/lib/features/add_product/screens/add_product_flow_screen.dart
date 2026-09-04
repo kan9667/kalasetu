@@ -42,7 +42,9 @@ class AddProductFlowScreen extends ConsumerWidget {
           StepProgressBar(
             currentStep: currentStep,
             onStepTapped: (step) {
-              ref.read(addProductFlowProvider.notifier).setStep(step);
+              if (step <= currentStep) {
+                ref.read(addProductFlowProvider.notifier).setStep(step);
+              }
             },
           ),
           Expanded(

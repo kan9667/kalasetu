@@ -1,12 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
-import '../../../core/theme/app_colors.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/widgets/connectivity_pill.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/offline_sync/models/queue_item.dart';
 
 class Step3AiReviewWidget extends ConsumerStatefulWidget {
   const Step3AiReviewWidget({super.key});
@@ -18,6 +21,8 @@ class Step3AiReviewWidget extends ConsumerStatefulWidget {
 
 class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
   final TextEditingController _customTagController = TextEditingController();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlayingAudio = false;
   int _selectedLanguageIndex = 0; // 0 for EN, 1 for HI
   String? _processingDraftId;
 
@@ -33,10 +38,14 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
     if (!mounted) return;
     final draft = ref.read(addProductFlowProvider);
     if (draft.originalImagePath.isEmpty || draft.currentStep != 2) return;
+    // If already enhanced and voice note transcribed, do not trigger processing again
+    if (draft.isEnhanced && (draft.voiceTranscript.isNotEmpty || draft.recordedAudioPath.isEmpty)) {
+      return;
+    }
     if (_processingDraftId == draft.draftId) return;
     _processingDraftId = draft.draftId;
     final isOnline = ref.read(connectivityProvider).value ?? true;
-    String localeCode = 'en';
+    String localeCode = 'hi';
     try {
       localeCode = context.locale.languageCode;
     } catch (_) {}
@@ -48,7 +57,155 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
   @override
   void dispose() {
     _customTagController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
+  }
+
+  Future<void> _togglePlayAudio(String path) async {
+    try {
+      if (_isPlayingAudio) {
+        await _audioPlayer.stop();
+        setState(() => _isPlayingAudio = false);
+      } else {
+        setState(() => _isPlayingAudio = true);
+        await _audioPlayer.setFilePath(path);
+        await _audioPlayer.play();
+        _audioPlayer.playerStateStream.listen((state) {
+          if (state.processingState == ProcessingState.completed && mounted) {
+            setState(() => _isPlayingAudio = false);
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isPlayingAudio = false);
+    }
+  }
+
+  Future<void> _showRetakePhotoSheet() async {
+    final picker = ImagePicker();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFFFBF8F2),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Retake Photo', style: AppTextStyles.headlineMedium),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Color(0xFFC86D51)),
+                title: const Text('Take New Photo (Camera)'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final img = await picker.pickImage(source: ImageSource.camera);
+                  if (img != null) {
+                    await ref.read(addProductFlowProvider.notifier).retakePhoto(File(img.path));
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Color(0xFF4A3E35)),
+                title: const Text('Choose from Gallery'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final img = await picker.pickImage(source: ImageSource.gallery);
+                  if (img != null) {
+                    await ref.read(addProductFlowProvider.notifier).retakePhoto(File(img.path));
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showRerecordVoiceSheet() async {
+    if (_isPlayingAudio) {
+      await _audioPlayer.stop();
+      setState(() => _isPlayingAudio = false);
+    }
+    final recorder = AudioRecorder();
+    bool isRec = false;
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      backgroundColor: const Color(0xFFFBF8F2),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Re-record Voice Description', style: AppTextStyles.headlineMedium),
+                  const SizedBox(height: 8),
+                  Text(
+                    isRec ? 'Listening... Speak clearly about your craft' : 'Tap mic to start recording',
+                    style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
+                  ),
+                  const SizedBox(height: 24),
+                  GestureDetector(
+                    onTap: () async {
+                      if (isRec) {
+                        setSheetState(() => isRec = false);
+                        final path = await recorder.stop();
+                        await recorder.dispose();
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (path != null) {
+                          await ref.read(addProductFlowProvider.notifier).retakeVoice(File(path));
+                        }
+                      } else {
+                        if (!await recorder.hasPermission()) return;
+                        final appDir = await getApplicationDocumentsDirectory();
+                        final path = '${appDir.path}/offline_sync_recordings/voice-${DateTime.now().millisecondsSinceEpoch}.m4a';
+                        await recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+                        setSheetState(() => isRec = true);
+                      }
+                    },
+                    child: Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isRec ? const Color(0xFFB34A38) : const Color(0xFFC86D51),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isRec ? const Color(0xFFB34A38) : const Color(0xFFC86D51)).withValues(alpha: 0.35),
+                            blurRadius: isRec ? 16 : 8,
+                            spreadRadius: isRec ? 4 : 1,
+                          ),
+                        ],
+                      ),
+                      child: Icon(isRec ? Icons.stop : Icons.mic, color: Colors.white, size: 36),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () {
+                      recorder.dispose();
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF7A6E63))),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -65,9 +222,6 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
       });
     }
 
-    // If Step 2 finished while offline, there's no listing yet. The moment
-    // connectivity comes back, kick off generation automatically so the
-    // user doesn't have to do anything else.
     ref.listen<AsyncValue<bool>>(connectivityProvider, (previous, next) {
       final wasOffline = previous?.value == false;
       final nowOnline = next.value == true;
@@ -81,40 +235,6 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
           .read(addProductFlowProvider.notifier)
           .submitForAiProcessing(true, languageCode: localeCode);
     });
-
-    if (draft.originalImagePath.isNotEmpty && !draft.isEnhanced) {
-      return isOnline
-          ? const _ImageProcessingView()
-          : const _OfflineWaitingView();
-    }
-
-    if (draft.isAiProcessing && draft.titleEn.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(color: AppColors.terracotta),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Generating your bilingual listing...',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: AppColors.terracotta,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // No listing yet and no internet to generate one — wait it out.
-    if (!isOnline && draft.titleEn.isEmpty && draft.originalImagePath.isEmpty) {
-      return const _OfflineWaitingView();
-    }
 
     final hasEnhancedImage =
         draft.isEnhanced &&
@@ -149,7 +269,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                             ),
                           ),
                         ),
-                        if (draft.isAiProcessing)
+                        if (draft.isAiProcessing && !draft.isEnhanced)
                           Positioned(
                             bottom: 12,
                             left: 12,
@@ -159,7 +279,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.7),
+                                color: Colors.black.withValues(alpha: 0.7),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: const Row(
@@ -173,12 +293,13 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                                       color: Colors.white,
                                     ),
                                   ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'AI Enhancing image...',
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Enhancing image and creating listing...',
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 12,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
@@ -191,9 +312,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
             const SizedBox(height: 8),
             Center(
               child: TextButton.icon(
-                onPressed: () {
-                  ref.read(addProductFlowProvider.notifier).startRetakePhoto();
-                },
+                onPressed: _showRetakePhotoSheet,
                 icon: const Icon(
                   Icons.camera_alt_outlined,
                   size: 18,
@@ -209,8 +328,104 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
           ],
+
+          // Voice & Story Card
+          Container(
+            margin: const EdgeInsets.only(bottom: 20),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAF7F2),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2D7C7)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.mic, color: Color(0xFFC86D51), size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Voice Description',
+                          style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    TextButton.icon(
+                      onPressed: _showRerecordVoiceSheet,
+                      icon: const Icon(Icons.refresh, size: 16, color: Color(0xFF8C533E)),
+                      label: const Text(
+                        'Re-record',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF8C533E)),
+                      ),
+                    ),
+                  ],
+                ),
+                if (draft.recordedAudioPath.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      IconButton.filled(
+                        icon: Icon(_isPlayingAudio ? Icons.pause : Icons.play_arrow),
+                        style: IconButton.styleFrom(backgroundColor: const Color(0xFFC86D51)),
+                        onPressed: () => _togglePlayAudio(draft.recordedAudioPath),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _isPlayingAudio ? 'Playing recording...' : 'Tap to listen to your voice note',
+                          style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: Color(0xFFE2D7C7)),
+                const SizedBox(height: 12),
+                Text(
+                  'Transcription (Hindi / English)',
+                  style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF7A6E63)),
+                ),
+                const SizedBox(height: 6),
+                if (draft.voiceTranscript.isNotEmpty)
+                  Text(
+                    draft.voiceTranscript,
+                    style: const TextStyle(fontSize: 14, color: Color(0xFF3F342B), height: 1.4),
+                  )
+                else if (draft.manualDescription.isNotEmpty)
+                  Text(
+                    draft.manualDescription,
+                    style: const TextStyle(fontSize: 14, color: Color(0xFF3F342B), height: 1.4),
+                  )
+                else if (draft.isAiProcessing || draft.voiceQueueStatus == QueueStatus.pending)
+                  Row(
+                    children: [
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFC86D51)),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Transcribing craft details in background...',
+                        style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF8C533E)),
+                      ),
+                    ],
+                  )
+                else
+                  Text(
+                    'No voice description provided',
+                    style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF9E9285)),
+                  ),
+              ],
+            ),
+          ),
 
           Row(
             children: [
@@ -536,93 +751,6 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
   }
 }
 
-class _OfflineWaitingView extends StatelessWidget {
-  const _OfflineWaitingView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.screenPadding),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: const BoxDecoration(
-                color: Color(0xFFF3EDE2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.cloud_off_rounded,
-                size: 42,
-                color: Color(0xFF8C533E),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            const Text(
-              "You're offline",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF3F342B),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              "Your photo and description are saved on this device. We'll generate "
-              "your AI listing automatically the moment you're back online — no need to redo anything.",
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: const Color(0xFF7A6E63),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            const ConnectivityPill(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ImageProcessingView extends StatelessWidget {
-  const _ImageProcessingView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.screenPadding),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(color: AppColors.terracotta),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              'Processing your image...',
-              style: AppTextStyles.bodyLarge.copyWith(
-                color: AppColors.terracotta,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'The enhanced image will appear here when it is ready.',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: const Color(0xFF7A6E63),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 /// Draggable before/after image comparison. Drag or tap anywhere across the
 /// widget to move the divider; the left side shows [beforePath], the right
@@ -670,6 +798,29 @@ class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
                     child: AppImage(
                       imageUrl: widget.afterPath,
                       fit: BoxFit.cover,
+                      fallbackWidget: Container(
+                        color: const Color(0xFFF3EDE2),
+                        child: const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Color(0xFFC86D51),
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Loading enhanced photo...',
+                                style: TextStyle(fontSize: 12, color: Color(0xFF7A6E63)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   Positioned.fill(
@@ -742,7 +893,7 @@ class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           shadows: const [
                             Shadow(color: Colors.black45, blurRadius: 4),
                           ],
@@ -786,7 +937,7 @@ class _SliderLabel extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.55),
+          color: Colors.black.withValues(alpha: 0.55),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(

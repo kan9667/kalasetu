@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import '../../core/config/api_config.dart';
 
 class TranscriptionResult {
   final String transcript;
@@ -102,5 +106,161 @@ class MockSpeechService implements SpeechService {
         tags: ['terracotta', 'pottery', 'folk-art', 'handcrafted', 'eco-friendly'],
       );
     }
+  }
+}
+
+/// Real HTTP speech service connecting directly to FastAPI `/api/v1/voice/transcribe`
+/// which runs the ML Whisper STT pipeline with domain craft glossary biasing.
+class HttpSpeechService implements SpeechService {
+  HttpSpeechService({Dio? dio})
+      : _dio = dio ??
+            Dio(
+              BaseOptions(
+                baseUrl: ApiConfig.baseUrl,
+                connectTimeout: const Duration(seconds: 15),
+                sendTimeout: const Duration(seconds: 30),
+                receiveTimeout: const Duration(seconds: 60),
+                headers: {'Accept': 'application/json'},
+              ),
+            );
+
+  final Dio _dio;
+
+  /// Check if the returned transcript matches known Whisper silence artifacts / hallucinations
+  static bool isSilenceHallucination(String text) {
+    if (text.trim().isEmpty) return true;
+    final clean = text
+        .replaceAll(RegExp(r"""[\s\.,!?:;\-_"'()\[\]{}।…~*]+"""), ' ')
+        .trim()
+        .toLowerCase();
+
+    const silenceArtifacts = {
+      'thanks',
+      'thank you',
+      'thanks for watching',
+      'thank you for watching',
+      'thanks for listening',
+      'thank you for listening',
+      'thank you very much',
+      'thank you so much',
+      'please subscribe',
+      'subscribe',
+      'subtitles',
+      'subtitles by',
+      'bye',
+      'bye bye',
+      'you',
+      'goodbye',
+      'peace',
+      'watching',
+      'so',
+      'the end',
+      'see you next time',
+      'thanks guys',
+      'thank you all',
+      'धन्यवाद',
+      'बहुत धन्यवाद',
+      'शुक्रिया',
+      'बहुत शुक्रिया',
+      'प्रस्तुत',
+      'प्रश्नित',
+      'प्रश्नित प्रश्नित',
+      'झाल',
+      'सब्सक्राइब करें',
+      'लाइक करें',
+      'शेयर करें',
+      'चैनल को सब्सक्राइब करें',
+    };
+
+    if (silenceArtifacts.contains(clean)) return true;
+
+    final words = clean.split(' ').where((w) => w.isNotEmpty).toList();
+    if (words.length <= 6) {
+      if ((clean.contains('thank') || clean.contains('thanks')) && clean.contains('watching')) {
+        return true;
+      }
+      for (final prefix in [
+        'thanks',
+        'thank you',
+        'bye',
+        'goodbye',
+        'subtitles',
+        'subscribe',
+        'धन्यवाद',
+        'शुक्रिया',
+      ]) {
+        if (clean.startsWith(prefix)) return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  Future<TranscriptionResult> transcribeAudio({
+    required String audioPath,
+    required String languageCode,
+  }) async {
+    final file = File(audioPath);
+    if (!await file.exists()) {
+      debugPrint('[HttpSpeechService] Audio file does not exist: $audioPath');
+      return const TranscriptionResult(transcript: '', confidence: 0.0);
+    }
+
+    try {
+      final activeUrl = ApiConfig.baseUrl;
+      _dio.options.baseUrl = activeUrl;
+
+      final fileName = audioPath.split(Platform.pathSeparator).last;
+      final formData = FormData.fromMap({
+        'audio': await MultipartFile.fromFile(
+          audioPath,
+          filename: fileName.isNotEmpty ? fileName : 'recording.m4a',
+        ),
+        'language_code': languageCode.isNotEmpty ? languageCode : 'hi',
+      });
+
+      debugPrint('[HttpSpeechService] POST $activeUrl/api/v1/voice/transcribe (lang: $languageCode)');
+      final response = await _dio.post(
+        '/api/v1/voice/transcribe',
+        data: formData,
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data as Map<String, dynamic>;
+        final transcript = (data['transcript'] as String? ?? '').trim();
+        debugPrint('[HttpSpeechService] Whisper transcription received: "$transcript"');
+
+        if (isSilenceHallucination(transcript)) {
+          debugPrint('[HttpSpeechService] Filtered silence hallucination: "$transcript"');
+          return const TranscriptionResult(transcript: '', confidence: 0.0);
+        }
+
+        return TranscriptionResult(
+          transcript: transcript,
+          confidence: transcript.isNotEmpty ? 0.95 : 0.0,
+        );
+      }
+    } catch (e) {
+      debugPrint('[HttpSpeechService] Error during voice transcription: $e');
+    }
+
+    return const TranscriptionResult(transcript: '', confidence: 0.0);
+  }
+
+  @override
+  Future<AiListingSuggestion> generateListingFromTranscript({
+    required String transcript,
+    required String languageCode,
+    String? categoryHint,
+  }) async {
+    final cleanTranscript = transcript.trim();
+    return AiListingSuggestion(
+      titleEn: cleanTranscript.isNotEmpty ? cleanTranscript : 'Handcrafted Artisan Product',
+      titleHi: cleanTranscript.isNotEmpty ? cleanTranscript : 'हस्तनिर्मित उत्पाद',
+      descriptionEn: cleanTranscript,
+      descriptionHi: cleanTranscript,
+      category: categoryHint ?? 'Handicrafts',
+      tags: ['handcrafted', 'artisan', 'kalasetu'],
+    );
   }
 }

@@ -39,6 +39,7 @@ class SyncManager {
     });
     // Catch anything that was queued while the app was fully closed.
     unawaited(triggerSyncIfOnline());
+    unawaited(_scheduleNextPollIfNeeded());
   }
 
   void dispose() {
@@ -85,7 +86,10 @@ class SyncManager {
   /// running or if there's no real internet.
   Future<void> triggerSyncIfOnline() async {
     if (_isSyncing) return;
-    if (!await connectivityService.hasRealInternet()) return;
+    if (!await connectivityService.hasRealInternet()) {
+      await _scheduleNextPollIfNeeded();
+      return;
+    }
 
     _isSyncing = true;
     try {
@@ -204,13 +208,14 @@ class SyncManager {
     }
   }
 
-  /// While any item is still PROCESSING, keep checking on it every few
+  /// While any item is still PROCESSING or PENDING, keep checking every few
   /// seconds so the UI updates without the user needing to reopen the app.
   Future<void> _scheduleNextPollIfNeeded() async {
     _processingPollTimer?.cancel();
     final stillProcessing = await db.countProcessing();
-    if (stillProcessing > 0) {
-      _processingPollTimer = Timer(const Duration(seconds: 8), () {
+    final pendingCount = await db.countPendingOrProcessing();
+    if (stillProcessing > 0 || pendingCount > 0) {
+      _processingPollTimer = Timer(const Duration(seconds: 5), () {
         unawaited(triggerSyncIfOnline());
       });
     }
