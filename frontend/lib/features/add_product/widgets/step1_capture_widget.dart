@@ -1,14 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/providers/app_providers.dart';
-import '../../../core/offline_sync/models/queue_item.dart';
 
 class Step1CaptureWidget extends ConsumerStatefulWidget {
   const Step1CaptureWidget({super.key});

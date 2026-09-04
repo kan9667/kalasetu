@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
+import '../../config/api_config.dart';
+import '../../../../data/services/speech_service.dart';
 import '../models/queue_item.dart';
 
 /// Result of the initial upload call.
@@ -178,6 +180,9 @@ class RealUploadApi implements UploadApi {
     required String idempotencyKey,
     required String productDraftId,
   }) async {
+    final activeUrl = baseUrl.isNotEmpty ? baseUrl : ApiConfig.baseUrl;
+    _dio.options.baseUrl = activeUrl;
+
     final formData = FormData.fromMap({
       'image': await MultipartFile.fromFile(file.path),
       'idempotency_key': idempotencyKey,
@@ -188,7 +193,7 @@ class RealUploadApi implements UploadApi {
     final data = response.data as Map<String, dynamic>;
     final enhancedUrl = data['enhanced_url'] as String? ?? data['enhanced_image_url'] as String?;
 
-    final cleanPrefix = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final cleanPrefix = activeUrl.endsWith('/') ? activeUrl.substring(0, activeUrl.length - 1) : activeUrl;
     final resolvedUrl = (enhancedUrl != null && !enhancedUrl.startsWith('http'))
         ? '$cleanPrefix${enhancedUrl.startsWith('/') ? enhancedUrl : '/$enhancedUrl'}'
         : (enhancedUrl ?? file.path);
@@ -208,29 +213,51 @@ class RealUploadApi implements UploadApi {
     required File file,
     required String idempotencyKey,
     required String productDraftId,
-  }) =>
-      _upload('/v1/uploads/voice', file, idempotencyKey, productDraftId);
+  }) async {
+    final activeUrl = baseUrl.isNotEmpty ? baseUrl : ApiConfig.baseUrl;
+    _dio.options.baseUrl = activeUrl;
 
-  Future<UploadResult> _upload(
-    String path,
-    File file,
-    String idempotencyKey,
-    String productDraftId,
-  ) async {
+    final fileName = file.path.split(Platform.pathSeparator).last;
     final formData = FormData.fromMap({
-      'file': await MultipartFile.fromFile(file.path),
-      'idempotency_key': idempotencyKey,
-      'product_draft_id': productDraftId,
+      'audio': await MultipartFile.fromFile(
+        file.path,
+        filename: fileName.isNotEmpty ? fileName : 'recording.m4a',
+      ),
+      'language_code': 'hi',
     });
 
-    final response = await _dio.post(path, data: formData);
-    final data = response.data as Map<String, dynamic>;
+    try {
+      final response = await _dio.post('/api/v1/voice/transcribe', data: formData);
+      final data = response.data as Map<String, dynamic>;
 
-    return UploadResult(
-      jobId: (data['job_id'] ?? idempotencyKey) as String,
-      immediatelyCompleted: data['status'] == 'completed',
-      resultPayload: data['result'] as Map<String, dynamic>?,
-    );
+      final rawTranscript = (data['transcript'] as String? ?? '').trim();
+      final cleanTranscript = HttpSpeechService.isSilenceHallucination(rawTranscript)
+          ? ''
+          : rawTranscript;
+
+      return UploadResult(
+        jobId: idempotencyKey,
+        immediatelyCompleted: data['status'] == 'completed',
+        resultPayload: {
+          'transcript': cleanTranscript,
+          'language_code': data['language_code'] ?? 'hi',
+          'status': data['status'] ?? 'completed',
+        },
+      );
+    } catch (e) {
+      // Fallback to /api/v1/voice/process if transcribe endpoint differs
+      try {
+        final fallbackResponse = await _dio.post('/api/v1/voice/process', data: formData);
+        final data = fallbackResponse.data as Map<String, dynamic>;
+        return UploadResult(
+          jobId: idempotencyKey,
+          immediatelyCompleted: data['status'] == 'completed',
+          resultPayload: data,
+        );
+      } catch (_) {
+        rethrow;
+      }
+    }
   }
 
   @override

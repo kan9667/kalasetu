@@ -74,7 +74,10 @@ class OfflineSyncDatabase extends _$OfflineSyncDatabase {
           ..where((t) =>
               t.status.equals(QueueStatus.pending.index) |
               t.status.equals(QueueStatus.failed.index))
-          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.status),
+            (t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc),
+          ]))
         .get();
   }
 

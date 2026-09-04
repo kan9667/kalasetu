@@ -24,6 +24,7 @@ dependencies:
 
   # Offline media queue
   drift: ^2.21.0
+  sqlite3_flutter_libs: ^0.5.24
   path: ^1.9.0
   uuid: ^4.5.1
   workmanager: ^0.6.0

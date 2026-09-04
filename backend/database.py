@@ -91,5 +91,4 @@ def init_db() -> None:
         db.close()
 
 
-# Ensure tables are created upon database module loading
-init_db()
+# Database tables are initialized explicitly in lifespan (main.py)
