@@ -1,7 +1,11 @@
 """Models package — DB models and Pydantic schemas."""
 
-from .db_models import ProductDB, PriceAuditDB
+from .db_models import ArtisanDB, ProductDB
 from .schemas import (
+    ArtisanRegisterRequest,
+    ArtisanLoginRequest,
+    OtpVerifyRequest,
+    ArtisanProfileResponse,
     ProductBase,
     ProductCreate,
     ProductUpdate,
@@ -11,15 +15,22 @@ from .schemas import (
     PriceSuggestRequest,
     PriceSuggestResponse,
     ComparableProductSchema,
+    CostInputsSchema,
     AudioTranscribeResponse,
     ListingGenerateRequest,
     ListingGenerateResponse,
     ImageEnhanceResponse,
+    VoiceToProductResponse,
+    VoiceGlossaryResponse,
 )
 
 __all__ = [
+    "ArtisanDB",
     "ProductDB",
-    "PriceAuditDB",
+    "ArtisanRegisterRequest",
+    "ArtisanLoginRequest",
+    "OtpVerifyRequest",
+    "ArtisanProfileResponse",
     "ProductBase",
     "ProductCreate",
     "ProductUpdate",
@@ -29,8 +40,11 @@ __all__ = [
     "PriceSuggestRequest",
     "PriceSuggestResponse",
     "ComparableProductSchema",
+    "CostInputsSchema",
     "AudioTranscribeResponse",
     "ListingGenerateRequest",
     "ListingGenerateResponse",
     "ImageEnhanceResponse",
+    "VoiceToProductResponse",
+    "VoiceGlossaryResponse",
 ]

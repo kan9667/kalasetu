@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
     # 1. Ensure upload directory exists
     ensure_upload_dir()
     
-    # 2. Initialize database schema & seed initial products
+    # 2. Initialize database tables (artisans + products)
     init_db()
 
     print("\n" + "=" * 60)

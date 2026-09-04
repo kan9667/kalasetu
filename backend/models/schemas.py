@@ -5,11 +5,50 @@ Designed for full compatibility with Flutter Dart models:
 - Product model (product.dart)
 - PriceSuggestion model (pricing_service.dart)
 - AiListingSuggestion (speech_service.dart)
+- ArtisanProfile (user_profile.dart)
 """
 
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
+
+
+# ── Artisan Schemas ─────────────────────────────────────────────────────────
+
+
+class ArtisanRegisterRequest(BaseModel):
+    name: str = Field(..., description="Artisan full name")
+    phone: str = Field(..., description="10-digit mobile number")
+    craft_type: str = Field(..., description="Primary craft category")
+    location_cluster: str = Field(..., description="Artisan cluster / town location")
+    state: Optional[str] = Field(default="", description="State / Region")
+    experience_years: Optional[str] = Field(default=None, description="Craft experience in years")
+    pehchan_id: Optional[str] = Field(default=None, description="Pehchan card / Artisan ID")
+    preferred_language: Optional[str] = Field(default="en", description="Preferred app language")
+
+
+class ArtisanLoginRequest(BaseModel):
+    phone: str = Field(..., description="10-digit mobile number")
+
+
+class OtpVerifyRequest(BaseModel):
+    phone: str = Field(..., description="10-digit mobile number")
+    otp: str = Field(..., description="6-digit OTP code")
+
+
+class ArtisanProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    phone: str
+    craft_type: str
+    location_cluster: str
+    state: str
+    experience_years: Optional[str] = None
+    pehchan_id: Optional[str] = None
+    preferred_language: str
+    created_at: datetime
 
 
 # ── Product Schemas ─────────────────────────────────────────────────────────
@@ -24,11 +63,12 @@ class ProductBase(BaseModel):
     image_url: str = Field(..., description="URL or local path to product image")
     category: str = Field(default="General", description="Craft category")
     tags: List[str] = Field(default_factory=list, description="Search and catalog tags")
-    status: str = Field(default="live", description="Status: live, pendingSync, draft")
+    status: str = Field(default="live", description="Status: live, draft, archived")
 
 
 class ProductCreate(ProductBase):
     id: Optional[str] = Field(default=None, description="Optional custom ID (e.g. from offline queue)")
+    artisan_id: Optional[str] = Field(default=None, description="Owner artisan ID")
     created_at: Optional[datetime] = Field(default=None)
 
 
@@ -48,6 +88,7 @@ class ProductResponse(ProductBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    artisan_id: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -196,4 +237,3 @@ class VoiceGlossaryResponse(BaseModel):
     total_terms: int
     terms: List[str]
     categories: List[str]
-

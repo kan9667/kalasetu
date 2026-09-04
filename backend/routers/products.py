@@ -26,6 +26,7 @@ router = APIRouter(prefix="/api/v1/products", tags=["Products"])
 
 @router.get("", response_model=List[ProductResponse])
 async def list_products(
+    artisan_id: Optional[str] = Query(None, description="Filter by owner artisan ID"),
     category: Optional[str] = Query(None, description="Filter by craft category"),
     status: Optional[str] = Query(None, description="Filter by status (live, draft)"),
     limit: int = Query(50, ge=1, le=200),
@@ -36,6 +37,8 @@ async def list_products(
     List all catalog products with optional category/status filters.
     """
     query = db.query(ProductDB)
+    if artisan_id:
+        query = query.filter(ProductDB.artisan_id == artisan_id)
     if category:
         query = query.filter(ProductDB.category.ilike(f"%{category}%"))
     if status:
@@ -46,6 +49,7 @@ async def list_products(
     return [
         ProductResponse(
             id=item.id,
+            artisan_id=item.artisan_id,
             title=item.title,
             title_hi=item.title_hi or "",
             description=item.description or "",
@@ -71,6 +75,7 @@ async def get_product(product_id: str, db: Session = Depends(get_db)):
 
     return ProductResponse(
         id=item.id,
+        artisan_id=item.artisan_id,
         title=item.title,
         title_hi=item.title_hi or "",
         description=item.description or "",
@@ -110,6 +115,7 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     else:
         db_item = ProductDB(
             id=prod_id,
+            artisan_id=product.artisan_id,
             title=product.title,
             title_hi=product.title_hi or "",
             description=product.description,
@@ -127,6 +133,7 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
 
     return ProductResponse(
         id=db_item.id,
+        artisan_id=db_item.artisan_id,
         title=db_item.title,
         title_hi=db_item.title_hi or "",
         description=db_item.description or "",
@@ -177,6 +184,7 @@ async def update_product(
 
     return ProductResponse(
         id=db_item.id,
+        artisan_id=db_item.artisan_id,
         title=db_item.title,
         title_hi=db_item.title_hi or "",
         description=db_item.description or "",
@@ -231,6 +239,7 @@ async def sync_offline_products(
         else:
             db_item = ProductDB(
                 id=prod_id,
+                artisan_id=item.artisan_id,
                 title=item.title,
                 title_hi=item.title_hi or "",
                 description=item.description,
@@ -252,6 +261,7 @@ async def sync_offline_products(
     responses = [
         ProductResponse(
             id=s.id,
+            artisan_id=s.artisan_id,
             title=s.title,
             title_hi=s.title_hi or "",
             description=s.description or "",
