@@ -27,7 +27,6 @@ from ..models.schemas import (
     PriceSuggestResponse,
     ComparableProductSchema,
 )
-from ..models.db_models import PriceAuditDB
 from .storage_service import StorageService
 
 logger = logging.getLogger(__name__)
@@ -137,29 +136,6 @@ class PricingService:
                 ),
             ]
 
-        # Audit logging into database if session provided
-        if db:
-            try:
-                audit = PriceAuditDB(
-                    id=f"audit_{uuid.uuid4().hex[:12]}",
-                    category=request.category or "",
-                    description=request.description,
-                    materials_cost=cost_inputs.get("materials", 0.0),
-                    labor_hours=cost_inputs.get("labor_hours", 0.0),
-                    hourly_rate=cost_inputs.get("hourly_rate", 50.0),
-                    calculated_floor=result.cost_floor,
-                    suggested_price=result.suggested_price,
-                    min_price=result.price_range_low,
-                    max_price=result.price_range_high,
-                    confidence=result.confidence_score,
-                    market_position=result.market_position,
-                    reasoning=result.reasoning,
-                    reasoning_hi=reasoning_hi,
-                )
-                db.add(audit)
-                db.commit()
-            except Exception as e:
-                logger.warning("Failed to record price audit in DB: %s", e)
 
         return PriceSuggestResponse(
             suggested_price=result.suggested_price,
