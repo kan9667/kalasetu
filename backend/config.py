@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     )
 
     # Models
-    llm_model: str = "gemini-2.5-flash"
+    llm_model: str = "gemini-3.6-flash"
     embedding_model: str = "gemini-embedding-001"
 
     # Database
