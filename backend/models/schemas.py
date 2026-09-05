@@ -237,3 +237,48 @@ class VoiceGlossaryResponse(BaseModel):
     total_terms: int
     terms: List[str]
     categories: List[str]
+
+
+# ── Social Media Helper Schemas ──────────────────────────────────────────────
+
+
+class SocialDraftRequest(BaseModel):
+    """
+    Request body for generating a social-media caption + hashtags for a
+    persisted listing.  The listing_id is provided in the URL path.
+    """
+
+    image_url: str = Field(..., description="URL of the product image to use for the caption")
+    title: Optional[str] = Field(default="", description="Listing title (English)")
+    category: Optional[str] = Field(default="", description="Craft category")
+    materials: Optional[List[str]] = Field(default_factory=list, description="Materials used")
+    description: Optional[str] = Field(default="", description="Listing description")
+    tone: Optional[str] = Field(default="warm and authentic", description="Caption tone (warm | playful | minimal)")
+    locale: Optional[str] = Field(default="en-US", description="BCP-47 locale code for caption language")
+    source: str = Field(default="catalogue", description="Entry-point source: add_flow | catalogue")
+
+
+class SocialDraftUnsavedRequest(SocialDraftRequest):
+    """
+    Same as SocialDraftRequest but for an add-flow listing that hasn't been
+    saved to the DB yet.  The draft_key matches AddProductDraft.draftId on
+    the Flutter side and acts as the upsert key instead of listing_id.
+    """
+
+    draft_key: str = Field(..., description="Client-side draft ID from the add-product flow")
+
+
+class SocialDraftSaveRequest(BaseModel):
+    """Body used when the user saves (possibly edited) caption + hashtags."""
+
+    caption: str = Field(..., description="Caption text (may be user-edited)")
+    hashtags: List[str] = Field(..., description="Hashtag list (may be user-edited)")
+    edited_by_user: bool = Field(default=True, description="Whether the user modified the AI output")
+
+
+class SocialDraftResponse(BaseModel):
+    """Response from generate and save endpoints."""
+
+    draft_id: str = Field(description="UUID of the persisted social_drafts row")
+    caption: str
+    hashtags: List[str]

@@ -193,5 +193,13 @@
   "regenerate_btn": "Regenerate",
   "review_photo_title": "Review Your Photo",
   "review_photo_subtitle": "Make sure it looks clear and well-lit, then add extra angles if you'd like",
-  "processing_image": "Processing your photo..."
+  "processing_image": "Processing your photo...",
+  "social_media_helper": "Social Media Helper",
+  "social_draft_notice": "AI-generated draft. Review all details before posting.",
+  "social_draft_saved": "Social draft saved.",
+  "social_copied": "Caption and hashtags copied.",
+  "caption_label": "Caption draft",
+  "caption_hint": "Review and edit the caption before posting",
+  "hashtags_label_social": "Hashtags",
+  "add_hashtag_hint": "Add a hashtag"
 }
