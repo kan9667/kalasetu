@@ -211,26 +211,36 @@ class SocialMediaService:
         )
         return response.text or ""
 
-    def _local_image_path(self, image_url: str) -> Path:
-        """Resolve local paths and this backend's localhost upload URLs."""
-        direct_path = Path(image_url)
-        if direct_path.is_file():
-            return direct_path
+def _local_image_path(self, image_url: str) -> Path:
+    """Resolve only this backend's localhost upload URLs to local files."""
 
-        parsed = urlparse(image_url)
-        if parsed.hostname in {"localhost", "127.0.0.1", "0.0.0.0"}:
-            upload_prefix = self.settings.static_url_prefix.rstrip("/") + "/"
-            if parsed.path.startswith(upload_prefix):
-                relative_path = unquote(parsed.path[len(upload_prefix):]).lstrip("/")
-                candidate = Path(self.settings.upload_dir) / relative_path
-                upload_root = Path(self.settings.upload_dir).resolve()
-                try:
-                    candidate.resolve().relative_to(upload_root)
-                except ValueError:
-                    return Path()
-                return candidate
+    parsed = urlparse(image_url)
 
+    if parsed.hostname not in {"localhost", "127.0.0.1", "0.0.0.0"}:
         return Path()
+
+    upload_prefix = self.settings.static_url_prefix.rstrip("/") + "/"
+
+    if not parsed.path.startswith(upload_prefix):
+        return Path()
+
+    relative_path = unquote(
+        parsed.path[len(upload_prefix):]
+    ).lstrip("/")
+
+    upload_root = Path(self.settings.upload_dir).resolve()
+    candidate = (upload_root / relative_path).resolve()
+
+    try:
+        candidate.relative_to(upload_root)
+    except ValueError:
+        logger.warning(
+            "[SocialMedia] Rejected image path outside upload directory: %s",
+            relative_path,
+        )
+        return Path()
+
+    return candidate
 
 
 # ── JSON Parsing ─────────────────────────────────────────────────────────────
