@@ -11,6 +11,7 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../data/models/product.dart';
+import '../../social_media/providers/social_media_provider.dart';
 import '../../home/screens/home_shell.dart';
 
 class CatalogueScreen extends ConsumerStatefulWidget {
@@ -331,6 +332,20 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                             pathParameters: {'id': item.id},
                           );
                         },
+                        onSocialTap: item.allPhotoPaths.isEmpty
+                            ? null
+                            : () => context.pushNamed(
+                                  AppRouteConstants.socialMediaHelper,
+                                  extra: SocialMediaArgs(
+                                    listingId: item.id,
+                                    source: 'catalogue',
+                                    allImages: item.allPhotoPaths,
+                                    title: item.title,
+                                    category: item.category,
+                                    description: item.description,
+                                    materials: item.tags,
+                                  ),
+                                ),
                       );
                     },
                   );
@@ -350,6 +365,20 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                           pathParameters: {'id': item.id},
                         );
                       },
+                      onSocialTap: item.allPhotoPaths.isEmpty
+                          ? null
+                          : () => context.pushNamed(
+                                AppRouteConstants.socialMediaHelper,
+                                extra: SocialMediaArgs(
+                                  listingId: item.id,
+                                  source: 'catalogue',
+                                  allImages: item.allPhotoPaths,
+                                  title: item.title,
+                                  category: item.category,
+                                  description: item.description,
+                                  materials: item.tags,
+                                ),
+                              ),
                     );
                   },
                 );
@@ -366,8 +395,9 @@ class _GridProductCard extends StatelessWidget {
   final Product product;
   final Widget statusBadge;
   final VoidCallback onTap;
+  final VoidCallback? onSocialTap;
 
-  const _GridProductCard({required this.product, required this.statusBadge, required this.onTap});
+  const _GridProductCard({required this.product, required this.statusBadge, required this.onTap, this.onSocialTap});
 
   @override
   Widget build(BuildContext context) {
@@ -411,6 +441,16 @@ class _GridProductCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  if (onSocialTap != null)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: onSocialTap,
+                        icon: const Icon(Icons.share, size: 16),
+                        label: Text('social_media_helper'.tr()),
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -425,8 +465,9 @@ class _ListProductCard extends StatelessWidget {
   final Product product;
   final Widget statusBadge;
   final VoidCallback onTap;
+  final VoidCallback? onSocialTap;
 
-  const _ListProductCard({required this.product, required this.statusBadge, required this.onTap});
+  const _ListProductCard({required this.product, required this.statusBadge, required this.onTap, this.onSocialTap});
 
   @override
   Widget build(BuildContext context) {
@@ -468,6 +509,13 @@ class _ListProductCard extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    if (onSocialTap != null)
+                      TextButton.icon(
+                        onPressed: onSocialTap,
+                        icon: const Icon(Icons.share, size: 16),
+                        label: Text('social_media_helper'.tr()),
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      ),
                   ],
                 ),
               ),
