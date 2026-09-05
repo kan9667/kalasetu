@@ -24,7 +24,6 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
     with SingleTickerProviderStateMixin {
   bool _isRecording = false;
   bool _showCheckmark = false;
-  bool _isProcessingImage = false;
   late AnimationController _pulseController;
   final TextEditingController _textController = TextEditingController();
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -187,8 +186,12 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
       return;
     }
 
-    // Show loader and wait for image enhancement to complete
-    setState(() => _isProcessingImage = true);
+    // Advance to Step 3 immediately — the full-screen AI loading screen
+    // (driven by draft.isAiProcessing) takes over from here. We no longer
+    // show a local spinner on this button first and wait for enhancement
+    // to finish before switching screens; enhancement now runs in the
+    // background while the full-screen loader is already showing.
+    ref.read(addProductFlowProvider.notifier).nextStep();
 
     try {
       // 1. Await image enhancement from the backend (single request)
@@ -201,12 +204,6 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
       );
     } catch (e) {
       debugPrint('[Step2] Error waiting for image enhancement: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isProcessingImage = false);
-        // Page 3 will only be shown once image processing is complete
-        ref.read(addProductFlowProvider.notifier).nextStep();
-      }
     }
   }
 
@@ -226,283 +223,235 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
       _textController.text = draft.voiceTranscript;
     }
 
-    return Stack(
-      children: [
-        SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('describe_title'.tr(), style: AppTextStyles.headlineMedium),
-              const SizedBox(height: 4),
-              Text(
-                'describe_subtitle'.tr(),
-                style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
-              ),
-              const SizedBox(height: 20),
-
-              // Central interactive recording / check / replay circle
-              Center(
-                child: GestureDetector(
-                  onTap: () {
-                    if (_isRecording) {
-                      _toggleRecording();
-                    } else if (_showCheckmark) {
-                      // Transitioning
-                    } else if (hasAudio) {
-                      _togglePlayAudio();
-                    } else {
-                      _toggleRecording();
-                    }
-                  },
-                  child: AnimatedBuilder(
-                    animation: _pulseController,
-                    builder: (context, child) {
-                      final scale = _isRecording
-                          ? 1.0 + (_pulseController.value * 0.15)
-                          : (_showCheckmark ? 1.05 : 1.0);
-
-                      Color circleColor;
-                      IconData iconData;
-                      String labelText;
-
-                      if (_isRecording) {
-                        circleColor = const Color(0xFFB34A38);
-                        iconData = Icons.stop_rounded;
-                        labelText = 'stop_recording'.tr();
-                      } else if (_showCheckmark) {
-                        circleColor = const Color(0xFF2E7D32); // Vibrant green tick
-                        iconData = Icons.check_circle_rounded;
-                        labelText = 'Recorded!';
-                      } else if (hasAudio) {
-                        circleColor = const Color(0xFF4A3E35); // Artisan deep slate
-                        iconData = _isPlayingAudio ? Icons.pause_rounded : Icons.play_arrow_rounded;
-                        labelText = _isPlayingAudio ? 'Playing...' : 'Tap to replay';
-                      } else {
-                        circleColor = const Color(0xFFC86D51); // Terracotta brand
-                        iconData = Icons.mic;
-                        labelText = 'tap_to_speak'.tr();
-                      }
-
-                      return Transform.scale(
-                        scale: scale,
-                        child: Container(
-                          width: 124,
-                          height: 124,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: circleColor,
-                            boxShadow: [
-                              BoxShadow(
-                                color: circleColor.withValues(alpha: 0.35),
-                                blurRadius: _isRecording ? 18 : 8,
-                                spreadRadius: _isRecording ? 6 : 1,
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                iconData,
-                                size: 44,
-                                color: Colors.white,
-                              ),
-                              const SizedBox(height: 4),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                child: Text(
-                                  labelText,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-
-              if (_isRecording) ...[
-                const SizedBox(height: 12),
-                Text(
-                  'recording'.tr(),
-                  style: const TextStyle(
-                    color: Color(0xFFB34A38),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-
-              // Re-record button displayed once recording exists
-              if (hasAudio && !_isRecording && !_showCheckmark) ...[
-                const SizedBox(height: 14),
-                Center(
-                  child: OutlinedButton.icon(
-                    onPressed: _rerecord,
-                    icon: const Icon(Icons.refresh_rounded, size: 20, color: Color(0xFFC86D51)),
-                    label: const Text(
-                      'Re-record voice description',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFC86D51),
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFC86D51)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    ),
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 20),
-
-              Row(
-                children: [
-                  const Expanded(child: Divider(color: Color(0xFFE2D7C7))),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                    child: Text(
-                      'or_type_description'.tr(),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF7A6E63),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  const Expanded(child: Divider(color: Color(0xFFE2D7C7))),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _textController,
-                maxLines: 4,
-                style: const TextStyle(fontSize: 15, color: Color(0xFF3F342B)),
-                decoration: InputDecoration(
-                  hintText: 'type_desc_hint'.tr(),
-                  labelText: 'transcript_label'.tr(),
-                  alignLabelWithHint: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  filled: true,
-                  fillColor: const Color(0xFFFAF7F2),
-                ),
-                onChanged: (val) {
-                  ref.read(addProductFlowProvider.notifier).setManualDescription(val);
-                },
-              ),
-
-              if (draft.voiceTranscript.isNotEmpty &&
-                  draft.transcriptionConfidence < _kLowConfidenceThreshold) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFBF4E6),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFE6CD9A)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Color(0xFFB07D2B), size: 18),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Some words might need review. You can edit the text above.',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF5A4D41)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 24),
-
-              AppButton(
-                label: 'sounds_right'.tr(),
-                icon: Icons.arrow_forward,
-                isLoading: _isProcessingImage,
-                onPressed: _isProcessingImage
-                    ? null
-                    : () {
-                        final currentDraft = ref.read(addProductFlowProvider);
-                        final hasManualDescription = _textController.text.trim().isNotEmpty ||
-                            currentDraft.manualDescription.isNotEmpty;
-                        final hasRecordedAudio = currentDraft.recordedAudioPath.isNotEmpty;
-                        final hasTranscript = currentDraft.voiceTranscript.isNotEmpty;
-                        final voiceReady = hasRecordedAudio ||
-                            hasTranscript ||
-                            currentDraft.voiceQueueItemId == null ||
-                            currentDraft.voiceQueueStatus == QueueStatus.completed;
-                        if (hasManualDescription || voiceReady) {
-                          _onNext();
-                        }
-                      },
-              ),
-              const SizedBox(height: 16),
-            ],
+    return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('describe_title'.tr(), style: AppTextStyles.headlineMedium),
+          const SizedBox(height: 4),
+          Text(
+            'describe_subtitle'.tr(),
+            style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
           ),
-        ),
+          const SizedBox(height: 20),
 
-        // Full screen blocking loader while image enhancement completes
-        if (_isProcessingImage)
-          Container(
-            color: Colors.black.withValues(alpha: 0.65),
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              color: const Color(0xFFFBF8F2),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(
-                      width: 52,
-                      height: 52,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 4,
-                        color: Color(0xFFC86D51),
+          // Central interactive recording / check / replay circle
+          Center(
+            child: GestureDetector(
+              onTap: () {
+                if (_isRecording) {
+                  _toggleRecording();
+                } else if (_showCheckmark) {
+                  // Transitioning
+                } else if (hasAudio) {
+                  _togglePlayAudio();
+                } else {
+                  _toggleRecording();
+                }
+              },
+              child: AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, child) {
+                  final scale = _isRecording
+                      ? 1.0 + (_pulseController.value * 0.15)
+                      : (_showCheckmark ? 1.05 : 1.0);
+
+                  Color circleColor;
+                  IconData iconData;
+                  String labelText;
+
+                  if (_isRecording) {
+                    circleColor = const Color(0xFFB34A38);
+                    iconData = Icons.stop_rounded;
+                    labelText = 'stop_recording'.tr();
+                  } else if (_showCheckmark) {
+                    circleColor = const Color(0xFF2E7D32); // Vibrant green tick
+                    iconData = Icons.check_circle_rounded;
+                    labelText = 'Recorded!';
+                  } else if (hasAudio) {
+                    circleColor = const Color(0xFF4A3E35); // Artisan deep slate
+                    iconData = _isPlayingAudio ? Icons.pause_rounded : Icons.play_arrow_rounded;
+                    labelText = _isPlayingAudio ? 'Playing...' : 'Tap to replay';
+                  } else {
+                    circleColor = const Color(0xFFC86D51); // Terracotta brand
+                    iconData = Icons.mic;
+                    labelText = 'tap_to_speak'.tr();
+                  }
+
+                  return Transform.scale(
+                    scale: scale,
+                    child: Container(
+                      width: 124,
+                      height: 124,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: circleColor,
+                        boxShadow: [
+                          BoxShadow(
+                            color: circleColor.withValues(alpha: 0.35),
+                            blurRadius: _isRecording ? 18 : 8,
+                            spreadRadius: _isRecording ? 6 : 1,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            iconData,
+                            size: 44,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(height: 4),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Text(
+                              labelText,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 22),
-                    Text(
-                      'Enhancing image and creating listing',
-                      style: AppTextStyles.headlineMedium.copyWith(fontSize: 18),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'AI is enhancing your product photo, removing background, and generating your catalog listing.',
-                      style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ),
-      ],
+
+          if (_isRecording) ...[
+            const SizedBox(height: 12),
+            Text(
+              'recording'.tr(),
+              style: const TextStyle(
+                color: Color(0xFFB34A38),
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+
+          // Re-record button displayed once recording exists
+          if (hasAudio && !_isRecording && !_showCheckmark) ...[
+            const SizedBox(height: 14),
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: _rerecord,
+                icon: const Icon(Icons.refresh_rounded, size: 20, color: Color(0xFFC86D51)),
+                label: const Text(
+                  'Re-record voice description',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFC86D51),
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFC86D51)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 20),
+
+          Row(
+            children: [
+              const Expanded(child: Divider(color: Color(0xFFE2D7C7))),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                child: Text(
+                  'or_type_description'.tr(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF7A6E63),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const Expanded(child: Divider(color: Color(0xFFE2D7C7))),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          TextField(
+            controller: _textController,
+            maxLines: 4,
+            style: const TextStyle(fontSize: 15, color: Color(0xFF3F342B)),
+            decoration: InputDecoration(
+              hintText: 'type_desc_hint'.tr(),
+              labelText: 'transcript_label'.tr(),
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              filled: true,
+              fillColor: const Color(0xFFFAF7F2),
+            ),
+            onChanged: (val) {
+              ref.read(addProductFlowProvider.notifier).setManualDescription(val);
+            },
+          ),
+
+          if (draft.voiceTranscript.isNotEmpty &&
+              draft.transcriptionConfidence < _kLowConfidenceThreshold) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFBF4E6),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE6CD9A)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Color(0xFFB07D2B), size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Some words might need review. You can edit the text above.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF5A4D41)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 24),
+
+          AppButton(
+            label: 'sounds_right'.tr(),
+            icon: Icons.arrow_forward,
+            onPressed: () {
+              final currentDraft = ref.read(addProductFlowProvider);
+              final hasManualDescription = _textController.text.trim().isNotEmpty ||
+                  currentDraft.manualDescription.isNotEmpty;
+              final hasRecordedAudio = currentDraft.recordedAudioPath.isNotEmpty;
+              final hasTranscript = currentDraft.voiceTranscript.isNotEmpty;
+              final voiceReady = hasRecordedAudio ||
+                  hasTranscript ||
+                  currentDraft.voiceQueueItemId == null ||
+                  currentDraft.voiceQueueStatus == QueueStatus.completed;
+              if (hasManualDescription || voiceReady) {
+                _onNext();
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
     );
   }
 }

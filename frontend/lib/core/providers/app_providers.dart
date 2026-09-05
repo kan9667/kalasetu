@@ -18,6 +18,21 @@ import '../../data/services/sync_service.dart';
 import '../offline_sync/models/queue_item.dart';
 import '../offline_sync/offline_sync_service.dart';
 
+// --- Dev/test bypass ---------------------------------------------------
+// Lets you build and run the app WITHOUT the backend running, so you can
+// test the frontend (navigation, UI, state transitions) end-to-end.
+// Turn on with:
+//   flutter run --dart-define=MOCK_AI_BACKEND=true
+//   flutter build apk --dart-define=MOCK_AI_BACKEND=true   (a throwaway
+//   test build — never pass this flag on the build you actually ship)
+// When true, image enhancement, transcription, and listing generation are
+// all faked locally with a short delay instead of calling the real
+// backend, so Step 2 → 3 (and the pricing step, if you extend the same
+// pattern to PricingService) resolve instantly regardless of whether a
+// server is reachable.
+const bool kMockAiBackend =
+    bool.fromEnvironment('MOCK_AI_BACKEND', defaultValue: false);
+
 // --- Language Selection Provider ---
 class HasSelectedLanguageNotifier extends StateNotifier<bool> {
   static const String _boxName = 'app_settings_box';
@@ -265,6 +280,8 @@ class AddProductDraft {
   final String pricingReasoning;
   final String pricingReasoningHi;
   final bool isAiProcessing;
+  final bool isPricingProcessing;
+  final bool isRegenerating; // true only during an in-place Regenerate on Step 3
   final List<String> additionalImagePaths;
   final bool isRetakeFlow;
   final bool hasExistingDraft;
@@ -303,6 +320,8 @@ class AddProductDraft {
     this.pricingReasoningHi =
         'प्राकृतिक नदी की मिट्टी, चाक पर गढ़ने का समय और उचित पारिश्रमिक के आधार पर विश्लेषित।',
     this.isAiProcessing = false,
+    this.isPricingProcessing = false,
+    this.isRegenerating = false,
     this.additionalImagePaths = const [],
     this.isRetakeFlow = false,
     this.hasExistingDraft = false,
@@ -340,6 +359,8 @@ class AddProductDraft {
     String? pricingReasoning,
     String? pricingReasoningHi,
     bool? isAiProcessing,
+    bool? isPricingProcessing,
+    bool? isRegenerating,
     List<String>? additionalImagePaths,
     bool? isRetakeFlow,
     bool? hasExistingDraft,
@@ -377,6 +398,8 @@ class AddProductDraft {
       pricingReasoning: pricingReasoning ?? this.pricingReasoning,
       pricingReasoningHi: pricingReasoningHi ?? this.pricingReasoningHi,
       isAiProcessing: isAiProcessing ?? this.isAiProcessing,
+      isPricingProcessing: isPricingProcessing ?? this.isPricingProcessing,
+      isRegenerating: isRegenerating ?? this.isRegenerating,
       additionalImagePaths: additionalImagePaths ?? this.additionalImagePaths,
       isRetakeFlow: isRetakeFlow ?? this.isRetakeFlow,
       hasExistingDraft: hasExistingDraft ?? this.hasExistingDraft,
@@ -401,6 +424,88 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   Completer<bool>? _imageEnhancingCompleter;
   Map<String, dynamic>? _pendingDraft;
 
+  // Tracks whether an image-enhancement request is actually in flight right
+  // now. This is distinct from `state.isEnhanced`, which only tells us
+  // whether enhancement has ever *succeeded* — when the backend is down,
+  // isEnhanced stays false forever even after the request has given up,
+  // which is what caused the AI-processing spinner to hang indefinitely.
+  bool _imageEnhancementInFlight = false;
+
+  // Tracks whether a listing-generation request (from manual description or
+  // from a transcribed voice note) is actually in flight right now.
+  bool _listingGenerationInFlight = false;
+
+  // isAiProcessing used to be written independently by several different
+  // async completions (image enhancement, listing generation, the voice
+  // queue watcher), each one clobbering whatever the others had just set.
+  // That's what caused the spinner to flap on/off — e.g. image enhancement
+  // finishes and turns it off, then an unrelated voice-queue update arrives
+  // a moment later and turns it back on — which tore down and rebuilt the
+  // full-screen loader (resetting its "go back" timer and flashing the
+  // screen behind it). Instead, isAiProcessing is now always derived from
+  // the full set of "is anything still pending" signals in one place.
+  void _recomputeAiProcessing() {
+    final imageQueuePending = state.imageQueueItemId != null &&
+        state.imageQueueItemId!.isNotEmpty &&
+        state.imageQueueStatus != QueueStatus.completed &&
+        state.imageQueueStatus != QueueStatus.failed;
+    final voiceQueuePending = state.voiceQueueItemId != null &&
+        state.voiceQueueItemId!.isNotEmpty &&
+        state.voiceQueueStatus != QueueStatus.completed &&
+        state.voiceQueueStatus != QueueStatus.failed;
+    final stillProcessing = _imageEnhancementInFlight ||
+        _listingGenerationInFlight ||
+        imageQueuePending ||
+        voiceQueuePending;
+
+    // Once the watchdog has forcibly closed the loader for this generation,
+    // don't let it flip back on. imageQueuePending/voiceQueuePending have no
+    // timeout of their own — they just mirror whatever OfflineSyncService's
+    // background retry loop reports — so if the backend never responds, that
+    // loop can keep reporting "pending" indefinitely, and every one of those
+    // updates used to re-trigger this method and re-open the full-screen
+    // loader right after the watchdog had just closed it. The item keeps
+    // syncing in the background regardless; it just can't hold the UI open
+    // anymore once we've already given up waiting on it.
+    if (_watchdogFiredForGen == _aiProcessingGen) return;
+
+    if (state.isAiProcessing != stillProcessing) {
+      state = state.copyWith(isAiProcessing: stillProcessing);
+    }
+  }
+
+  // Bumped every time submitForAiProcessing() starts a new submission or the
+  // user backs out via cancelAiProcessing(). Async callbacks capture the
+  // generation they were started with and no-op if it's gone stale, so a
+  // slow response can't resurrect the full-screen loader after the user has
+  // already navigated away from it.
+  int _aiProcessingGen = 0;
+
+  // Hard backstop: no matter what combination of timeouts/queue states is in
+  // play, the AI-processing spinner is never allowed to stay on forever.
+  Timer? _aiProcessingWatchdog;
+
+  // Generation the watchdog last forced the spinner off for. See the check
+  // at the top of _recomputeAiProcessing — this is what stops a stale
+  // queue-status update from re-opening the loader after the watchdog has
+  // already given up on this submission.
+  int? _watchdogFiredForGen;
+
+  void _startAiProcessingWatchdog(int gen) {
+    _aiProcessingWatchdog?.cancel();
+    _aiProcessingWatchdog = Timer(const Duration(seconds: 32), () {
+      if (gen != _aiProcessingGen) return;
+      _watchdogFiredForGen = gen;
+      if (state.isAiProcessing) {
+        debugPrint(
+          '[AddProductFlow] AI-processing watchdog fired — forcing spinner off.',
+        );
+        state = state.copyWith(isAiProcessing: false);
+        _persistDraft();
+      }
+    });
+  }
+
   AddProductFlowNotifier(this._ref)
     : super(
         AddProductDraft(
@@ -414,6 +519,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   void dispose() {
     _imageQueueSubscription?.cancel();
     _voiceQueueSubscription?.cancel();
+    _aiProcessingWatchdog?.cancel();
     super.dispose();
   }
 
@@ -715,9 +821,14 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     if (_processingSubmissionInProgress) return;
     _processingSubmissionInProgress = true;
 
+    // New submission: invalidate any stale completions from a previous one
+    // and start a hard watchdog so the spinner can never hang forever.
+    final gen = ++_aiProcessingGen;
+
     try {
       final hasPendingAi = !state.isEnhanced || state.titleEn.isEmpty;
       state = state.copyWith(isAiProcessing: isOnline && hasPendingAi);
+      if (state.isAiProcessing) _startAiProcessingWatchdog(gen);
 
       if (state.imageQueueItemId != null &&
           state.imageQueueItemId!.isNotEmpty) {
@@ -776,7 +887,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
             _imageEnhancingCompleter == null) {
           final imageFile = File(state.originalImagePath);
           if (imageFile.existsSync()) {
-            unawaited(_enhanceProductImage(imageFile));
+            unawaited(_enhanceProductImage(imageFile, gen: gen));
           }
         }
 
@@ -788,11 +899,12 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         if (state.titleEn.isEmpty &&
             state.manualDescription.isNotEmpty &&
             state.recordedAudioPath.isEmpty) {
-          unawaited(_generateListingFromManualDescription(languageCode));
+          unawaited(_generateListingFromManualDescription(languageCode, gen: gen));
         }
       } else {
         // Offline: keep items saved in draft and queue, wait for connectivity
         state = state.copyWith(isAiProcessing: false);
+        _aiProcessingWatchdog?.cancel();
       }
     } finally {
       _processingSubmissionInProgress = false;
@@ -815,7 +927,6 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 
     final completer = Completer<bool>();
     _imageEnhancingCompleter = completer;
-    state = state.copyWith(isAiProcessing: true);
 
     try {
       await _enhanceProductImage(imageFile);
@@ -831,28 +942,57 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     return state.isEnhanced;
   }
 
-  Future<void> _enhanceProductImage(File imageFile) async {
+  Future<void> _enhanceProductImage(File imageFile, {int? gen}) async {
+    _imageEnhancementInFlight = true;
+    _recomputeAiProcessing();
+    if (kMockAiBackend) {
+      await Future.delayed(const Duration(milliseconds: 700));
+      _imageEnhancementInFlight = false;
+      if (gen != null && gen != _aiProcessingGen) return;
+      state = state.copyWith(
+        enhancedImagePath: imageFile.path,
+        isEnhanced: true,
+        imageQueueStatus: QueueStatus.completed,
+      );
+      _recomputeAiProcessing();
+      _persistDraft();
+      return;
+    }
     try {
       final enhancer = _ref.read(imageEnhancerServiceProvider);
-      final enhancedUrl = await enhancer.enhanceImage(
-        imageFile.path,
-        draftId: state.draftId,
-      );
+      // Cap at 30 s so the loading overlay is dismissed promptly when the
+      // backend is unreachable instead of waiting for two full retry cycles.
+      final enhancedUrl = await enhancer
+          .enhanceImage(imageFile.path, draftId: state.draftId)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              debugPrint('[AddProductFlow] Image enhancement timed out — proceeding offline.');
+              return imageFile.path;
+            },
+          );
+      // Mark not-in-flight before recomputing so any concurrent
+      // listing-generation completion sees the up-to-date flight status.
+      _imageEnhancementInFlight = false;
+      if (gen != null && gen != _aiProcessingGen) return;
+
       if (enhancedUrl.isEmpty || enhancedUrl == imageFile.path) {
-        state = state.copyWith(isAiProcessing: false);
+        _recomputeAiProcessing();
         return;
       }
 
       state = state.copyWith(
         enhancedImagePath: enhancedUrl,
         isEnhanced: true,
-        isAiProcessing: false,
         imageQueueStatus: QueueStatus.completed,
       );
+      _recomputeAiProcessing();
       _persistDraft();
     } catch (e, st) {
       debugPrint('[AddProductFlow] AI enhancement error: $e\n$st');
-      state = state.copyWith(isAiProcessing: false);
+      _imageEnhancementInFlight = false;
+      if (gen != null && gen != _aiProcessingGen) return;
+      _recomputeAiProcessing();
     }
   }
 
@@ -917,9 +1057,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         enhancedImagePath:
             hasNewEnhancedUrl ? enhancedUrl : state.enhancedImagePath,
         isEnhanced: state.isEnhanced || hasNewEnhancedUrl,
-        isAiProcessing: state.voiceQueueItemId != null &&
-            state.voiceQueueStatus != QueueStatus.completed,
       );
+      _recomputeAiProcessing();
     } else {
       final pricing = result?['pricing'] as Map<String, dynamic>?;
       final suggestedPrice = (pricing?['suggested_price'] as num?)?.toDouble();
@@ -958,24 +1097,62 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         finalPrice: suggestedPrice ?? state.finalPrice,
         pricingReasoning: reasoning ?? state.pricingReasoning,
         pricingReasoningHi: reasoningHi ?? state.pricingReasoningHi,
-        isAiProcessing: item.status != QueueStatus.completed &&
-            item.status != QueueStatus.failed,
       );
+      _recomputeAiProcessing();
     }
     _persistDraft();
   }
 
   Future<void> _generateListingFromManualDescription(
-    String languageCode,
-  ) async {
-    try {
-      state = state.copyWith(isAiProcessing: true);
-      final speechService = _ref.read(speechServiceProvider);
-      final suggestion = await speechService.generateListingFromTranscript(
-        transcript: state.manualDescription,
-        languageCode: languageCode,
-        categoryHint: state.category,
+    String languageCode, {
+    int? gen,
+  }) async {
+    _listingGenerationInFlight = true;
+    _recomputeAiProcessing();
+    if (kMockAiBackend) {
+      await Future.delayed(const Duration(milliseconds: 700));
+      _listingGenerationInFlight = false;
+      if (gen != null && gen != _aiProcessingGen) return;
+      state = state.copyWith(
+        titleEn: state.manualDescription,
+        titleHi: state.titleHi.isNotEmpty ? state.titleHi : state.manualDescription,
+        descriptionEn: state.manualDescription,
+        descriptionHi:
+            state.descriptionHi.isNotEmpty ? state.descriptionHi : state.manualDescription,
       );
+      _recomputeAiProcessing();
+      _persistDraft();
+      return;
+    }
+    try {
+      final speechService = _ref.read(speechServiceProvider);
+      // Cap at 25 s so isAiProcessing always resolves, even if the backend
+      // is unreachable — without this, a hung request left the full-screen
+      // loader stuck forever.
+      final suggestion = await speechService
+          .generateListingFromTranscript(
+            transcript: state.manualDescription,
+            languageCode: languageCode,
+            categoryHint: state.category,
+          )
+          .timeout(
+            const Duration(seconds: 25),
+            onTimeout: () {
+              debugPrint(
+                '[AddProductFlow] Manual-description listing generation timed out.',
+              );
+              return AiListingSuggestion(
+                titleEn: state.manualDescription,
+                titleHi: state.titleHi,
+                descriptionEn: state.manualDescription,
+                descriptionHi: state.descriptionHi,
+                category: state.category,
+                tags: state.tags,
+              );
+            },
+          );
+      _listingGenerationInFlight = false;
+      if (gen != null && gen != _aiProcessingGen) return;
       state = state.copyWith(
         titleEn: suggestion.titleEn,
         titleHi: suggestion.titleHi,
@@ -983,15 +1160,17 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         descriptionHi: suggestion.descriptionHi,
         category: suggestion.category,
         tags: suggestion.tags,
-        isAiProcessing: !state.isEnhanced && state.originalImagePath.isNotEmpty,
       );
+      _recomputeAiProcessing();
       _persistDraft();
     } catch (_) {
+      _listingGenerationInFlight = false;
+      if (gen != null && gen != _aiProcessingGen) return;
       state = state.copyWith(
         titleEn: state.manualDescription,
         descriptionEn: state.manualDescription,
-        isAiProcessing: !state.isEnhanced && state.originalImagePath.isNotEmpty,
       );
+      _recomputeAiProcessing();
       _persistDraft();
     }
   }
@@ -1058,6 +1237,16 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     );
     _persistDraft();
 
+    if (kMockAiBackend) {
+      // Skip the real offline-sync queue entirely — there's no backend to
+      // sync to in mock mode, so mark it done immediately instead of
+      // leaving voiceQueueStatus stuck at "pending" (which would otherwise
+      // keep the AI-processing loader open until the watchdog times out).
+      state = state.copyWith(voiceQueueStatus: QueueStatus.completed);
+      _persistDraft();
+      return '';
+    }
+
     if (OfflineSyncService.instance.isInitialized) {
       try {
         final localId = await OfflineSyncService.instance.enqueueVoiceNote(
@@ -1076,37 +1265,82 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   }
 
   Future<void> transcribeVoiceDirectly(File audioFile, {String languageCode = 'hi'}) async {
+    if (kMockAiBackend) {
+      await Future.delayed(const Duration(milliseconds: 700));
+      const fakeTranscript = 'Mock transcription (backend bypassed for testing)';
+      _listingGenerationInFlight = true;
+      state = state.copyWith(voiceTranscript: fakeTranscript, transcriptionConfidence: 1.0);
+      _recomputeAiProcessing();
+      _persistDraft();
+      await Future.delayed(const Duration(milliseconds: 700));
+      _listingGenerationInFlight = false;
+      state = state.copyWith(
+        titleEn: fakeTranscript,
+        descriptionEn: fakeTranscript,
+      );
+      _recomputeAiProcessing();
+      _persistDraft();
+      return;
+    }
     try {
       final speechService = _ref.read(speechServiceProvider);
 
-      // Step 1: Transcribe audio via Whisper
-      final result = await speechService.transcribeAudio(
-        audioPath: audioFile.path,
-        languageCode: languageCode,
-      );
+      // Step 1: Transcribe audio via Whisper. Cap at 20 s — backend may be
+      // unreachable, and this must always resolve so the loader can't hang.
+      final result = await speechService
+          .transcribeAudio(
+            audioPath: audioFile.path,
+            languageCode: languageCode,
+          )
+          .timeout(
+            const Duration(seconds: 20),
+            onTimeout: () {
+              debugPrint('[AddProductFlow] Direct transcription timed out.');
+              return const TranscriptionResult(transcript: '', confidence: 0);
+            },
+          );
       final transcript = result.transcript;
 
       if (transcript.isEmpty ||
           HttpSpeechService.isSilenceHallucination(transcript)) {
         debugPrint('[AddProductFlow] Transcription empty or hallucination — skipping listing generation.');
+        _recomputeAiProcessing();
         return;
       }
 
+      _listingGenerationInFlight = true;
       state = state.copyWith(
         voiceTranscript: transcript,
         transcriptionConfidence: result.confidence,
-        isAiProcessing: true, // spinner stays on while LLM generates listing
       );
+      _recomputeAiProcessing();
       _persistDraft();
 
-      // Step 2: Generate bilingual SEO listing from transcript via Gemini
+      // Step 2: Generate bilingual SEO listing from transcript via Gemini.
+      // Cap at 25 s for the same reason as above.
       debugPrint('[AddProductFlow] Transcript ready — calling generate-listing...');
-      final suggestion = await speechService.generateListingFromTranscript(
-        transcript: transcript,
-        languageCode: languageCode,
-        categoryHint: state.category,
-      );
+      final suggestion = await speechService
+          .generateListingFromTranscript(
+            transcript: transcript,
+            languageCode: languageCode,
+            categoryHint: state.category,
+          )
+          .timeout(
+            const Duration(seconds: 25),
+            onTimeout: () {
+              debugPrint('[AddProductFlow] Direct listing generation timed out.');
+              return AiListingSuggestion(
+                titleEn: transcript,
+                titleHi: state.titleHi,
+                descriptionEn: transcript,
+                descriptionHi: state.descriptionHi,
+                category: state.category,
+                tags: state.tags,
+              );
+            },
+          );
 
+      _listingGenerationInFlight = false;
       state = state.copyWith(
         titleEn: suggestion.titleEn,
         titleHi: suggestion.titleHi,
@@ -1114,14 +1348,14 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         descriptionHi: suggestion.descriptionHi,
         category: suggestion.category,
         tags: suggestion.tags,
-        // Keep spinner on only if image enhancement is still pending
-        isAiProcessing: !state.isEnhanced && state.originalImagePath.isNotEmpty,
       );
+      _recomputeAiProcessing();
       _persistDraft();
       debugPrint('[AddProductFlow] Listing generation complete: "${suggestion.titleEn}"');
     } catch (e) {
       debugPrint('[AddProductFlow] Error during voice transcription/listing: $e');
-      state = state.copyWith(isAiProcessing: false);
+      _listingGenerationInFlight = false;
+      _recomputeAiProcessing();
     }
   }
 
@@ -1176,25 +1410,154 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 
   Future<void> generateAiListing(String languageCode) async {
     state = state.copyWith(isAiProcessing: true);
-    if (state.recordedAudioPath.isNotEmpty &&
-        OfflineSyncService.instance.isInitialized) {
-      final audioFile = File(state.recordedAudioPath);
-      if (audioFile.existsSync()) {
-        try {
-          final localId = await OfflineSyncService.instance.enqueueVoiceNote(
-            audioFile: audioFile,
-            productDraftId: state.draftId,
-          );
-          state = state.copyWith(voiceQueueItemId: localId);
-          _watchVoiceQueue(localId);
-          await OfflineSyncService.instance.triggerSyncNow();
-        } catch (_) {}
+    try {
+      final speechService = _ref.read(speechServiceProvider);
+
+      String transcript = state.voiceTranscript.trim();
+      if (transcript.isEmpty) {
+        transcript = state.manualDescription.trim();
       }
-    } else if (state.manualDescription.isNotEmpty) {
-      await _generateListingFromManualDescription(languageCode);
-    } else {
+      if (transcript.isEmpty) {
+        transcript = state.descriptionEn.trim();
+      }
+      if (transcript.isEmpty) {
+        transcript = state.descriptionHi.trim();
+      }
+      if (transcript.isEmpty) {
+        transcript = state.titleEn.trim();
+      }
+
+      if (transcript.isEmpty && state.recordedAudioPath.isNotEmpty) {
+        final audioFile = File(state.recordedAudioPath);
+        if (audioFile.existsSync()) {
+          try {
+            // Cap transcription at 20 s — backend may be unreachable.
+            final transResult = await speechService
+                .transcribeAudio(
+                  audioPath: audioFile.path,
+                  languageCode: languageCode,
+                )
+                .timeout(
+                  const Duration(seconds: 20),
+                  onTimeout: () {
+                    debugPrint('[AddProductFlow] Transcription timed out.');
+                    return const TranscriptionResult(transcript: '', confidence: 0);
+                  },
+                );
+            if (transResult.transcript.isNotEmpty &&
+                !HttpSpeechService.isSilenceHallucination(transResult.transcript)) {
+              transcript = transResult.transcript;
+              state = state.copyWith(voiceTranscript: transcript);
+            }
+          } catch (e) {
+            debugPrint('[AddProductFlow] Error transcribing in generateAiListing: $e');
+          }
+        }
+      }
+
+      if (transcript.isEmpty) {
+        transcript = state.category.isNotEmpty
+            ? 'Handcrafted ${state.category} artisan product made with traditional techniques'
+            : 'Handcrafted traditional artisan product';
+      }
+
+      // Cap listing generation at 25 s.
+      final suggestion = await speechService
+          .generateListingFromTranscript(
+            transcript: transcript,
+            languageCode: languageCode,
+            categoryHint: state.category.isNotEmpty ? state.category : null,
+          )
+          .timeout(
+            const Duration(seconds: 25),
+            onTimeout: () {
+              debugPrint('[AddProductFlow] Listing generation timed out — using placeholder.');
+              return AiListingSuggestion(
+                titleEn: state.titleEn.isNotEmpty ? state.titleEn : transcript,
+                titleHi: state.titleHi,
+                descriptionEn: state.descriptionEn.isNotEmpty ? state.descriptionEn : transcript,
+                descriptionHi: state.descriptionHi,
+                category: state.category,
+                tags: state.tags,
+              );
+            },
+          );
+
+      state = state.copyWith(
+        titleEn: suggestion.titleEn,
+        titleHi: suggestion.titleHi,
+        descriptionEn: suggestion.descriptionEn,
+        descriptionHi: suggestion.descriptionHi,
+        category: suggestion.category.isNotEmpty ? suggestion.category : state.category,
+        tags: suggestion.tags.isNotEmpty ? suggestion.tags : state.tags,
+        isAiProcessing: false,
+      );
+      _persistDraft();
+    } catch (e) {
+      debugPrint('[AddProductFlow] Error in generateAiListing: $e');
       state = state.copyWith(isAiProcessing: false);
     }
+  }
+
+  Future<void> regenerateAll({String languageCode = 'en'}) async {
+    state = state.copyWith(
+      isEnhanced: false,
+      enhancedImagePath: state.originalImagePath,
+      isAiProcessing: true,
+      isRegenerating: true, // overlay card, not full-screen
+      imageQueueStatus: QueueStatus.pending,
+    );
+    _persistDraft();
+
+    final isOnline = _ref.read(connectivityProvider).value ?? true;
+
+    Future<void>? enhanceFuture;
+    if (isOnline && state.originalImagePath.isNotEmpty) {
+      final imgFile = File(state.originalImagePath);
+      if (imgFile.existsSync()) {
+        enhanceFuture = _enhanceProductImage(imgFile);
+      }
+    }
+
+    final listingFuture = generateAiListing(languageCode);
+
+    try {
+      await Future.wait([
+        ?enhanceFuture,
+        listingFuture,
+      ]);
+    } catch (e) {
+      debugPrint('[AddProductFlow] Error during regenerateAll: $e');
+    } finally {
+      state = state.copyWith(isAiProcessing: false, isRegenerating: false);
+      _persistDraft();
+    }
+  }
+
+  /// Manual escape hatch for the full-screen AI loader (Step 2 → 3), used
+  /// only if a request hangs well beyond its own timeout.
+  ///
+  /// This must actually navigate the user back to Step 2 — just clearing
+  /// isAiProcessing left currentStep on Step 3, so "Go back" silently
+  /// dropped the user onto the offline-waiting screen (or a half-populated
+  /// Step 3) instead of returning them to where they tapped Next.
+  void cancelAiProcessing() {
+    _aiProcessingWatchdog?.cancel();
+    // Invalidate any in-flight enhancement/listing requests from this
+    // submission so a late response can't flip isAiProcessing back on
+    // after the user has already left this screen.
+    _aiProcessingGen++;
+    state = state.copyWith(isAiProcessing: false, isRegenerating: false);
+    if (state.currentStep == 2) {
+      state = state.copyWith(currentStep: 1);
+    }
+    _persistDraft();
+  }
+
+  /// Manual escape hatch for the full-screen pricing loader (Step 3 → 4).
+  void cancelPricingProcessing() {
+    state = state.copyWith(isPricingProcessing: false);
+    _persistDraft();
   }
 
   Future<void> calculatePriceSuggestion() async {
@@ -1216,6 +1579,24 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       pricingReasoning: suggestion.reasoning,
       pricingReasoningHi: suggestion.reasoningHi,
     );
+  }
+
+  /// Called when the user taps "Looks Good!" on Step 3.
+  /// Shows a pricing loading screen, calculates the AI price suggestion,
+  /// then advances to Step 4 (pricing) and dismisses the loader.
+  Future<void> submitForPricingAndAdvance() async {
+    state = state.copyWith(isPricingProcessing: true);
+    try {
+      await calculatePriceSuggestion();
+    } catch (e) {
+      debugPrint('[AddProductFlow] Error calculating price: $e');
+    } finally {
+      state = state.copyWith(
+        isPricingProcessing: false,
+        currentStep: 3,
+      );
+      _persistDraft();
+    }
   }
 
   void updateCostParameters({

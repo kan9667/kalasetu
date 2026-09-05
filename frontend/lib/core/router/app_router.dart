@@ -34,7 +34,7 @@ class RouterNotifier extends ChangeNotifier {
     );
     _ref.listen<bool>(
       hasSelectedLanguageProvider,
-      (_, __) => notifyListeners(),
+      (_, _) => notifyListeners(),
     );
   }
 }
@@ -120,7 +120,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         name: AppRouteConstants.otp,
         builder: (context, state) {
           final phoneNumber = state.uri.queryParameters['phone'] ?? '';
-          return OtpScreen(phoneNumber: phoneNumber);
+          final isNewUser = state.uri.queryParameters['isNewUser'] == 'true';
+          return OtpScreen(phoneNumber: phoneNumber, isNewUser: isNewUser);
         },
       ),
       GoRoute(

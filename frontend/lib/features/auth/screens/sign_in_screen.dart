@@ -32,7 +32,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     if (_formKey.currentState?.validate() ?? false) {
       final phone = _phoneController.text.trim();
       ref.read(authStateProvider.notifier).signInWithPhone(phone);
-      context.goNamed(AppRouteConstants.otp, queryParameters: {'phone': phone});
+      context.pushNamed(AppRouteConstants.otp, queryParameters: {'phone': phone});
     }
   }
 

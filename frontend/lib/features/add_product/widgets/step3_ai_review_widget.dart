@@ -3,13 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:record/record.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/providers/app_providers.dart';
-import '../../../core/offline_sync/models/queue_item.dart';
 
 class Step3AiReviewWidget extends ConsumerStatefulWidget {
   const Step3AiReviewWidget({super.key});
@@ -21,14 +17,19 @@ class Step3AiReviewWidget extends ConsumerStatefulWidget {
 
 class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
   final TextEditingController _customTagController = TextEditingController();
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlayingAudio = false;
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descController = TextEditingController();
   int _selectedLanguageIndex = 0; // 0 for EN, 1 for HI
   String? _processingDraftId;
 
   @override
   void initState() {
     super.initState();
+    final draft = ref.read(addProductFlowProvider);
+    _titleController.text =
+        _selectedLanguageIndex == 0 ? draft.titleEn : draft.titleHi;
+    _descController.text =
+        _selectedLanguageIndex == 0 ? draft.descriptionEn : draft.descriptionHi;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initiateProcessing();
     });
@@ -57,28 +58,9 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
   @override
   void dispose() {
     _customTagController.dispose();
-    _audioPlayer.dispose();
+    _titleController.dispose();
+    _descController.dispose();
     super.dispose();
-  }
-
-  Future<void> _togglePlayAudio(String path) async {
-    try {
-      if (_isPlayingAudio) {
-        await _audioPlayer.stop();
-        setState(() => _isPlayingAudio = false);
-      } else {
-        setState(() => _isPlayingAudio = true);
-        await _audioPlayer.setFilePath(path);
-        await _audioPlayer.play();
-        _audioPlayer.playerStateStream.listen((state) {
-          if (state.processingState == ProcessingState.completed && mounted) {
-            setState(() => _isPlayingAudio = false);
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isPlayingAudio = false);
-    }
   }
 
   Future<void> _showRetakePhotoSheet() async {
@@ -126,88 +108,6 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
     );
   }
 
-  Future<void> _showRerecordVoiceSheet() async {
-    if (_isPlayingAudio) {
-      await _audioPlayer.stop();
-      setState(() => _isPlayingAudio = false);
-    }
-    final recorder = AudioRecorder();
-    bool isRec = false;
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isDismissible: false,
-      backgroundColor: const Color(0xFFFBF8F2),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) {
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Re-record Voice Description', style: AppTextStyles.headlineMedium),
-                  const SizedBox(height: 8),
-                  Text(
-                    isRec ? 'Listening... Speak clearly about your craft' : 'Tap mic to start recording',
-                    style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
-                  ),
-                  const SizedBox(height: 24),
-                  GestureDetector(
-                    onTap: () async {
-                      if (isRec) {
-                        setSheetState(() => isRec = false);
-                        final path = await recorder.stop();
-                        await recorder.dispose();
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        if (path != null) {
-                          await ref.read(addProductFlowProvider.notifier).retakeVoice(File(path));
-                        }
-                      } else {
-                        if (!await recorder.hasPermission()) return;
-                        final appDir = await getApplicationDocumentsDirectory();
-                        final path = '${appDir.path}/offline_sync_recordings/voice-${DateTime.now().millisecondsSinceEpoch}.m4a';
-                        await recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
-                        setSheetState(() => isRec = true);
-                      }
-                    },
-                    child: Container(
-                      width: 76,
-                      height: 76,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isRec ? const Color(0xFFB34A38) : const Color(0xFFC86D51),
-                        boxShadow: [
-                          BoxShadow(
-                            color: (isRec ? const Color(0xFFB34A38) : const Color(0xFFC86D51)).withValues(alpha: 0.35),
-                            blurRadius: isRec ? 16 : 8,
-                            spreadRadius: isRec ? 4 : 1,
-                          ),
-                        ],
-                      ),
-                      child: Icon(isRec ? Icons.stop : Icons.mic, color: Colors.white, size: 36),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () {
-                      recorder.dispose();
-                      Navigator.pop(ctx);
-                    },
-                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF7A6E63))),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final draft = ref.watch(addProductFlowProvider);
@@ -236,12 +136,37 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
           .submitForAiProcessing(true, languageCode: localeCode);
     });
 
+    ref.listen<AddProductDraft>(addProductFlowProvider, (previous, next) {
+      final currentExpectedTitle =
+          _selectedLanguageIndex == 0 ? next.titleEn : next.titleHi;
+      if (_titleController.text != currentExpectedTitle &&
+          (previous == null ||
+              (_selectedLanguageIndex == 0
+                      ? previous.titleEn
+                      : previous.titleHi) !=
+                  currentExpectedTitle)) {
+        _titleController.text = currentExpectedTitle;
+      }
+      final currentExpectedDesc =
+          _selectedLanguageIndex == 0 ? next.descriptionEn : next.descriptionHi;
+      if (_descController.text != currentExpectedDesc &&
+          (previous == null ||
+              (_selectedLanguageIndex == 0
+                      ? previous.descriptionEn
+                      : previous.descriptionHi) !=
+                  currentExpectedDesc)) {
+        _descController.text = currentExpectedDesc;
+      }
+    });
+
     final hasEnhancedImage =
         draft.isEnhanced &&
         draft.enhancedImagePath.isNotEmpty &&
         draft.enhancedImagePath != draft.originalImagePath;
 
-    return SingleChildScrollView(
+    return Stack(
+      children: [
+        SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
       child: Column(
@@ -293,8 +218,8 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                                       color: Colors.white,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  const Text(
+                                  SizedBox(width: 8),
+                                  Text(
                                     'Enhancing image and creating listing...',
                                     style: TextStyle(
                                       color: Colors.white,
@@ -330,102 +255,6 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
             ),
             const SizedBox(height: 12),
           ],
-
-          // Voice & Story Card
-          Container(
-            margin: const EdgeInsets.only(bottom: 20),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFAF7F2),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2D7C7)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.mic, color: Color(0xFFC86D51), size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Voice Description',
-                          style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    TextButton.icon(
-                      onPressed: _showRerecordVoiceSheet,
-                      icon: const Icon(Icons.refresh, size: 16, color: Color(0xFF8C533E)),
-                      label: const Text(
-                        'Re-record',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF8C533E)),
-                      ),
-                    ),
-                  ],
-                ),
-                if (draft.recordedAudioPath.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      IconButton.filled(
-                        icon: Icon(_isPlayingAudio ? Icons.pause : Icons.play_arrow),
-                        style: IconButton.styleFrom(backgroundColor: const Color(0xFFC86D51)),
-                        onPressed: () => _togglePlayAudio(draft.recordedAudioPath),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _isPlayingAudio ? 'Playing recording...' : 'Tap to listen to your voice note',
-                          style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-                const Divider(height: 1, color: Color(0xFFE2D7C7)),
-                const SizedBox(height: 12),
-                Text(
-                  'Transcription (Hindi / English)',
-                  style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF7A6E63)),
-                ),
-                const SizedBox(height: 6),
-                if (draft.voiceTranscript.isNotEmpty)
-                  Text(
-                    draft.voiceTranscript,
-                    style: const TextStyle(fontSize: 14, color: Color(0xFF3F342B), height: 1.4),
-                  )
-                else if (draft.manualDescription.isNotEmpty)
-                  Text(
-                    draft.manualDescription,
-                    style: const TextStyle(fontSize: 14, color: Color(0xFF3F342B), height: 1.4),
-                  )
-                else if (draft.isAiProcessing || draft.voiceQueueStatus == QueueStatus.pending)
-                  Row(
-                    children: [
-                      const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFC86D51)),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Transcribing craft details in background...',
-                        style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF8C533E)),
-                      ),
-                    ],
-                  )
-                else
-                  Text(
-                    'No voice description provided',
-                    style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF9E9285)),
-                  ),
-              ],
-            ),
-          ),
 
           Row(
             children: [
@@ -463,7 +292,13 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
               children: [
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => _selectedLanguageIndex = 0),
+                    onTap: () {
+                      setState(() {
+                        _selectedLanguageIndex = 0;
+                        _titleController.text = draft.titleEn;
+                        _descController.text = draft.descriptionEn;
+                      });
+                    },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
@@ -495,7 +330,13 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                 ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => _selectedLanguageIndex = 1),
+                    onTap: () {
+                      setState(() {
+                        _selectedLanguageIndex = 1;
+                        _titleController.text = draft.titleHi;
+                        _descController.text = draft.descriptionHi;
+                      });
+                    },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
@@ -530,11 +371,8 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
           ),
           const SizedBox(height: 16),
 
-          TextFormField(
-            initialValue: _selectedLanguageIndex == 0
-                ? draft.titleEn
-                : draft.titleHi,
-            key: ValueKey('title_$_selectedLanguageIndex'),
+          TextField(
+            controller: _titleController,
             decoration: InputDecoration(
               labelText: 'product_title_label'.tr(),
               border: OutlineInputBorder(
@@ -557,11 +395,8 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
           ),
           const SizedBox(height: 14),
 
-          TextFormField(
-            initialValue: _selectedLanguageIndex == 0
-                ? draft.descriptionEn
-                : draft.descriptionHi,
-            key: ValueKey('desc_$_selectedLanguageIndex'),
+          TextField(
+            controller: _descController,
             maxLines: 3,
             decoration: InputDecoration(
               labelText: 'product_desc_label'.tr(),
@@ -659,6 +494,28 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+
+          Center(
+            child: TextButton.icon(
+              onPressed: () {
+                ref.read(addProductFlowProvider.notifier).setStep(1);
+              },
+              icon: const Icon(
+                Icons.mic_none_outlined,
+                size: 18,
+                color: Color(0xFF8C533E),
+              ),
+              label: Text(
+                're_record'.tr(),
+                style: const TextStyle(
+                  color: Color(0xFF8C533E),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
 
           Row(
@@ -667,7 +524,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                 flex: 6,
                 child: ElevatedButton.icon(
                   onPressed: () =>
-                      ref.read(addProductFlowProvider.notifier).nextStep(),
+                      ref.read(addProductFlowProvider.notifier).submitForPricingAndAdvance(),
                   icon: const Icon(
                     Icons.arrow_forward,
                     color: Colors.white,
@@ -709,7 +566,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                     final lang = _selectedLanguageIndex == 0 ? 'en' : 'hi';
                     ref
                         .read(addProductFlowProvider.notifier)
-                        .generateAiListing(lang);
+                        .regenerateAll(languageCode: lang);
                   },
                   icon: Icon(
                     Icons.refresh,
@@ -747,6 +604,56 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
           const SizedBox(height: 20),
         ],
       ),
+    ),
+    // Overlay card — shown only when Regenerate is in progress
+    if (draft.isRegenerating)
+      Container(
+        color: Colors.black.withValues(alpha: 0.6),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Card(
+          elevation: 8,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          color: const Color(0xFFFBF8F2),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 32,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 4,
+                    color: Color(0xFFC86D51),
+                    backgroundColor: Color(0xFFEBE3D5),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Text(
+                  'Enhancing image and creating listing',
+                  style: AppTextStyles.headlineMedium.copyWith(fontSize: 18),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'AI is enhancing your product photo and regenerating your catalog listing.',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: const Color(0xFF7A6E63),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      ],
     );
   }
 }

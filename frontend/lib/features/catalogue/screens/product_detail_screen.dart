@@ -25,6 +25,8 @@ class ProductDetailScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) {
         return AlertDialog(
+          actionsAlignment: MainAxisAlignment.center,
+          actionsOverflowAlignment: OverflowBarAlignment.center,
           title: Text('edit_product_title'.tr(), style: AppTextStyles.headlineMedium),
           content: SingleChildScrollView(
             child: Column(
@@ -54,6 +56,7 @@ class ProductDetailScreen extends ConsumerWidget {
               onPressed: () => Navigator.pop(ctx),
               child: Text('cancel'.tr()),
             ),
+            const SizedBox(width: AppSpacing.sm),
             AppButton(
               label: 'save'.tr(),
               width: 100,
@@ -83,6 +86,8 @@ class ProductDetailScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) {
         return AlertDialog(
+          actionsAlignment: MainAxisAlignment.center,
+          actionsOverflowAlignment: OverflowBarAlignment.center,
           title: Text('delete_product_confirm_title'.tr(), style: AppTextStyles.headlineMedium),
           content: Text('delete_product_confirm_msg'.tr(), style: AppTextStyles.bodyMedium),
           actions: [
@@ -90,6 +95,7 @@ class ProductDetailScreen extends ConsumerWidget {
               onPressed: () => Navigator.pop(ctx),
               child: Text('cancel'.tr()),
             ),
+            const SizedBox(width: AppSpacing.sm),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.brick),
               onPressed: () async {
