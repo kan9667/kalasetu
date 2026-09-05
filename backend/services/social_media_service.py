@@ -227,9 +227,26 @@ class SocialMediaService:
             return Path()
 
         relative_path = unquote(parsed.path[len(upload_prefix):]).lstrip("/")
-        upload_root = Path(self.settings.upload_dir).resolve()
-        candidate = (upload_root / relative_path).resolve()
+        relative = Path(relative_path)
+        
+        # 1. Block traversal attempts BEFORE path resolution
+        if (
+            not relative_path
+            or relative.is_absolute()
+            or any(part in {"..", "."} for part in relative.parts)
+            or any("\\" in part for part in relative.parts)
+        ):
+            logger.warning(
+                "[SocialMedia] Rejected invalid image path segment: %s",
+                relative_path,
+            )
+            return Path()
 
+        # 2. Safely resolve the path
+        upload_root = Path(self.settings.upload_dir).resolve()
+        candidate = (upload_root / relative).resolve()
+
+        # 3. Final cryptographic check (what you already had)
         try:
             candidate.relative_to(upload_root)
         except ValueError:
