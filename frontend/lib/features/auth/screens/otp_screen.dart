@@ -13,8 +13,13 @@ import '../providers/auth_provider.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
   final String phoneNumber;
+  final bool isNewUser;
 
-  const OtpScreen({super.key, required this.phoneNumber});
+  const OtpScreen({
+    super.key,
+    required this.phoneNumber,
+    this.isNewUser = false,
+  });
 
   @override
   ConsumerState<OtpScreen> createState() => _OtpScreenState();
@@ -62,7 +67,15 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       rawAppBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else if (widget.isNewUser) {
+              context.goNamed(AppRouteConstants.register);
+            } else {
+              context.goNamed(AppRouteConstants.signIn);
+            }
+          },
         ),
       ),
       body: SingleChildScrollView(

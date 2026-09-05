@@ -99,7 +99,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       );
 
       ref.read(authStateProvider.notifier).registerWithDetails(profile);
-      context.goNamed(
+      context.pushNamed(
         AppRouteConstants.otp,
         queryParameters: {
           'phone': phone,
@@ -128,11 +128,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             }
           },
         ),
-        title: Text(
-          'register_title'.tr(),
-          style: AppTextStyles.headlineMedium,
-        ),
-        centerTitle: true,
         actions: const [
           Padding(
             padding: EdgeInsets.only(right: AppSpacing.sm),
