@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -7,7 +8,10 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/router/app_route_constants.dart';
 import '../../../data/models/product.dart';
+import '../../../data/services/social_media_service.dart';
+import '../../social_media/providers/social_media_provider.dart';
 import '../../home/screens/home_shell.dart';
 
 class Step5ConfirmWidget extends ConsumerStatefulWidget {
@@ -45,7 +49,18 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       createdAt: DateTime.now(),
     );
 
-    await ref.read(productListProvider.notifier).addProduct(newProduct);
+    final createdProduct = await ref.read(productListProvider.notifier).addProduct(newProduct);
+
+    if (isOnline && draft.draftId.isNotEmpty) {
+      try {
+        await HttpSocialMediaService().linkDraftsToListing(
+          draftKey: draft.draftId,
+          listingId: createdProduct.id,
+        );
+      } catch (_) {
+        // Publishing should still succeed if draft linking is temporarily unavailable.
+      }
+    }
 
     if (mounted) {
       setState(() => _isPublishing = false);
@@ -260,6 +275,39 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
           ),
 
           const SizedBox(height: AppSpacing.xl),
+
+          if (draft.originalImagePath.isNotEmpty || draft.additionalImagePaths.isNotEmpty)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.share),
+              label: Text('social_media_helper'.tr()),
+              onPressed: () {
+                final images = [
+                  if (draft.isEnhanced && draft.enhancedImagePath.isNotEmpty)
+                    draft.enhancedImagePath
+                  else
+                    draft.originalImagePath,
+                  ...draft.additionalImagePaths,
+                ].where((path) => path.isNotEmpty).toList();
+
+                context.pushNamed(
+                  AppRouteConstants.socialMediaHelper,
+                  extra: SocialMediaArgs(
+                    draftKey: draft.draftId,
+                    source: 'add_flow',
+                    allImages: images,
+                    title: draft.titleEn,
+                    category: draft.category,
+                    description: draft.descriptionEn.isNotEmpty
+                        ? draft.descriptionEn
+                        : draft.voiceTranscript,
+                    materials: draft.tags,
+                  ),
+                );
+              },
+            ),
+
+          if (draft.originalImagePath.isNotEmpty || draft.additionalImagePaths.isNotEmpty)
+            const SizedBox(height: AppSpacing.md),
 
           AppButton(
             label: 'list_product_btn'.tr(),

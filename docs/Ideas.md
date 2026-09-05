@@ -7,6 +7,10 @@ text to speech on every page <br>
 cues for what to say in voice description (description, price, raw materials) <br> 
 onboarding voice first <br>
 translator for labels <br>
+social media helper <br>
+multiple images? <br>
+tutorial walkthrough <br>
+sold out/remove listing/relist option in catalog <br>
 
 
 

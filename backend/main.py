@@ -31,6 +31,7 @@ from backend.routers import (
     catalog_router,
     auth_router,
     voice_router,
+    social_router,
 )
 
 settings = get_settings()
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
     print(f"  🎙️ Voice Pipeline:  http://localhost:{settings.port}/api/v1/voice/process")
     print(f"  💰 Pricing Endpoint: http://localhost:{settings.port}/api/v1/pricing/suggest")
     print(f"  📦 Products API:    http://localhost:{settings.port}/api/v1/products")
+    print(f"  📱 Social Helper:   http://localhost:{settings.port}/api/v1/listings/{{id}}/social-draft")
     print("=" * 60 + "\n")
 
     yield
@@ -86,6 +88,7 @@ app.include_router(pricing_router)
 app.include_router(products_router)
 app.include_router(catalog_router)
 app.include_router(auth_router)
+app.include_router(social_router)
 
 
 @app.get("/", tags=["Root"])

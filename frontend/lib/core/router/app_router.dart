@@ -12,6 +12,8 @@ import '../../features/home/screens/home_shell.dart';
 import '../../features/catalogue/screens/catalogue_screen.dart';
 import '../../features/catalogue/screens/product_detail_screen.dart';
 import '../../features/add_product/screens/add_product_flow_screen.dart';
+import '../../features/social_media/providers/social_media_provider.dart';
+import '../../features/social_media/screens/social_media_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/language_settings_screen.dart';
 import '../../features/profile/screens/my_stats_screen.dart';
@@ -138,6 +140,19 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/add-product',
         name: AppRouteConstants.addProduct,
         builder: (context, state) => const AddProductFlowScreen(),
+      ),
+      GoRoute(
+        path: '/social-media-helper',
+        name: AppRouteConstants.socialMediaHelper,
+        builder: (context, state) {
+          final args = state.extra;
+          if (args is! SocialMediaArgs) {
+            return const Scaffold(
+              body: Center(child: Text('Social media helper arguments are missing.')),
+            );
+          }
+          return SocialMediaScreen(args: args);
+        },
       ),
       GoRoute(
         path: '/profile',

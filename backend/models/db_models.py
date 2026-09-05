@@ -8,7 +8,7 @@ Two core tables:
 
 import json
 from datetime import datetime
-from sqlalchemy import Column, String, Float, DateTime, Text, ForeignKey
+from sqlalchemy import Column, String, Float, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -65,5 +65,45 @@ class ProductDB(Base):
         """Deserialize tags from JSON."""
         try:
             return json.loads(self.tags) if self.tags else []
+        except Exception:
+            return []
+
+
+class SocialDraftDB(Base):
+    """
+    AI-generated social media caption + hashtag draft for a product listing.
+
+    Upsert key:
+      - Catalogue flow:  (listing_id, image_url)
+      - Add-product flow: (draft_key, image_url)
+    """
+
+    __tablename__ = "social_drafts"
+
+    id = Column(String(64), primary_key=True, index=True)
+    listing_id = Column(
+        String(64),
+        ForeignKey("products.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # Used when the listing hasn't been saved yet (add-flow).
+    # Matches AddProductDraft.draftId on the Flutter side.
+    draft_key = Column(String(128), nullable=True, index=True)
+    image_url = Column(String(512), nullable=False)
+    caption = Column(Text, default="")
+    hashtags = Column(Text, default="[]")  # JSON-encoded list of strings
+    # Source of the generation: 'add_flow' or 'catalogue'
+    source = Column(String(32), default="catalogue")
+    # True once the user has manually edited caption / hashtags after generation
+    edited_by_user = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    @property
+    def hashtags_list(self) -> list[str]:
+        """Deserialize hashtags from JSON."""
+        try:
+            return json.loads(self.hashtags) if self.hashtags else []
         except Exception:
             return []

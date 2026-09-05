@@ -67,6 +67,16 @@ async def enhance_image(
         raise HTTPException(status_code=500, detail=f"Image enhancement failed: {str(e)}")
 
 
+@router.post("/upload-image", response_model=dict)
+async def upload_image(image: UploadFile = File(...)):
+    """Store a client-local image and return a backend-accessible URL."""
+    try:
+        image_url = await storage_service.save_upload(image, subfolder="social")
+        return {"image_url": image_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image upload failed: {str(e)}")
+
+
 @router.post("/transcribe", response_model=AudioTranscribeResponse)
 async def transcribe_voice_note(
     audio: UploadFile = File(...),
