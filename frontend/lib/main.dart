@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -9,22 +7,20 @@ import 'data/models/product.dart';
 import 'data/models/user_profile.dart';
 import 'core/offline_sync/offline_sync_service.dart';
 import 'core/offline_sync/services/upload_api.dart';
+import 'core/config/api_config.dart';
 
 Future<Box<T>> _openSafeBox<T>(String boxName) async {
   try {
     return await Hive.openBox<T>(boxName);
   } catch (e) {
     debugPrint('Resetting incompatible Hive box "$boxName": $e');
-    await Hive.deleteBoxFromDisk(boxName);
+    try {
+      await Hive.deleteBoxFromDisk(boxName);
+    } catch (err) {
+      debugPrint('Warning: Failed to delete box $boxName from disk: $err');
+    }
     return await Hive.openBox<T>(boxName);
   }
-}
-
-String _apiBaseUrl() {
-  const configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
-  if (configuredBaseUrl.isNotEmpty) return configuredBaseUrl;
-  if (Platform.isAndroid) return 'http://10.0.2.2:8000';
-  return 'http://127.0.0.1:8000';
 }
 
 void main() async {
@@ -52,9 +48,11 @@ void main() async {
   await _openSafeBox('draft_box');
   await _openSafeBox('app_settings_box');
 
+  final activeBaseUrl = await ApiConfig.discoverWorkingUrl();
+
   await OfflineSyncService.instance.init(
-    uploadApi: RealUploadApi(baseUrl: _apiBaseUrl()),
-    healthCheckUrl: '${_apiBaseUrl()}/api/v1/health',
+    uploadApi: RealUploadApi(baseUrl: activeBaseUrl),
+    healthCheckUrl: '$activeBaseUrl/api/v1/health',
   );
 
   runApp(

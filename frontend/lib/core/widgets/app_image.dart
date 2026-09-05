@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_colors.dart';
 
+import '../config/api_config.dart';
+
 class AppImage extends StatelessWidget {
   final String imageUrl;
   final BoxFit fit;
@@ -39,13 +41,7 @@ class AppImage extends StatelessWidget {
 
     String resolvedUrl = imageUrl;
     if (resolvedUrl.startsWith('/uploads/')) {
-      const configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
-      final baseUrl = configuredBaseUrl.isNotEmpty
-          ? configuredBaseUrl
-          : (Platform.isAndroid
-                ? 'http://10.0.2.2:8000'
-                : 'http://127.0.0.1:8000');
-      resolvedUrl = '$baseUrl$resolvedUrl';
+      resolvedUrl = '${ApiConfig.baseUrl}$resolvedUrl';
     }
 
     final isNetwork =
@@ -54,7 +50,8 @@ class AppImage extends StatelessWidget {
         resolvedUrl.startsWith('blob:') ||
         resolvedUrl.startsWith('http://localhost') ||
         resolvedUrl.startsWith('http://127.0.0.1') ||
-        resolvedUrl.startsWith('http://10.0.2.2');
+        resolvedUrl.startsWith('http://10.0.2.2') ||
+        resolvedUrl.startsWith('http://192.168.');
 
     // Local file from camera/gallery capture
     if (!kIsWeb && !isNetwork && !isBlobOrLocalhost) {
@@ -77,6 +74,24 @@ class AppImage extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            width: width,
+            height: height,
+            color: const Color(0xFFF3EDE2),
+            child: const Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Color(0xFFC86D51),
+                ),
+              ),
+            ),
+          );
+        },
         errorBuilder: (context, error, stackTrace) {
           debugPrint(
             'AppImage failed to load network image: $resolvedUrl ($error)',

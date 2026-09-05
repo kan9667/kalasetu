@@ -7,7 +7,20 @@
 # ============================================================
 
 from PIL import Image
-from rembg import remove
+from rembg import remove, new_session
+
+_session = None
+
+
+def get_rembg_session():
+    """Lazily initialize and reuse the ONNX session to avoid 15s model reload penalty."""
+    global _session
+    if _session is None:
+        try:
+            _session = new_session("u2net")
+        except Exception:
+            _session = new_session("u2netp")
+    return _session
 
 
 def remove_background(image):
@@ -17,26 +30,30 @@ def remove_background(image):
     This removes walls, furniture, clutter, and other distracting
     elements while preserving the main product/subject.
     
-    The rembg library uses the U2-Net deep learning model to detect
-    the foreground subject and create a transparency mask.
-    
     Args:
         image (PIL.Image): Input image in RGB mode.
         
     Returns:
         PIL.Image: RGBA image with transparent background.
-                   The product pixels keep their original colors.
-                   Background pixels have alpha = 0 (fully transparent).
     """
     # Ensure the image is in RGB mode for rembg
     if image.mode != "RGB":
         image = image.convert("RGB")
     
-    # rembg.remove() accepts a PIL Image and returns a PIL Image in RGBA mode.
-    # It uses the default u2net model which works well for general objects.
-    result = remove(image)
+    # Downscale for fast rembg processing if image is huge (e.g. 50MP phone camera)
+    # The output canvas is 1200x1200, so 1500px is more than enough for crisp edge detection.
+    max_dim = max(image.size)
+    if max_dim > 1500:
+        ratio = 1500.0 / max_dim
+        new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+        process_img = image.resize(new_size, Image.Resampling.BILINEAR)
+    else:
+        process_img = image
+
+    session = get_rembg_session()
+    result = remove(process_img, session=session)
     
-    # Make sure the result is in RGBA mode (it should be, but let's be safe)
+    # Make sure the result is in RGBA mode
     if result.mode != "RGBA":
         result = result.convert("RGBA")
     

@@ -1,19 +1,50 @@
 """
 SQLAlchemy Database Models for KalaSetu.
+
+Two core tables:
+  - ArtisanDB: Registered artisan profiles (phone-verified owners).
+  - ProductDB: Product catalog listings owned by artisans.
 """
 
 import json
 from datetime import datetime
-from sqlalchemy import Column, String, Float, DateTime, Text
+from sqlalchemy import Column, String, Float, DateTime, Text, ForeignKey
+from sqlalchemy.orm import relationship
 from ..database import Base
 
 
+class ArtisanDB(Base):
+    """Registered artisan profile."""
+
+    __tablename__ = "artisans"
+
+    id = Column(String(64), primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    phone = Column(String(15), unique=True, nullable=False, index=True)
+    craft_type = Column(String(128), default="")
+    location_cluster = Column(String(255), default="")
+    state = Column(String(128), default="")
+    experience_years = Column(String(16), default="")
+    pehchan_id = Column(String(64), nullable=True)
+    preferred_language = Column(String(8), default="en")
+    created_at = Column(DateTime, default=datetime.now)
+
+    # Relationship: one artisan owns many products
+    products = relationship("ProductDB", back_populates="artisan", lazy="dynamic")
+
+
 class ProductDB(Base):
-    """Product catalog item stored in the database."""
+    """Product catalog item owned by an artisan."""
 
     __tablename__ = "products"
 
     id = Column(String(64), primary_key=True, index=True)
+    artisan_id = Column(
+        String(64),
+        ForeignKey("artisans.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     title = Column(String(255), nullable=False)
     title_hi = Column(String(255), default="")
     description = Column(Text, default="")
@@ -22,9 +53,12 @@ class ProductDB(Base):
     image_url = Column(String(512), default="")
     category = Column(String(128), default="General", index=True)
     tags = Column(Text, default="[]")  # JSON encoded list of strings
-    status = Column(String(32), default="live", index=True)  # live, pendingSync, draft
+    status = Column(String(32), default="live", index=True)  # live, draft, archived
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    # Relationship back to artisan
+    artisan = relationship("ArtisanDB", back_populates="products")
 
     @property
     def tags_list(self) -> list[str]:
@@ -33,25 +67,3 @@ class ProductDB(Base):
             return json.loads(self.tags) if self.tags else []
         except Exception:
             return []
-
-
-class PriceAuditDB(Base):
-    """Audit record of AI pricing requests and recommendations."""
-
-    __tablename__ = "price_audits"
-
-    id = Column(String(64), primary_key=True, index=True)
-    category = Column(String(128), default="")
-    description = Column(Text, default="")
-    materials_cost = Column(Float, default=0.0)
-    labor_hours = Column(Float, default=0.0)
-    hourly_rate = Column(Float, default=0.0)
-    calculated_floor = Column(Float, default=0.0)
-    suggested_price = Column(Float, default=0.0)
-    min_price = Column(Float, default=0.0)
-    max_price = Column(Float, default=0.0)
-    confidence = Column(Float, default=0.0)
-    market_position = Column(String(64), default="")
-    reasoning = Column(Text, default="")
-    reasoning_hi = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.now)

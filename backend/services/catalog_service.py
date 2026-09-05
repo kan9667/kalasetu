@@ -15,6 +15,8 @@ import os
 import sys
 import json
 import logging
+import re
+import subprocess
 from pathlib import Path
 from typing import Optional, List
 from starlette.concurrency import run_in_threadpool
@@ -96,6 +98,58 @@ class CatalogService:
 
     # ── Voice Transcription (ML Voice Pipeline) ─────────────────────────────
 
+    @staticmethod
+    def _is_audio_silent(path: Path) -> bool:
+        """Check if audio has no audible sound using ffmpeg volumedetect."""
+        try:
+            result = subprocess.run(
+                [
+                    "ffmpeg", "-i", str(path), "-af", "volumedetect",
+                    "-vn", "-sn", "-dn", "-f", "null", "/dev/null"
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5,
+            )
+            for line in result.stderr.splitlines():
+                if "max_volume:" in line:
+                    parts = line.split("max_volume:")
+                    if len(parts) > 1:
+                        vol_str = parts[1].replace("dB", "").strip()
+                        max_vol = float(vol_str)
+                        return max_vol < -40.0
+        except Exception:
+            pass
+        return False
+
+    @staticmethod
+    def _is_silence_hallucination(text: str) -> bool:
+        """Detect common Whisper hallucinations triggered by silent audio."""
+        if not text:
+            return True
+        clean = re.sub(r'[\s\.,!?:;\-_"\'()[\]{}।…~*]+', ' ', text).strip().lower()
+        silence_artifacts = {
+            "thanks", "thank you", "thanks for watching", "thank you for watching",
+            "thanks for listening", "thank you for listening", "thank you very much",
+            "thank you so much", "please subscribe", "subscribe", "subtitles",
+            "subtitles by", "bye", "bye bye", "you", "goodbye", "peace",
+            "watching", "so", "the end", "see you next time", "thanks guys", "thank you all",
+            "धन्यवाद", "बहुत धन्यवाद", "शुक्रिया", "बहुत शुक्रिया",
+            "प्रस्तुत", "प्रश्नित", "प्रश्नित प्रश्नित", "झाल", "सब्सक्राइब करें",
+            "लाइक करें", "शेयर करें", "चैनल को सब्सक्राइब करें",
+        }
+        if clean in silence_artifacts:
+            return True
+        words = clean.split()
+        if len(words) <= 6:
+            if ("thank" in clean or "thanks" in clean) and "watching" in clean:
+                return True
+            for prefix in ["thanks", "thank you", "bye", "goodbye", "subtitles", "subscribe", "धन्यवाद", "शुक्रिया"]:
+                if clean.startswith(prefix):
+                    return True
+        return False
+
     async def transcribe_audio(
         self,
         audio_file_path: str,
@@ -111,6 +165,11 @@ class CatalogService:
         if not path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
 
+        # Check for silent audio before running heavy Whisper processing
+        if self._is_audio_silent(path):
+            logger.warning("Audio file %s is silent (volume < -40dB). Aborting transcription.", path.name)
+            raise ValueError("No audible speech detected. Please speak closer to the microphone.")
+
         result = await run_in_threadpool(
             self.voice_processor.process_voice_note,
             audio_path=str(path),
@@ -124,8 +183,13 @@ class CatalogService:
             logger.error("Voice pipeline transcription failure: %s", error_msg)
             raise ValueError(error_msg)
 
+        transcript_text = result.transcript.text.strip()
+        if self._is_silence_hallucination(transcript_text):
+            logger.warning("Whisper silence hallucination detected: '%s'. Aborting transcription.", transcript_text)
+            raise ValueError("No audible speech detected. Please speak closer to the microphone.")
+
         return AudioTranscribeResponse(
-            transcript=result.transcript.text,
+            transcript=transcript_text,
             language_code=result.transcript.language_code,
             detected_language=result.transcript.language_code,
             duration_seconds=result.transcript.duration_seconds,
