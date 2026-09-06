@@ -252,6 +252,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                                         ],
                                       ),
                                     ),
+                                  ),
                               ],
                             ),
                           ),

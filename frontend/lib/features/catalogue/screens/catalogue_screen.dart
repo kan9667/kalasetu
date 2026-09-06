@@ -14,7 +14,6 @@ import '../../../core/widgets/motifs/empty_craft_state.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../data/models/product.dart';
 import '../../social_media/providers/social_media_provider.dart';
-import '../../home/screens/home_shell.dart';
 import '../providers/catalogue_filter_provider.dart';
 
 class CatalogueScreen extends ConsumerStatefulWidget {

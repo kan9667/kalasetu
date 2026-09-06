@@ -70,6 +70,7 @@ class HomeShell extends ConsumerWidget {
         child: IndexedStack(
           key: ValueKey<int>(currentIndex),
           index: currentIndex,
+          children: screens,
         ),
       ),
       floatingActionButton: const KalaMitraFab(),

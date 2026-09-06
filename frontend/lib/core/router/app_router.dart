@@ -16,6 +16,7 @@ import '../../features/social_media/providers/social_media_provider.dart';
 import '../../features/social_media/screens/social_media_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/language_settings_screen.dart';
+import '../../features/profile/screens/my_stats_screen.dart';
 import '../../features/tutorial/screens/tutorial_carousel_screen.dart';
 import '../../features/chatbot/screens/chatbot_sheet.dart';
 import '../../features/notifications/screens/notifications_screen.dart';
