@@ -32,6 +32,7 @@ from backend.routers import (
     auth_router,
     voice_router,
     social_router,
+    chat_router,
 )
 
 settings = get_settings()
@@ -89,6 +90,7 @@ app.include_router(products_router)
 app.include_router(catalog_router)
 app.include_router(auth_router)
 app.include_router(social_router)
+app.include_router(chat_router)
 
 
 @app.get("/", tags=["Root"])

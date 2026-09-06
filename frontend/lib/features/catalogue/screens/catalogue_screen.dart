@@ -13,6 +13,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../data/models/product.dart';
 import '../../social_media/providers/social_media_provider.dart';
 import '../../home/screens/home_shell.dart';
+import '../providers/catalogue_filter_provider.dart';
 
 class CatalogueScreen extends ConsumerStatefulWidget {
   const CatalogueScreen({super.key});
@@ -34,6 +35,17 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     'filter_woodwork',
     'filter_paintings',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    final filter = ref.read(catalogueFilterProvider);
+    _searchQuery = filter.searchQuery;
+    _selectedCategory = filter.selectedCategory;
+    if (filter.searchQuery.isNotEmpty) {
+      _searchController.text = filter.searchQuery;
+    }
+  }
 
   @override
   void dispose() {
@@ -129,6 +141,18 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
   Widget build(BuildContext context) {
     final productsAsync = ref.watch(productListProvider);
 
+    ref.listen<CatalogueFilterState>(catalogueFilterProvider, (prev, next) {
+      if (next.searchQuery != _searchController.text) {
+        _searchController.text = next.searchQuery;
+      }
+      if (next.searchQuery != _searchQuery || next.selectedCategory != _selectedCategory) {
+        setState(() {
+          _searchQuery = next.searchQuery;
+          _selectedCategory = next.selectedCategory;
+        });
+      }
+    });
+
     return AppScaffold(
       title: 'my_catalogue_title'.tr(),
       body: Column(
@@ -149,6 +173,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                         onPressed: () {
                           _searchController.clear();
                           setState(() => _searchQuery = '');
+                          ref.read(catalogueFilterProvider.notifier).setSearchQuery('');
                         },
                       )
                     : null,
@@ -156,6 +181,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
               ),
               onChanged: (val) {
                 setState(() => _searchQuery = val.trim());
+                ref.read(catalogueFilterProvider.notifier).setSearchQuery(val.trim());
               },
             ),
           ),
@@ -176,6 +202,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                     selectedColor: AppColors.terracottaLight,
                     onSelected: (selected) {
                       setState(() => _selectedCategory = catKey);
+                      ref.read(catalogueFilterProvider.notifier).setSelectedCategory(catKey);
                     },
                   ),
                 );

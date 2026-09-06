@@ -111,13 +111,13 @@ class MockUploadApi implements UploadApi {
       immediatelyCompleted: type == QueueItemType.voiceCatalog,
       resultPayload: type == QueueItemType.voiceCatalog
           ? {
-              'transcript': 'This is a handcrafted terracotta floral vase made from natural river clay.',
-              'titleEn': 'Handcrafted Terracotta Floral Vase',
-              'titleHi': 'हस्तनिर्मित मिट्टी का फूलदान',
-              'descriptionEn': 'A traditional terracotta vase shaped by hand from natural clay.',
-              'descriptionHi': 'प्राकृतिक मिट्टी से हाथ से बनाया गया पारंपरिक मिट्टी का फूलदान।',
-              'category': 'Pottery',
-              'tags': ['terracotta', 'pottery', 'handcrafted'],
+              'transcript': 'This is an authentic handcrafted artisan product made using traditional techniques.',
+              'titleEn': 'Handcrafted Traditional Artisan Item',
+              'titleHi': 'प्रामाणिक हस्तशिल्प उत्पाद',
+              'descriptionEn': 'An authentic artisan craft shaped by hand using traditional regional techniques.',
+              'descriptionHi': 'पारंपरिक तकनीक से हाथ से बनाया गया प्रामाणिक हस्तशिल्प उत्पाद।',
+              'category': 'Handicrafts',
+              'tags': ['handcrafted', 'artisan', 'made-in-india'],
             }
           : null,
     );
@@ -147,13 +147,13 @@ class MockUploadApi implements UploadApi {
     return JobStatusResult(
       isComplete: true,
       resultPayload: {
-        'transcript': 'This is a handcrafted terracotta floral vase made from natural river clay.',
-        'titleEn': 'Handcrafted Terracotta Floral Vase',
-        'titleHi': 'हस्तनिर्मित मिट्टी का फूलदान',
-        'descriptionEn': 'A traditional terracotta vase shaped by hand from natural clay.',
-        'descriptionHi': 'प्राकृतिक मिट्टी से हाथ से बनाया गया पारंपरिक मिट्टी का फूलदान।',
-        'category': 'Pottery',
-        'tags': ['terracotta', 'pottery', 'handcrafted'],
+        'transcript': 'This is an authentic handcrafted artisan product made using traditional techniques.',
+        'titleEn': 'Handcrafted Traditional Artisan Item',
+        'titleHi': 'प्रामाणिक हस्तशिल्प उत्पाद',
+        'descriptionEn': 'An authentic artisan craft shaped by hand using traditional regional techniques.',
+        'descriptionHi': 'पारंपरिक तकनीक से हाथ से बनाया गया प्रामाणिक हस्तशिल्प उत्पाद।',
+        'category': 'Handicrafts',
+        'tags': ['handcrafted', 'artisan', 'made-in-india'],
       },
     );
   }

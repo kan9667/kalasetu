@@ -23,6 +23,13 @@ class ProductRepository {
   Future<List<Product>> getProducts({bool forceRefresh = false, bool isOnline = true}) async {
     final box = _getProductsBox();
 
+    // Ensure legacy preexisting seed products are purged from local cache
+    if (box.containsKey('prod_1')) await box.delete('prod_1');
+    if (box.containsKey('prod_2')) await box.delete('prod_2');
+    final pendingBox = _getPendingBox();
+    if (pendingBox.containsKey('prod_1')) await pendingBox.delete('prod_1');
+    if (pendingBox.containsKey('prod_2')) await pendingBox.delete('prod_2');
+
     // If box is empty and online, populate with remote products
     if ((box.isEmpty || forceRefresh) && isOnline) {
       try {
@@ -161,7 +168,6 @@ class ProductRepository {
         debugPrint('ProductRepository: Failed to sync pending item $id: $e');
       }
     }
-
     return syncedCount;
   }
 

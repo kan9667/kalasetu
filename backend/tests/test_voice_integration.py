@@ -67,7 +67,8 @@ def mock_voice_processor():
             elapsed_seconds=0.45,
         )
 
-    with patch("backend.services.catalog_service.ArtisanVoiceProcessor.process_voice_note", side_effect=mock_process):
+    with patch("backend.services.catalog_service.ArtisanVoiceProcessor.process_voice_note", side_effect=mock_process), \
+         patch("backend.services.catalog_service.CatalogService._is_audio_silent", return_value=False):
         yield
 
 

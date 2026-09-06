@@ -18,4 +18,5 @@ class AppRouteConstants {
   static const String productDetail = 'productDetail';
   static const String languageSettings = 'languageSettings';
   static const String myStats = 'myStats';
+  static const String assistant = 'assistant';
 }
