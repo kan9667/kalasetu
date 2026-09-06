@@ -101,8 +101,9 @@ class ProfileScreen extends ConsumerWidget {
               onTap: () => context.pushNamed(AppRouteConstants.languageSettings),
             ),
             _MenuTile(
-              icon: Icons.bar_chart,
+              icon: Icons.trending_up,
               title: 'my_stats_title'.tr(),
+              subtitle: 'my_stats_subtitle'.tr(),
               onTap: () => context.pushNamed(AppRouteConstants.myStats),
             ),
             _MenuTile(
