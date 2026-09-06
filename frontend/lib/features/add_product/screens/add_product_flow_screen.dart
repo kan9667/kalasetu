@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../../core/router/app_route_constants.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -83,6 +85,15 @@ class AddProductFlowScreen extends ConsumerWidget {
     return AppScaffold(
       title: 'tab_add_product'.tr(),
       automaticallyImplyLeading: false,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.help_outline_rounded),
+          tooltip: 'how_to_list_btn'.tr(),
+          onPressed: () {
+            context.pushNamed(AppRouteConstants.listingTutorial);
+          },
+        ),
+      ],
       leading: currentStep > 0
           ? IconButton(
               icon: const Icon(Icons.arrow_back),

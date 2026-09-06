@@ -74,6 +74,7 @@ class AppRadii {
   static const double lg         = 16.0;
   static const double xl         = 20.0;
   static const double xxl        = 24.0;
+  static const double full       = 999.0;
 
   // Semantic radii — v3 spec
   static const double button     = 999.0; // fully rounded pill buttons

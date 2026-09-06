@@ -139,7 +139,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
     });
 
     return AppScaffold(
-      title: 'Performance',
+      title: 'my_stats_title'.tr(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.screenPadding,
