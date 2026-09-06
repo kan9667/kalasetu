@@ -25,27 +25,27 @@ void main() {
   });
 
   group('TutorialSlidesData', () {
-    test('contains exactly 7 slides spanning overview, 5 steps, and outro', () {
+    test('contains exactly 8 slides spanning overview, 6 steps, and outro', () {
       final slides = TutorialSlidesData.slides;
-      expect(slides.length, equals(7));
+      expect(slides.length, equals(8));
 
       expect(slides[0].isIntro, isTrue);
       expect(slides[0].stepIndex, equals(0));
 
-      for (int i = 1; i <= 5; i++) {
+      for (int i = 1; i <= 6; i++) {
         expect(slides[i].isStep, isTrue);
         expect(slides[i].stepIndex, equals(i));
       }
 
-      expect(slides[6].isOutro, isTrue);
-      expect(slides[6].stepIndex, equals(6));
+      expect(slides[7].isOutro, isTrue);
+      expect(slides[7].stepIndex, equals(7));
     });
 
-    test('each slide has non-empty keys and highlights', () {
+    test('each slide has non-empty keys, ttsKey, and highlights', () {
       for (final slide in TutorialSlidesData.slides) {
         expect(slide.titleKey.isNotEmpty, isTrue);
         expect(slide.descKey.isNotEmpty, isTrue);
-        expect(slide.tipKey.isNotEmpty, isTrue);
+        expect(slide.ttsKey.isNotEmpty, isTrue);
         expect(slide.highlights.isNotEmpty, isTrue);
       }
     });

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
 class TutorialSlideModel {
-  final int stepIndex; // 0 for intro, 1..5 for steps, 6 for ready/outro
+  final int stepIndex; // 0 for intro, 1..6 for steps, 7 for ready/outro
   final String badgeKey;
   final String titleKey;
   final String descKey;
-  final String tipKey;
+  final String ttsKey; // short crisp narration text key
   final IconData icon;
   final Color accentColor;
   final List<String> highlights;
@@ -16,116 +16,138 @@ class TutorialSlideModel {
     required this.badgeKey,
     required this.titleKey,
     required this.descKey,
-    required this.tipKey,
+    required this.ttsKey,
     required this.icon,
     required this.accentColor,
     required this.highlights,
   });
 
   bool get isIntro => stepIndex == 0;
-  bool get isOutro => stepIndex == 6;
-  bool get isStep => stepIndex >= 1 && stepIndex <= 5;
+  bool get isOutro => stepIndex == 7;
+  bool get isStep => stepIndex >= 1 && stepIndex <= 6;
 }
 
 class TutorialSlidesData {
   static const List<TutorialSlideModel> slides = [
+    // ── Slide 1: Overview ────────────────────────────────────────────────
     TutorialSlideModel(
       stepIndex: 0,
       badgeKey: 'slide1_badge',
       titleKey: 'slide1_title',
       descKey: 'slide1_desc',
-      tipKey: 'slide1_tip',
+      ttsKey: 'slide1_tts',
       icon: Icons.storefront_rounded,
       accentColor: AppColors.terracotta,
       highlights: [
-        'AI Studio Photography',
-        'Voice Storytelling',
-        'Fair Market Pricing',
-        'Works 100% Offline',
+        'List Crafts',
+        'Market on WhatsApp',
+        'AI Assistant',
+        'Track Orders',
       ],
     ),
+    // ── Slide 2: Step 1 — Photography ───────────────────────────────────
     TutorialSlideModel(
       stepIndex: 1,
       badgeKey: 'slide2_badge',
       titleKey: 'slide2_title',
       descKey: 'slide2_desc',
-      tipKey: 'slide2_tip',
+      ttsKey: 'slide2_tts',
       icon: Icons.camera_alt_rounded,
       accentColor: AppColors.mustard,
       highlights: [
-        'Natural Daylight',
-        'Plain Background',
-        'Add 2-3 Angles',
+        'Morning Daylight',
+        'Clean Background',
+        '2–3 Angles',
       ],
     ),
+    // ── Slide 3: Step 2 — Voice Story ───────────────────────────────────
     TutorialSlideModel(
       stepIndex: 2,
       badgeKey: 'slide3_badge',
       titleKey: 'slide3_title',
       descKey: 'slide3_desc',
-      tipKey: 'slide3_tip',
+      ttsKey: 'slide3_tts',
       icon: Icons.mic_rounded,
       accentColor: AppColors.terracottaDark,
       highlights: [
-        'Tap to Record',
-        'Mother Tongue Support',
+        'Hindi, Tamil, Bengali',
+        'Say Materials Used',
         'Share Craft Legacy',
       ],
     ),
+    // ── Slide 4: Step 3 — AI Review & Fair Price ────────────────────────
     TutorialSlideModel(
       stepIndex: 3,
       badgeKey: 'slide4_badge',
       titleKey: 'slide4_title',
       descKey: 'slide4_desc',
-      tipKey: 'slide4_tip',
+      ttsKey: 'slide4_tts',
       icon: Icons.auto_fix_high_rounded,
       accentColor: AppColors.forestGreen,
       highlights: [
-        'Lighting Enhancement',
+        'AI-Enhanced Photo',
         'Auto Craft Story',
-        'Smart Tags & Category',
+        'Dignity Fair Price',
       ],
     ),
+    // ── Slide 5: Step 4 — Social Media Helper (NEW) ─────────────────────
     TutorialSlideModel(
       stepIndex: 4,
       badgeKey: 'slide5_badge',
       titleKey: 'slide5_title',
       descKey: 'slide5_desc',
-      tipKey: 'slide5_tip',
-      icon: Icons.currency_rupee_rounded,
+      ttsKey: 'slide5_tts',
+      icon: Icons.share_rounded,
       accentColor: AppColors.mustard,
       highlights: [
-        'Material Cost + Labor',
-        'Recommended Price Band',
-        'Guaranteed Profit Margin',
+        'WhatsApp & Instagram',
+        'Ready-Made Captions',
+        '1-Tap Copy & Share',
       ],
     ),
+    // ── Slide 6: Step 5 — KalaMitra AI Assistant (NEW) ──────────────────
     TutorialSlideModel(
       stepIndex: 5,
       badgeKey: 'slide6_badge',
       titleKey: 'slide6_title',
       descKey: 'slide6_desc',
-      tipKey: 'slide6_tip',
-      icon: Icons.cloud_sync_rounded,
-      accentColor: AppColors.forestGreen,
+      ttsKey: 'slide6_tts',
+      icon: Icons.record_voice_over_rounded,
+      accentColor: AppColors.gold,
       highlights: [
-        'Zero Data Worry',
-        'Drafts Kept Safe',
-        'Auto Cloud Sync',
+        'Ask in Your Language',
+        'Pricing Advice',
+        'Pehchan ID Help',
       ],
     ),
+    // ── Slide 7: Step 6 — Orders & Analytics (NEW) ──────────────────────
     TutorialSlideModel(
       stepIndex: 6,
       badgeKey: 'slide7_badge',
       titleKey: 'slide7_title',
       descKey: 'slide7_desc',
-      tipKey: 'slide7_tip',
+      ttsKey: 'slide7_tts',
+      icon: Icons.bar_chart_rounded,
+      accentColor: AppColors.forestGreen,
+      highlights: [
+        'Pack & Ship Orders',
+        'Fair Wage Earnings',
+        'Sales Analytics',
+      ],
+    ),
+    // ── Slide 8: Ready / Outro ───────────────────────────────────────────
+    TutorialSlideModel(
+      stepIndex: 7,
+      badgeKey: 'slide8_badge',
+      titleKey: 'slide8_title',
+      descKey: 'slide8_desc',
+      ttsKey: 'slide8_tts',
       icon: Icons.celebration_rounded,
       accentColor: AppColors.terracotta,
       highlights: [
-        'Direct Buyer Linkage',
-        'Verified Artisan Profile',
-        'Zero Middleman Fees',
+        'Open Studio Camera',
+        'List Your First Craft',
+        'Start Earning Today',
       ],
     ),
   ];

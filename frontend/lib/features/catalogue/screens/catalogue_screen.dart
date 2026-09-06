@@ -14,6 +14,7 @@ import '../../../core/widgets/motifs/empty_craft_state.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../data/models/product.dart';
 import '../../social_media/providers/social_media_provider.dart';
+import '../../home/screens/home_shell.dart';
 import '../providers/catalogue_filter_provider.dart';
 
 class CatalogueScreen extends ConsumerStatefulWidget {
@@ -261,6 +262,37 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
 
     return AppScaffold(
       title: 'my_catalogue_title'.tr(),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: GestureDetector(
+            onTap: () {
+              ref.read(homeTabIndexProvider.notifier).state = 0;
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.terracotta,
+                borderRadius: BorderRadius.circular(AppRadii.button),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                  const SizedBox(width: 4),
+                  Text(
+                    'add_product_btn'.tr(),
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
       body: Column(
         children: [
           // Search Bar matching kalasetu-redesign-v3.html
@@ -404,6 +436,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                 if (filtered.isEmpty) {
                   return Center(
                     child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -411,12 +444,22 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                             title: 'no_products_title'.tr(),
                             subtitle: 'no_products_desc'.tr(),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 16),
+                          AppButton(
+                            label: 'add_product_btn'.tr(),
+                            icon: Icons.add_photo_alternate_rounded,
+                            type: AppButtonType.primary,
+                            width: 240,
+                            onPressed: () {
+                              ref.read(homeTabIndexProvider.notifier).state = 0;
+                            },
+                          ),
+                          const SizedBox(height: 10),
                           AppButton(
                             label: 'how_to_list_btn'.tr(),
                             icon: Icons.play_circle_outline_rounded,
                             type: AppButtonType.outlined,
-                            width: 220,
+                            width: 240,
                             onPressed: () {
                               context.pushNamed(AppRouteConstants.listingTutorial);
                             },

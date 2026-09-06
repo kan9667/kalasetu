@@ -54,10 +54,8 @@ class _TutorialCarouselScreenState extends ConsumerState<TutorialCarouselScreen>
       _ttsService.stop();
     } else {
       final currentSlide = _slides[_currentPage];
-      final title = currentSlide.titleKey.tr();
-      final desc = currentSlide.descKey.tr();
-      final fullSpeech = '$title. $desc';
-      _ttsService.speak(fullSpeech, languageCode: context.locale.languageCode);
+      final ttsText = currentSlide.ttsKey.tr();
+      _ttsService.speak(ttsText, languageCode: context.locale.languageCode);
     }
   }
 
@@ -143,7 +141,7 @@ class _TutorialCarouselScreenState extends ConsumerState<TutorialCarouselScreen>
                                   : 'step_counter'.tr(
                                       namedArgs: {
                                         'current': '${currentSlide.stepIndex}',
-                                        'total': '5',
+                                        'total': '6',
                                       },
                                     ),
                           style: AppTextStyles.labelMedium.copyWith(
