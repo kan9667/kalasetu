@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/app_spacing.dart';
 import '../providers/app_providers.dart';
+import 'motifs/mehrab_clipper.dart';
 
 class LanguagePicker extends ConsumerWidget {
   final bool isCompact;
@@ -20,93 +21,103 @@ class LanguagePicker extends ConsumerWidget {
   ];
 
   void _showLanguageBottomSheet(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
+    showMehrabBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.bottomSheet)),
-      ),
       builder: (modalContext) {
         String currentLocaleCode = 'en';
         try {
           currentLocaleCode = context.locale.languageCode;
         } catch (_) {}
 
-        return SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding,
-                vertical: AppSpacing.md,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                Row(
-                  children: [
-                    const Icon(Icons.language, color: AppColors.terracotta),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      'select_language'.tr(),
-                      style: AppTextStyles.headlineMedium,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                const Divider(),
-                ...languages.map((lang) {
-                  final isSelected = currentLocaleCode == lang['code'];
-                  return Semantics(
-                    button: true,
-                    selected: isSelected,
-                    label: '${lang['name']} (${lang['native']})',
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: AppSpacing.minTouchTarget),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                          vertical: AppSpacing.xs,
-                        ),
-                        title: Text(
-                          lang['name']!,
-                          style: AppTextStyles.bodyLarge.copyWith(
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                        subtitle: Text(
-                          lang['native']!,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        trailing: isSelected
-                            ? const Icon(Icons.check_circle, color: AppColors.terracotta)
-                            : const Icon(Icons.circle_outlined, color: AppColors.border),
-                        onTap: () async {
-                          final newLocale = Locale(lang['code']!);
-                          try {
-                            await context.setLocale(newLocale);
-                          } catch (_) {}
-
-                          // Also update profile state
-                          final currentProfile = ref.read(userProfileProvider);
-                          ref.read(userProfileProvider.notifier).updateProfile(
-                                currentProfile.copyWith(preferredLanguage: lang['code']!),
-                              );
-
-                          if (modalContext.mounted) {
-                            Navigator.pop(modalContext);
-                          }
-                        },
-                      ),
-                    ),
-                  );
-                }),
-              ],
-            ),
+        return Padding(
+          padding: const EdgeInsets.only(
+            left: AppSpacing.screenPadding,
+            right: AppSpacing.screenPadding,
+            bottom: AppSpacing.lg,
           ),
-        ),
-      );
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  const Icon(Icons.language, color: AppColors.terracotta, size: 22),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    'select_language'.tr(),
+                    style: AppTextStyles.headlineMedium.copyWith(fontSize: 20),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              const Divider(color: AppColors.line, height: 1),
+              const SizedBox(height: AppSpacing.xs),
+              ...languages.map((lang) {
+                final isSelected = currentLocaleCode == lang['code'];
+                return Semantics(
+                  button: true,
+                  selected: isSelected,
+                  label: '${lang['name']} (${lang['native']})',
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: AppSpacing.minTouchTarget),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xs,
+                      ),
+                      title: Text(
+                        lang['name']!,
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected ? AppColors.terracotta : AppColors.ink,
+                        ),
+                      ),
+                      subtitle: Text(
+                        lang['native']!,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.inkSoft,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? const Icon(Icons.check_circle, color: AppColors.terracotta)
+                          : const Icon(Icons.circle_outlined, color: AppColors.border),
+                      onTap: () async {
+                        final newLocale = Locale(lang['code']!);
+                        try {
+                          await context.setLocale(newLocale);
+                          debugPrint('setLocale SUCCESS: ${newLocale.languageCode}');
+                        } catch (e, st) {
+                          debugPrint('setLocale ERROR: $e\n$st');
+                        }
+
+                        // Also update profile state
+                        final currentProfile = ref.read(userProfileProvider);
+                        ref.read(userProfileProvider.notifier).updateProfile(
+                              currentProfile.copyWith(preferredLanguage: lang['code']!),
+                            );
+
+                        if (modalContext.mounted) {
+                          Navigator.pop(modalContext);
+                        }
+                      },
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
       },
     );
   }

@@ -41,8 +41,12 @@ void main() async {
   }
 
   // Safely open all boxes
-  await _openSafeBox<Product>('products_box');
-  await _openSafeBox<String>('pending_sync_box');
+  final productsBox = await _openSafeBox<Product>('products_box');
+  final pendingBox = await _openSafeBox<String>('pending_sync_box');
+  await productsBox.delete('prod_1');
+  await productsBox.delete('prod_2');
+  await pendingBox.delete('prod_1');
+  await pendingBox.delete('prod_2');
   await _openSafeBox<UserProfile>('user_profile_box');
   await _openSafeBox('auth_box');
   await _openSafeBox('draft_box');
@@ -60,6 +64,8 @@ void main() async {
       supportedLocales: const [
         Locale('en'),
         Locale('hi'),
+        Locale('ta'),
+        Locale('bn'),
       ],
       path: 'assets/translations',
       fallbackLocale: const Locale('en'),

@@ -25,6 +25,13 @@ class ProductRepository {
     if (box.containsKey('prod_1')) await box.delete('prod_1');
     if (box.containsKey('prod_2')) await box.delete('prod_2');
 
+    // Ensure legacy preexisting seed products are purged from local cache
+    if (box.containsKey('prod_1')) await box.delete('prod_1');
+    if (box.containsKey('prod_2')) await box.delete('prod_2');
+    final pendingBox = _getPendingBox();
+    if (pendingBox.containsKey('prod_1')) await pendingBox.delete('prod_1');
+    if (pendingBox.containsKey('prod_2')) await pendingBox.delete('prod_2');
+
     // If box is empty and online, populate with remote products
     if ((box.isEmpty || forceRefresh) && isOnline) {
       try {
@@ -86,15 +93,21 @@ class ProductRepository {
     if (isOnline) {
       try {
         final updated = await _apiService.updateProduct(product);
-        await productsBox.put(updated.id, updated.copyWith(status: ProductStatus.live));
+        final targetStatus = product.status == ProductStatus.pendingSync
+            ? ProductStatus.live
+            : product.status;
+        final saved = updated.copyWith(status: targetStatus);
+        await productsBox.put(saved.id, saved);
         await pendingBox.delete(product.id);
-        return updated;
+        return saved;
       } catch (e) {
         debugPrint('ProductRepository: Online update failed, saving to pending queue: $e');
       }
     }
 
-    final localProduct = product.copyWith(status: ProductStatus.pendingSync);
+    final localProduct = product.copyWith(
+      status: product.status == ProductStatus.live ? ProductStatus.pendingSync : product.status,
+    );
     await productsBox.put(localProduct.id, localProduct);
     await pendingBox.put(localProduct.id, 'UPDATE');
     return localProduct;
@@ -144,7 +157,10 @@ class ProductRepository {
               await productsBox.put(id, created.copyWith(status: ProductStatus.live));
             } else {
               final updated = await _apiService.updateProduct(product);
-              await productsBox.put(id, updated.copyWith(status: ProductStatus.live));
+              final targetStatus = product.status == ProductStatus.pendingSync
+                  ? ProductStatus.live
+                  : product.status;
+              await productsBox.put(id, updated.copyWith(status: targetStatus));
             }
             await pendingBox.delete(id);
             syncedCount++;
@@ -154,7 +170,6 @@ class ProductRepository {
         debugPrint('ProductRepository: Failed to sync pending item $id: $e');
       }
     }
-
     return syncedCount;
   }
 

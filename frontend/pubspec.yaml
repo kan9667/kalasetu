@@ -53,6 +53,11 @@ dependencies:
   path_provider: ^2.1.4
   permission_handler: ^13.0.1
 
+  # PDF / Label Maker
+  pdf: ^3.10.8
+  printing: ^5.13.2
+  qr_flutter: ^4.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -67,4 +72,18 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/translations/
+    - assets/fonts/
+
+  fonts:
+    # Manrope — variable weight (200–800), used for all body/UI/label text
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope-VariableFont_wght.ttf
+
+    # Fraunces — variable optical-size (9–144) + weight (100–900)
+    # Use FontVariation('opsz', 9..36) at display sizes for expressive character
+    # Use FontVariation('opsz', 72..144) for body-scale if needed
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces-VariableFont_opsz_wght.ttf
 

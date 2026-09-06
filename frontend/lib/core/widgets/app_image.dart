@@ -79,14 +79,14 @@ class AppImage extends StatelessWidget {
           return Container(
             width: width,
             height: height,
-            color: const Color(0xFFF3EDE2),
+            color: AppColors.parchmentDeep,
             child: const Center(
               child: SizedBox(
                 width: 28,
                 height: 28,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  color: Color(0xFFC86D51),
+                  color: AppColors.terracotta,
                 ),
               ),
             ),

@@ -2,6 +2,7 @@
 *.pyc
 __pycache__/
 *.pyo
+*.pyd
 *.egg-info/
 dist/
 build/
@@ -9,28 +10,94 @@ build/
 .eggs/
 venv/
 .venv/
+env/
+.env/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.log
+*.pid
 
-# Environment
+# Environment & Secrets
 .env
+.env.*
+.env*.local
+!.env.example
+*.pem
+*.key
 
-# Pricing pipeline runtime data
+# Machine Learning & Pipelines
 ML/pricing/data/
 ML/pricing/chroma_db/
+ML/voice_pipeline/data/
+ML/image_pipeline/output/*
+!ML/image_pipeline/output/.gitkeep
+**/chroma_db/
 
-# OS
+# Databases & Local Storage
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.hive
+
+# Backend runtime files & uploads
+backend/uploads/
+uploads/
+**/uploads/
+!**/uploads/.gitkeep
+
+# Audio & Voice Recordings (Whisper / KalaMitra temporary audio)
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.aac
+*.flac
+**/chat_voice_recordings/
+
+# OS & Filesystem Metadata
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# IDE
+# IDE & AI Assistants
 .vscode/
 .idea/
 *.swp
 *.swo
+.claude/
+.cursor/
+.gemini/
+*.iml
+*.ipr
+*.iws
 
-# Backend runtime files & uploads
-backend/uploads/
-*.db
-*.sqlite3
+# Flutter & Dart
+pubspec.lock
+**/pubspec.lock
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+frontend/build/
+frontend/.pub-cache/
 
-# Voice pipeline runtime data
-ML/voice_pipeline/data/
+# Mobile keystores & signing
+key.properties
+**/*.keystore
+**/*.jks
+local.properties
+**/local.properties

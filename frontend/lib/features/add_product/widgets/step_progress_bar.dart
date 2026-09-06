@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/motifs/tanka_stitch_painter.dart';
 
 class StepProgressBar extends StatelessWidget {
   final int currentStep; // 0 to 4
@@ -12,10 +14,18 @@ class StepProgressBar extends StatelessWidget {
     this.onStepTapped,
   });
 
+  static const List<IconData> _stepIcons = [
+    Icons.photo_camera_outlined,
+    Icons.mic_none_outlined,
+    Icons.auto_awesome_outlined,
+    Icons.sell_outlined,
+    Icons.cloud_upload_outlined,
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
+      height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       alignment: Alignment.center,
       child: Row(
@@ -24,53 +34,73 @@ class StepProgressBar extends StatelessWidget {
             final stepIndex = index ~/ 2;
             final isCompleted = stepIndex < currentStep;
             return Expanded(
-              child: Container(
-                height: 3,
-                color: isCompleted ? const Color(0xFF437A57) : const Color(0xFFE2D7C7),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                child: SizedBox(
+                  height: 2,
+                  child: isCompleted
+                      ? const CustomPaint(
+                          painter: TankaStitchPainter(
+                            color: AppColors.success,
+                            strokeWidth: 2,
+                            dashLength: 5,
+                            dashGap: 4,
+                          ),
+                        )
+                      : Container(
+                          height: 2,
+                          color: AppColors.line,
+                        ),
+                ),
               ),
             );
           } else {
             final stepIndex = index ~/ 2;
             final isCompleted = stepIndex < currentStep;
             final isCurrent = stepIndex == currentStep;
+            final iconData = stepIndex < _stepIcons.length
+                ? _stepIcons[stepIndex]
+                : Icons.circle;
 
-            Color bgColor = const Color(0xFFF2ECE1);
-            Color borderColor = const Color(0xFFD6C7B2);
-            Widget child = Text(
-              '${stepIndex + 1}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF7D7265),
-              ),
-            );
+            Color bgColor = AppColors.cardSurface;
+            Color borderColor = AppColors.line;
+            Color iconColor = AppColors.inkFaint;
+            List<BoxShadow>? shadows;
+            Widget child;
 
             if (isCompleted) {
-              bgColor = const Color(0xFF437A57);
-              borderColor = const Color(0xFF437A57);
+              bgColor = AppColors.success;
+              borderColor = AppColors.success;
+              iconColor = Colors.white;
               child = const Icon(Icons.check, size: 16, color: Colors.white);
             } else if (isCurrent) {
-              bgColor = const Color(0xFFC86D51);
-              borderColor = const Color(0xFFC86D51);
-              child = Text(
-                '${stepIndex + 1}',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+              bgColor = AppColors.terracotta;
+              borderColor = AppColors.terracotta;
+              iconColor = Colors.white;
+              shadows = const [
+                BoxShadow(
+                  color: AppColors.terracottaLight,
+                  spreadRadius: 4,
+                  blurRadius: 0,
                 ),
-              );
+              ];
+              child = Icon(iconData, size: 16, color: Colors.white);
+            } else {
+              child = Icon(iconData, size: 16, color: iconColor);
             }
 
             return GestureDetector(
               onTap: onStepTapped != null ? () => onStepTapped!(stepIndex) : null,
-              child: Container(
-                width: 32,
-                height: 32,
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: bgColor,
-                  border: Border.all(color: borderColor, width: 2),
+                  border: Border.all(color: borderColor, width: 1.5),
+                  boxShadow: shadows,
                 ),
                 alignment: Alignment.center,
                 child: child,

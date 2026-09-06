@@ -30,13 +30,16 @@ class ProductAdapter extends TypeAdapter<Product> {
       createdAt: fields[10] as DateTime?,
       additionalPhotoPaths: (fields[11] as List).cast<String>(),
       aiEnhancedPhotoPath: fields[12] as String,
+      statusUpdatedAt: fields[13] as DateTime?,
+      restockQuantity: fields[14] as int?,
+      statusReason: fields[15] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Product obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(16)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -62,7 +65,13 @@ class ProductAdapter extends TypeAdapter<Product> {
       ..writeByte(11)
       ..write(obj.additionalPhotoPaths)
       ..writeByte(12)
-      ..write(obj.aiEnhancedPhotoPath);
+      ..write(obj.aiEnhancedPhotoPath)
+      ..writeByte(13)
+      ..write(obj.statusUpdatedAt)
+      ..writeByte(14)
+      ..write(obj.restockQuantity)
+      ..writeByte(15)
+      ..write(obj.statusReason);
   }
 
   @override
@@ -91,6 +100,10 @@ class ProductStatusAdapter extends TypeAdapter<ProductStatus> {
         return ProductStatus.draft;
       case 3:
         return ProductStatus.sold;
+      case 4:
+        return ProductStatus.soldOut;
+      case 5:
+        return ProductStatus.listingRemoved;
       default:
         return ProductStatus.live;
     }
@@ -110,6 +123,12 @@ class ProductStatusAdapter extends TypeAdapter<ProductStatus> {
         break;
       case ProductStatus.sold:
         writer.writeByte(3);
+        break;
+      case ProductStatus.soldOut:
+        writer.writeByte(4);
+        break;
+      case ProductStatus.listingRemoved:
+        writer.writeByte(5);
         break;
     }
   }

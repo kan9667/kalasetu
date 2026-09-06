@@ -1,76 +1,68 @@
 # ============================================================
-# config.py — All configurable settings for the image enhancer
+# config.py — Easy Settings for AI Image Enhancer
 # ============================================================
-# Change values here instead of editing the processing code.
-# These defaults are tuned for typical e-commerce product photos.
+# Students: You can easily tweak these settings to experiment
+# with different results without changing any complex code!
 # ============================================================
 
-# --- Output Dimensions ---
-# Final canvas size in pixels (square canvas is standard for e-commerce)
+# ------------------------------------------------------------
+# 1. BASIC SETTINGS (Most common things to change)
+# ------------------------------------------------------------
+
+# Final image dimensions (square 1200x1200 is standard for e-commerce)
 OUTPUT_WIDTH = 1200
 OUTPUT_HEIGHT = 1200
 
-# --- JPEG Compression ---
-# Quality from 1 (worst) to 95 (best). 92 is a good balance.
-JPEG_QUALITY = 92
-
-# --- Cropping ---
-# Fractional padding around the detected product (0.08 = 8% of product size)
-CROP_PADDING = 0.08
-
-# --- Background ---
-# RGB color for the clean background (white is standard for e-commerce)
+# Background color for the product canvas (RGB tuple)
+# (255, 255, 255) = Clean White
 BACKGROUND_COLOR = (255, 255, 255)
 
-# --- Sharpening ---
-# Set to False to skip sharpening entirely
+# Output image quality (1 to 95). 92 gives crisp photos with small file sizes.
+JPEG_QUALITY = 92
+
+# Padding around the product (0.08 means 8% space around edges)
+CROP_PADDING = 0.08
+
+
+# ------------------------------------------------------------
+# 2. ENHANCEMENT TOGGLES (Turn features ON/OFF)
+# ------------------------------------------------------------
+
+# Sharpening: makes soft edges clearer without white edge halos
 SHARPEN_ENABLED = True
+SHARPEN_PERCENT = 40        # Mild sharpening strength (avoids white halo artifacts)
+SHARPEN_RADIUS = 1          # Radius in pixels (1px keeps edges crisp without halos)
+SHARPEN_THRESHOLD = 3
 
-# Sharpening strength (radius, percent, threshold for UnsharpMask)
-SHARPEN_RADIUS = 2          # Pixel radius of the blur
-SHARPEN_PERCENT = 80        # Strength of sharpening (0-200 is safe range)
-SHARPEN_THRESHOLD = 3       # Minimum brightness difference to sharpen
-
-# --- Lighting Correction ---
-# CLAHE clip limit — higher = more contrast enhancement. 2.0 is conservative.
-CLAHE_CLIP_LIMIT = 2.0
-
-# CLAHE tile grid size — smaller tiles = more local contrast
+# Lighting correction: fixes dark/underexposed photos gently without bleaching
+LIGHTING_ENABLED = True
+TARGET_BRIGHTNESS = 110     # Natural brightness level (avoids washed-out whitish look)
+CLAHE_CLIP_LIMIT = 1.0      # Gentle contrast adjustment (prevents chalky midtones)
 CLAHE_TILE_SIZE = 8
+GAMMA_MIN = 0.85            # Prevents aggressive over-brightening
+GAMMA_MAX = 1.2             # Maximum brightness adjustment
 
-# Target average brightness (0-255). If image average is far from this, gamma is applied.
-TARGET_BRIGHTNESS = 130
+# White balance: fixes yellow indoor lighting or blue tint
+# 0.0 = preserve 100% natural original colors (prevents unnatural color shifts or greenish tints)
+# Higher values (e.g. 0.3 - 0.5) shift colors toward neutral gray
+WHITE_BALANCE_STRENGTH = 0.0
 
-# How much gamma correction is allowed (1.0 = none, <1 = brighter, >1 = darker)
-GAMMA_MIN = 0.6
-GAMMA_MAX = 1.6
 
-# --- White Balance ---
-# Strength of white-balance correction (0.0 = no change, 1.0 = full gray-world correction)
-# 0.5 is conservative — enough to reduce obvious casts without destroying product colors
-WHITE_BALANCE_STRENGTH = 0.5
+# ------------------------------------------------------------
+# 3. SAFETY CHECKS (File validation)
+# ------------------------------------------------------------
 
-# --- Input Validation ---
-# Maximum input file size in megabytes
-MAX_INPUT_SIZE_MB = 25
-
-# Minimum image dimension in pixels (width or height)
-MIN_DIMENSION = 100
-
-# Maximum image dimension in pixels (to prevent memory issues)
-MAX_DIMENSION = 10000
-
-# Supported input file extensions
+# Allowed file formats
 SUPPORTED_FORMATS = {".jpg", ".jpeg", ".png", ".webp"}
 
-# --- Resize Limits ---
-# Maximum upscale factor (2.0 means we won't upscale beyond 2x the original)
-MAX_UPSCALE_FACTOR = 2.0
+# Max file size allowed (in Megabytes)
+MAX_INPUT_SIZE_MB = 25
 
-# --- Alpha Detection ---
-# Minimum alpha value to consider a pixel as "foreground" (0-255)
+# Min & max pixel dimensions
+MIN_DIMENSION = 100
+MAX_DIMENSION = 10000
+
+# Internal detection thresholds
 ALPHA_THRESHOLD = 30
-
-# Minimum contour area (in pixels) to consider as part of the product
-# Small blobs below this are treated as noise
 MIN_CONTOUR_AREA = 500
+MAX_UPSCALE_FACTOR = 2.0

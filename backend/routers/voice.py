@@ -29,7 +29,7 @@ storage_service = StorageService()
 @router.post("/transcribe", response_model=AudioTranscribeResponse)
 async def transcribe_artisan_voice(
     audio: UploadFile = File(..., description="Artisan voice recording (.m4a, .wav, .mp3)"),
-    language_code: str = Form("hi", description="Spoken language code (e.g. hi, ta, bn, mr, etc.)"),
+    language_code: str = Form("auto", description="Spoken language code (default: auto, or hi, en, ta, bn, etc.)"),
     category_hint: Optional[str] = Form(None, description="Craft category hint to prioritize glossary terms"),
 ):
     """
@@ -57,7 +57,7 @@ async def transcribe_artisan_voice(
 async def process_voice_to_product(
     audio: UploadFile = File(..., description="Artisan voice recording (.m4a, .wav, .mp3)"),
     image: Optional[UploadFile] = File(None, description="Optional product photograph"),
-    language_code: str = Form("hi", description="Spoken language code"),
+    language_code: str = Form("auto", description="Spoken language code (default: auto)"),
     category_hint: Optional[str] = Form(None, description="Craft category hint"),
     raw_material_cost: Optional[float] = Form(None, description="Optional raw material cost in INR"),
     labor_hours: Optional[float] = Form(None, description="Optional hours of labor spent"),

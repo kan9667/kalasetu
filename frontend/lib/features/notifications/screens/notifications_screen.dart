@@ -7,20 +7,35 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/providers/app_providers.dart';
 
-class NotificationsScreen extends ConsumerWidget {
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
+
+  @override
+  ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Mark all as read when this screen opens.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(notificationsProvider.notifier).markAllRead();
+    });
+  }
 
   (IconData, Color) _iconAndColorFor(NotificationType type) {
     switch (type) {
       case NotificationType.listingLive:
         return (Icons.check_circle, AppColors.online);
       case NotificationType.pendingSync:
-        // Calm, never harsh — routine sync status is not an alert.
         return (Icons.cloud_queue, AppColors.syncing);
       case NotificationType.buyerView:
         return (Icons.visibility, AppColors.terracotta);
       case NotificationType.priceSuggestion:
         return (Icons.trending_up, AppColors.mustard);
+      case NotificationType.newOrder:
+        return (Icons.receipt_long, AppColors.terracottaDark);
     }
   }
 
@@ -32,11 +47,12 @@ class NotificationsScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final notifications = ref.watch(notificationsProvider);
 
     return AppScaffold(
       title: 'notifications_title'.tr(),
+      showNotificationBell: false, // Already on this screen — don't show bell again
       body: notifications.isEmpty
           ? Center(
               child: Padding(

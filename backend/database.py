@@ -35,6 +35,6 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     """Create all tables (ArtisanDB + ProductDB)."""
     # Import models so SQLAlchemy registers them with Base.metadata
-    from .models.db_models import ArtisanDB, ProductDB  # noqa: F401
+    from .models.db_models import ArtisanDB, ProductDB, SocialDraftDB  # noqa: F401
 
     Base.metadata.create_all(bind=engine)

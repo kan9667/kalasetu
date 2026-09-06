@@ -3,7 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_image.dart';
+import '../../../core/widgets/cycling_guidance_cue.dart';
+import '../../../core/widgets/motifs/dotted_border_box.dart';
+import '../../../core/widgets/motifs/mehrab_clipper.dart';
 import '../../../core/providers/app_providers.dart';
 
 class Step1CaptureWidget extends ConsumerStatefulWidget {
@@ -15,8 +22,10 @@ class Step1CaptureWidget extends ConsumerStatefulWidget {
 
 class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
   final ImagePicker _picker = ImagePicker();
+  bool _isPickingImage = false;
 
   Future<void> _pickImage(ImageSource source) async {
+    setState(() => _isPickingImage = true);
     try {
       final picked = await _picker.pickImage(
         source: source,
@@ -29,10 +38,13 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
       }
     } catch (e, st) {
       debugPrint('[Step1Capture] Image picker error: $e\n$st');
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
     }
   }
 
   Future<void> _addAdditionalImage() async {
+    setState(() => _isPickingImage = true);
     try {
       final picked = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -45,7 +57,95 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
       }
     } catch (e, st) {
       debugPrint('[Step1Capture] Additional image error: $e\n$st');
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
     }
+  }
+
+  static const List<GuidanceCue> _captureCues = [
+    GuidanceCue(
+      text: 'Show the full item in frame',
+      icon: Icons.crop_free_rounded,
+    ),
+    GuidanceCue(
+      text: 'Capture intricate details & texture up close',
+      icon: Icons.zoom_in_rounded,
+    ),
+    GuidanceCue(
+      text: 'Use clear, natural daylight for real colors',
+      icon: Icons.wb_sunny_outlined,
+    ),
+    GuidanceCue(
+      text: 'Place a coin or hand beside it for size reference',
+      icon: Icons.straighten_rounded,
+    ),
+  ];
+
+  Widget _buildGuidanceCues() {
+    return CyclingGuidanceCue(
+      headerTitle: 'PHOTO TIPS',
+      headerIcon: Icons.tips_and_updates_outlined,
+      cues: _captureCues,
+      isPaused: _isPickingImage,
+      onCueChanged: (cue) {
+        // TTS playback hook
+      },
+    );
+  }
+
+  void _showPhotoSourceSheet() {
+    showMehrabBottomSheet(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Choose Photo Source',
+                style: AppTextStyles.headlineMedium,
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    color: AppColors.parchmentDeep,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt, color: AppColors.terracotta),
+                ),
+                title: Text('take_photo'.tr(), style: AppTextStyles.headlineSmall),
+                subtitle: Text('Capture a new photo with camera', style: AppTextStyles.bodySmall),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              const Divider(color: AppColors.line),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    color: AppColors.parchmentDeep,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library, color: AppColors.ink),
+                ),
+                title: Text('upload_gallery'.tr(), style: AppTextStyles.headlineSmall),
+                subtitle: Text('Select a photo from device gallery', style: AppTextStyles.bodySmall),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -65,88 +165,90 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
           // Step Title & Subtitle
           Text(
             hasImage ? 'review_photo_title'.tr() : 'capture_title'.tr(),
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF3F342B),
-              fontFamily: 'serif',
-            ),
+            style: AppTextStyles.headlineLarge,
           ),
           const SizedBox(height: 4),
           Text(
             hasImage ? 'review_photo_subtitle'.tr() : 'capture_subtitle'.tr(),
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF7A6E63),
-            ),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
           ),
+          const SizedBox(height: 14),
+
+          // Cycling guidance cues with fade transitions
+          _buildGuidanceCues(),
           const SizedBox(height: 16),
 
           if (!hasImage) ...[
-            Container(
+            // Photo capture placeholder with dotted border motif
+            DottedBorderBox(
               width: double.infinity,
-              height: 220,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3EDE2),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFDFD5C6), width: 1.5),
-              ),
+              height: 200,
+              backgroundColor: AppColors.parchmentDeep,
+              radius: AppRadii.card,
+              borderColor: AppColors.dottedBorder,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: const BoxDecoration(
-                      color: Color(0xFFE5DAC8),
+                      color: AppColors.cardSurface,
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0x0C000000),
+                          blurRadius: 6,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    child: const Icon(Icons.camera_alt_rounded, size: 36, color: Color(0xFF8C533E)),
+                    child: const Icon(Icons.camera_alt_rounded, size: 36, color: AppColors.terracotta),
                   ),
                   const SizedBox(height: 12),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
                     child: Text(
                       'capture_instructions'.tr(),
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF6F6358)),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.inkSoft,
+                        fontWeight: FontWeight.w600,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 18),
-            ElevatedButton.icon(
+            const SizedBox(height: 20),
+            AppButton(
+              label: 'take_photo'.tr(),
+              icon: Icons.camera_alt,
+              isLoading: _isPickingImage,
               onPressed: () => _pickImage(ImageSource.camera),
-              icon: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
-              label: Text('take_photo'.tr(), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFC86D51),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-              ),
             ),
             const SizedBox(height: 10),
-            OutlinedButton.icon(
+            AppButton(
+              label: 'upload_gallery'.tr(),
+              icon: Icons.photo_library,
+              type: AppButtonType.outlined,
+              isLoading: _isPickingImage,
               onPressed: () => _pickImage(ImageSource.gallery),
-              icon: const Icon(Icons.photo_library, color: Color(0xFF4A3E35), size: 20),
-              label: Text('upload_gallery'.tr(), style: const TextStyle(color: Color(0xFF4A3E35), fontSize: 16, fontWeight: FontWeight.bold)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFD6C7B2)),
-                backgroundColor: const Color(0xFFF7F2EA),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
             ),
           ] else ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: SizedBox(
-                height: 230,
-                width: double.infinity,
-                child: AppImage(
-                  imageUrl: displayImagePath,
-                  fit: BoxFit.cover,
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                boxShadow: AppElevation.cardShadow,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                child: SizedBox(
+                  height: 230,
+                  width: double.infinity,
+                  child: AppImage(
+                    imageUrl: displayImagePath,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
             ),
@@ -154,12 +256,12 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
 
             Text(
               'additional_angles_title'.tr(),
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF3F342B)),
+              style: AppTextStyles.headlineSmall,
             ),
             const SizedBox(height: 2),
             Text(
               'additional_angles_subtitle'.tr(),
-              style: const TextStyle(fontSize: 12, color: Color(0xFF7A6E63)),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
             ),
             const SizedBox(height: 8),
 
@@ -175,7 +277,8 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
                           height: 72,
                           margin: const EdgeInsets.only(right: 8),
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(AppRadii.sm),
+                            border: Border.all(color: AppColors.line),
                             image: DecorationImage(image: FileImage(File(path)), fit: BoxFit.cover),
                           ),
                         ),
@@ -196,24 +299,27 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
                   if (draft.additionalImagePaths.length < 2)
                     InkWell(
                       onTap: _addAdditionalImage,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
                       child: Container(
                         width: 72,
                         height: 72,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF3EDE2),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFDFD5C6)),
+                          color: AppColors.parchmentDeep,
+                          borderRadius: BorderRadius.circular(AppRadii.sm),
+                          border: Border.all(color: AppColors.line),
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.add_a_photo_outlined, size: 20, color: Color(0xFF8C533E)),
+                            const Icon(Icons.add_a_photo_outlined, size: 20, color: AppColors.terracotta),
                             const SizedBox(height: 2),
                             Text(
                               'add_another_angle'.tr(),
                               textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 10, color: Color(0xFF6F6358), fontWeight: FontWeight.w500),
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.inkSoft,
+                                fontSize: 10,
+                              ),
                             ),
                           ],
                         ),
@@ -222,30 +328,19 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
                 ],
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
 
-            ElevatedButton.icon(
+            AppButton(
+              label: 'accept_photo'.tr(),
+              icon: Icons.check_circle_outline,
               onPressed: () => ref.read(addProductFlowProvider.notifier).confirmPhoto(),
-              icon: const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-              label: Text('accept_photo'.tr(), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFC86D51),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-              ),
             ),
             const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: () => _pickImage(ImageSource.camera),
-              icon: const Icon(Icons.refresh, color: Color(0xFF4A3E35), size: 20),
-              label: Text('redo_photo'.tr(), style: const TextStyle(color: Color(0xFF4A3E35), fontSize: 16, fontWeight: FontWeight.bold)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFD6C7B2)),
-                backgroundColor: const Color(0xFFF7F2EA),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
+            AppButton(
+              label: 'redo_photo'.tr(),
+              icon: Icons.refresh,
+              type: AppButtonType.outlined,
+              onPressed: _showPhotoSourceSheet,
             ),
           ],
           const SizedBox(height: 20),
