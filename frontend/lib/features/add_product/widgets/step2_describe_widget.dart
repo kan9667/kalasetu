@@ -6,9 +6,12 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/cycling_guidance_cue.dart';
+import '../../../core/widgets/motifs/dotted_border_box.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/offline_sync/models/queue_item.dart';
 
@@ -69,7 +72,6 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
         localeCode = context.locale.languageCode;
       } catch (_) {}
 
-      // User stopped mic: turn icon to tick first, then transition to replay
       setState(() {
         _isRecording = false;
         _showCheckmark = true;
@@ -87,7 +89,6 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
         ));
       }
 
-      // Show the tick checkmark for 1.2s then transition to replay
       await Future.delayed(const Duration(milliseconds: 1200));
       if (mounted) {
         setState(() {
@@ -198,7 +199,6 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
 
     final draft = ref.read(addProductFlowProvider);
 
-    // If image is already enhanced or offline or no image, proceed directly
     if (!isOnline ||
         draft.originalImagePath.isEmpty ||
         (draft.isEnhanced &&
@@ -212,18 +212,10 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
       return;
     }
 
-    // Advance to Step 3 immediately — the full-screen AI loading screen
-    // (driven by draft.isAiProcessing) takes over from here. We no longer
-    // show a local spinner on this button first and wait for enhancement
-    // to finish before switching screens; enhancement now runs in the
-    // background while the full-screen loader is already showing.
     ref.read(addProductFlowProvider.notifier).nextStep();
 
     try {
-      // 1. Await image enhancement from the backend (single request)
       await ref.read(addProductFlowProvider.notifier).enhanceProductImageAndWait();
-
-      // 2. Submit remaining tasks (voice transcription queue / listing draft)
       ref.read(addProductFlowProvider.notifier).submitForAiProcessing(
         isOnline,
         languageCode: localeCode,
@@ -251,17 +243,17 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
 
     return SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('describe_title'.tr(), style: AppTextStyles.headlineMedium),
+          Text('describe_title'.tr(), style: AppTextStyles.headlineLarge),
           const SizedBox(height: 4),
           Text(
             'describe_subtitle'.tr(),
-            style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
           // Central interactive recording / check / replay circle
           Center(
@@ -281,27 +273,32 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
                 animation: _pulseController,
                 builder: (context, child) {
                   final scale = _isRecording
-                      ? 1.0 + (_pulseController.value * 0.15)
+                      ? 1.0 + (_pulseController.value * 0.12)
                       : (_showCheckmark ? 1.05 : 1.0);
 
                   Color circleColor;
+                  Color shadowColor;
                   IconData iconData;
                   String labelText;
 
                   if (_isRecording) {
-                    circleColor = const Color(0xFFB34A38);
+                    circleColor = AppColors.error;
+                    shadowColor = AppColors.error;
                     iconData = Icons.stop_rounded;
                     labelText = 'stop_recording'.tr();
                   } else if (_showCheckmark) {
-                    circleColor = const Color(0xFF2E7D32); // Vibrant green tick
+                    circleColor = AppColors.success;
+                    shadowColor = AppColors.successLight;
                     iconData = Icons.check_circle_rounded;
                     labelText = 'Recorded!';
                   } else if (hasAudio) {
-                    circleColor = const Color(0xFF4A3E35); // Artisan deep slate
+                    circleColor = AppColors.ink;
+                    shadowColor = AppColors.inkFaint;
                     iconData = _isPlayingAudio ? Icons.pause_rounded : Icons.play_arrow_rounded;
                     labelText = _isPlayingAudio ? 'Playing...' : 'Tap to replay';
                   } else {
-                    circleColor = const Color(0xFFC86D51); // Terracotta brand
+                    circleColor = AppColors.terracotta;
+                    shadowColor = AppColors.terracottaLight;
                     iconData = Icons.mic;
                     labelText = 'tap_to_speak'.tr();
                   }
@@ -309,16 +306,16 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
                   return Transform.scale(
                     scale: scale,
                     child: Container(
-                      width: 124,
-                      height: 124,
+                      width: 120,
+                      height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: circleColor,
                         boxShadow: [
                           BoxShadow(
-                            color: circleColor.withValues(alpha: 0.35),
-                            blurRadius: _isRecording ? 18 : 8,
-                            spreadRadius: _isRecording ? 6 : 1,
+                            color: shadowColor.withValues(alpha: 0.4),
+                            blurRadius: _isRecording ? 20 : 10,
+                            spreadRadius: _isRecording ? 6 : 2,
                           ),
                         ],
                       ),
@@ -327,7 +324,7 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
                         children: [
                           Icon(
                             iconData,
-                            size: 44,
+                            size: 42,
                             color: Colors.white,
                           ),
                           const SizedBox(height: 4),
@@ -335,8 +332,7 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
                             padding: const EdgeInsets.symmetric(horizontal: 8.0),
                             child: Text(
                               labelText,
-                              style: const TextStyle(
-                                fontSize: 12,
+                              style: AppTextStyles.labelSmall.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -358,86 +354,83 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
             const SizedBox(height: 12),
             Text(
               'recording'.tr(),
-              style: const TextStyle(
-                color: Color(0xFFB34A38),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.error,
                 fontWeight: FontWeight.bold,
-                fontSize: 14,
               ),
               textAlign: TextAlign.center,
             ),
           ],
 
-          // Re-record button displayed once recording exists
           if (hasAudio && !_isRecording && !_showCheckmark) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             Center(
-              child: OutlinedButton.icon(
+              child: AppButton(
+                label: 'Re-record voice description',
+                icon: Icons.refresh_rounded,
+                type: AppButtonType.outlined,
                 onPressed: _rerecord,
-                icon: const Icon(Icons.refresh_rounded, size: 20, color: Color(0xFFC86D51)),
-                label: const Text(
-                  'Re-record voice description',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFC86D51),
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFC86D51)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                ),
               ),
             ),
           ],
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
+          // Divider with "or type description" label
           Row(
             children: [
-              const Expanded(child: Divider(color: Color(0xFFE2D7C7))),
+              const Expanded(child: DottedBorderBox.divider()),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0),
                 child: Text(
                   'or_type_description'.tr(),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF7A6E63),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.inkSoft,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
-              const Expanded(child: Divider(color: Color(0xFFE2D7C7))),
+              const Expanded(child: DottedBorderBox.divider()),
             ],
           ),
 
-              const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
-              // Guidance prompt cycling cues
-              CyclingGuidanceCue(
-                headerTitle: 'WHAT TO MENTION',
-                headerIcon: Icons.lightbulb_outline,
-                cues: _describeCues,
-                isPaused: _isRecording || _isPlayingAudio || _textFocusNode.hasFocus,
-                onCueChanged: (cue) {
-                  // TODO: hook TTS playback here via onCueChanged
-                },
-              ),
+          // Guidance prompt cycling cues
+          CyclingGuidanceCue(
+            headerTitle: 'WHAT TO MENTION',
+            headerIcon: Icons.lightbulb_outline,
+            cues: _describeCues,
+            isPaused: _isRecording || _isPlayingAudio || _textFocusNode.hasFocus,
+            onCueChanged: (cue) {},
+          ),
 
-              const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
           TextField(
             controller: _textController,
             focusNode: _textFocusNode,
             maxLines: 4,
-            style: const TextStyle(fontSize: 15, color: Color(0xFF3F342B)),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
             decoration: InputDecoration(
               hintText: 'type_desc_hint'.tr(),
               labelText: 'transcript_label'.tr(),
+              labelStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
               alignLabelWithHint: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                borderSide: const BorderSide(color: AppColors.line),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                borderSide: const BorderSide(color: AppColors.line),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                borderSide: const BorderSide(color: AppColors.terracotta, width: 1.5),
+              ),
               filled: true,
-              fillColor: const Color(0xFFFAF7F2),
+              fillColor: AppColors.cardSurface,
             ),
             onChanged: (val) {
               ref.read(addProductFlowProvider.notifier).setManualDescription(val);
@@ -450,18 +443,18 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFFBF4E6),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE6CD9A)),
+                color: AppColors.goldLight,
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+                border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Color(0xFFB07D2B), size: 18),
-                  SizedBox(width: 8),
+                  const Icon(Icons.info_outline, color: AppColors.goldDark, size: 18),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Some words might need review. You can edit the text above.',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF5A4D41)),
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.goldDark),
                     ),
                   ),
                 ],

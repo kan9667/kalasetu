@@ -24,10 +24,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 3200), // 3.2s glow pulse loop
     );
     _scaleAnimation = CurvedAnimation(parent: _animController, curve: Curves.easeOutBack);
-    _animController.forward();
+    _animController.repeat(reverse: true); // softly pulsing glow
     _navigateToNext();
   }
 
@@ -64,7 +64,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.lg),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.cardSurface,
                     borderRadius: BorderRadius.circular(AppRadii.xl),
                     boxShadow: [
                       BoxShadow(

@@ -9,6 +9,8 @@ import '../../../core/router/app_route_constants.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_image.dart';
+import '../../../core/widgets/motifs/craft_category_badge.dart';
+import '../../../core/widgets/motifs/empty_craft_state.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../data/models/product.dart';
 import '../../social_media/providers/social_media_provider.dart';
@@ -53,6 +55,11 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     super.dispose();
   }
 
+  void _onCategorySelected(String catKey) {
+    setState(() => _selectedCategory = catKey);
+    ref.read(catalogueFilterProvider.notifier).setSelectedCategory(catKey);
+  }
+
   List<Product> _filterProducts(List<Product> products) {
     return products.where((p) {
       if (_selectedCategory != 'filter_all') {
@@ -73,52 +80,91 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
   }
 
   Widget _buildStatusBadge(ProductStatus status) {
+    if (status == ProductStatus.live) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0xEBFFFDF9), // rgba(255,253,249,0.92)
+          borderRadius: BorderRadius.circular(AppRadii.chip),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14201A18),
+              blurRadius: 4,
+              offset: Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 5,
+              height: 5,
+              decoration: const BoxDecoration(
+                color: AppColors.success,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'status_live'.tr(),
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.success,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     Color bg;
     Color fg;
     String labelKey;
     IconData icon;
 
     switch (status) {
-      case ProductStatus.live:
-        bg = AppColors.forestGreenLight.withValues(alpha: 0.2);
-        fg = AppColors.forestGreenDark;
-        labelKey = 'status_live';
-        icon = Icons.check_circle;
-        break;
       case ProductStatus.pendingSync:
-        bg = AppColors.turmericLight.withValues(alpha: 0.3);
-        fg = AppColors.turmericDark;
+        bg = AppColors.statusPendingBg;
+        fg = AppColors.statusPendingFg;
         labelKey = 'status_pending_sync';
         icon = Icons.cloud_queue;
         break;
       case ProductStatus.draft:
-        bg = AppColors.surfaceVariant;
-        fg = AppColors.textSecondary;
+        bg = AppColors.parchmentDeep;
+        fg = AppColors.inkSoft;
         labelKey = 'status_draft';
         icon = Icons.edit_note;
         break;
       case ProductStatus.sold:
-        bg = AppColors.mustard.withValues(alpha: 0.25);
-        fg = AppColors.terracottaDark;
+        bg = AppColors.goldLight;
+        fg = AppColors.goldDark;
         labelKey = 'status_sold';
         icon = Icons.sell;
         break;
       case ProductStatus.soldOut:
-        bg = AppColors.error.withValues(alpha: 0.15);
-        fg = AppColors.error;
+        bg = AppColors.terracottaLight;
+        fg = AppColors.terracottaDark;
         labelKey = 'status_sold_out';
         icon = Icons.remove_shopping_cart_outlined;
         break;
       case ProductStatus.listingRemoved:
-        bg = AppColors.mustard.withValues(alpha: 0.25);
-        fg = AppColors.terracottaDark;
+        bg = AppColors.parchmentDeep;
+        fg = AppColors.inkFaint;
         labelKey = 'status_listing_removed';
         icon = Icons.visibility_off_outlined;
+        break;
+      case ProductStatus.live:
+        bg = AppColors.statusSuccessBg;
+        fg = AppColors.statusSuccessFg;
+        labelKey = 'status_live';
+        icon = Icons.check_circle;
         break;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(AppRadii.chip),
@@ -126,14 +172,75 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: fg),
-          const SizedBox(width: 4),
+          Icon(icon, size: 11, color: fg),
+          const SizedBox(width: 3),
           Text(
             labelKey.tr(),
-            style: AppTextStyles.labelSmall.copyWith(color: fg, fontSize: 11),
+            style: AppTextStyles.labelSmall.copyWith(
+              color: fg,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCategoryBadge(String catKey) {
+    final isSelected = _selectedCategory == catKey;
+    final label = catKey.tr();
+
+    if (catKey == 'filter_all') {
+      return CraftCategoryBadge.all(
+        label: label,
+        isActive: isSelected,
+        onTap: () => _onCategorySelected(catKey),
+      );
+    }
+    if (catKey == 'filter_pottery') {
+      return CraftCategoryBadge(
+        label: label,
+        icon: CraftCategoryIcons.pottery(),
+        isActive: isSelected,
+        showPetalRing: false,
+        onTap: () => _onCategorySelected(catKey),
+      );
+    }
+    if (catKey == 'filter_textiles') {
+      return CraftCategoryBadge(
+        label: label,
+        icon: CraftCategoryIcons.textile(),
+        isActive: isSelected,
+        showPetalRing: false,
+        onTap: () => _onCategorySelected(catKey),
+      );
+    }
+    if (catKey == 'filter_jewelry') {
+      return CraftCategoryBadge(
+        label: label,
+        icon: CraftCategoryIcons.jewelry(),
+        isActive: isSelected,
+        showPetalRing: false,
+        onTap: () => _onCategorySelected(catKey),
+      );
+    }
+    if (catKey == 'filter_woodwork') {
+      return CraftCategoryBadge(
+        label: label,
+        icon: CraftCategoryIcons.woodwork(),
+        isActive: isSelected,
+        showPetalRing: false,
+        onTap: () => _onCategorySelected(catKey),
+      );
+    }
+    // Fallback for paintings or other
+    return CraftCategoryBadge(
+      label: label,
+      icon: CraftCategoryIcons.pottery(),
+      isActive: isSelected,
+      showPetalRing: false,
+      onTap: () => _onCategorySelected(catKey),
     );
   }
 
@@ -157,6 +264,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
       title: 'my_catalogue_title'.tr(),
       body: Column(
         children: [
+          // Search Bar matching kalasetu-redesign-v3.html
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding,
@@ -164,12 +272,14 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
             ),
             child: TextField(
               controller: _searchController,
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
               decoration: InputDecoration(
                 hintText: 'search_products_hint'.tr(),
-                prefixIcon: const Icon(Icons.search, color: AppColors.terracotta),
+                hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.inkFaint),
+                prefixIcon: const Icon(Icons.search, color: AppColors.inkFaint, size: 20),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear),
+                        icon: const Icon(Icons.clear, size: 18, color: AppColors.inkSoft),
                         onPressed: () {
                           _searchController.clear();
                           setState(() => _searchQuery = '');
@@ -177,7 +287,24 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                         },
                       )
                     : null,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                filled: true,
+                fillColor: AppColors.cardSurface,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.button),
+                  borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.button),
+                  borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.button),
+                  borderSide: const BorderSide(color: AppColors.terracotta, width: 2),
+                ),
               ),
               onChanged: (val) {
                 setState(() => _searchQuery = val.trim());
@@ -185,41 +312,80 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
               },
             ),
           ),
+
+          // Craft Category Badges with Petal Ring
           SizedBox(
-            height: 48,
+            height: 44,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
               itemCount: categories.length,
               itemBuilder: (context, index) {
-                final catKey = categories[index];
-                final isSelected = _selectedCategory == catKey;
                 return Padding(
-                  padding: const EdgeInsets.only(right: AppSpacing.xs),
-                  child: FilterChip(
-                    label: Text(catKey.tr()),
-                    selected: isSelected,
-                    selectedColor: AppColors.terracottaLight,
-                    onSelected: (selected) {
-                      setState(() => _selectedCategory = catKey);
-                      ref.read(catalogueFilterProvider.notifier).setSelectedCategory(catKey);
-                    },
-                  ),
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: _buildCategoryBadge(categories[index]),
                 );
               },
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
+
+          // Fair Wage Trust Badge Pill
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding,
+              vertical: 4.0,
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.goldLight,
+                borderRadius: BorderRadius.circular(AppRadii.chip),
+                border: Border.all(
+                  color: AppColors.gold.withValues(alpha: 0.35),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.workspace_premium_outlined,
+                    size: 15,
+                    color: AppColors.goldDark,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'fair_wage_trust_badge'.tr(),
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          // Product Grid or Empty State
           Expanded(
             child: productsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(
+                child: CircularProgressIndicator(color: AppColors.terracotta),
+              ),
               error: (err, stack) => Center(
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.screenPadding),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                      const Icon(Icons.error_outline, size: 48, color: AppColors.terracottaDark),
                       const SizedBox(height: AppSpacing.md),
                       Text('Error loading catalogue', style: AppTextStyles.headlineMedium),
                       const SizedBox(height: AppSpacing.sm),
@@ -236,101 +402,11 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
               ),
               data: (products) {
                 final filtered = _filterProducts(products);
-                final hasActiveFilter = _searchQuery.isNotEmpty || _selectedCategory != 'filter_all';
-
-                if (products.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: const BoxDecoration(
-                              color: AppColors.surfaceVariant,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.inventory_2_outlined,
-                              size: 56,
-                              color: AppColors.textTertiary,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          Text('no_products_title'.tr(), style: AppTextStyles.headlineMedium),
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            'no_products_desc'.tr(),
-                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: AppSpacing.xl),
-                          AppButton(
-                            label: 'add_first_product'.tr(),
-                            icon: Icons.add,
-                            width: 220,
-                            onPressed: () {
-                              ref.read(homeTabIndexProvider.notifier).state = 0;
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
 
                 if (filtered.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: const BoxDecoration(
-                              color: AppColors.surfaceVariant,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.search_off,
-                              size: 56,
-                              color: AppColors.textTertiary,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          const Text(
-                            'No products match your search',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF3F342B)),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            'Try a different keyword or category filter.',
-                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-                            textAlign: TextAlign.center,
-                          ),
-                          if (hasActiveFilter) ...[
-                            const SizedBox(height: AppSpacing.xl),
-                            AppButton(
-                              label: 'Clear search & filters',
-                              icon: Icons.clear,
-                              width: 220,
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _searchQuery = '';
-                                  _selectedCategory = 'filter_all';
-                                });
-                              },
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+                  return EmptyCraftState(
+                    title: 'no_products_title'.tr(),
+                    subtitle: 'no_products_desc'.tr(),
                   );
                 }
 
@@ -340,12 +416,15 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                       .read(productListProvider.notifier)
                       .loadProducts(forceRefresh: true),
                   child: GridView.builder(
-                    padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.screenPadding,
+                      vertical: AppSpacing.xs,
+                    ),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
-                      childAspectRatio: 0.72,
-                      crossAxisSpacing: AppSpacing.md,
-                      mainAxisSpacing: AppSpacing.md,
+                      childAspectRatio: 0.60,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
                     ),
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
@@ -392,21 +471,33 @@ class _GridProductCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onSocialTap;
 
-  const _GridProductCard({required this.product, required this.statusBadge, required this.onTap, this.onSocialTap});
+  const _GridProductCard({
+    required this.product,
+    required this.statusBadge,
+    required this.onTap,
+    this.onSocialTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        onTap: onTap,
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(AppRadii.card),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.card)),
+        border: Border.all(color: AppColors.line, width: 1.0),
+        boxShadow: AppElevation.cardShadow,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadii.card),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Product Image thumbnail with live/status tag
+              Expanded(
                 child: Stack(
                   children: [
                     Positioned.fill(
@@ -416,7 +507,12 @@ class _GridProductCard extends StatelessWidget {
                             : const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
                         child: Opacity(
                           opacity: product.isNonLive ? 0.72 : 1.0,
-                          child: AppImage(imageUrl: product.displayPhotoPath, fit: BoxFit.cover),
+                          child: product.displayPhotoPath.isNotEmpty
+                              ? AppImage(
+                                  imageUrl: product.displayPhotoPath,
+                                  fit: BoxFit.cover,
+                                )
+                              : _buildFallbackImage(product.category),
                         ),
                       ),
                     ),
@@ -424,43 +520,98 @@ class _GridProductCard extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.title,
-                    style: AppTextStyles.labelMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '₹${product.price.toStringAsFixed(0)}',
-                    style: AppTextStyles.headlineSmall.copyWith(
-                      color: AppColors.terracotta,
-                      fontWeight: FontWeight.bold,
+
+              // Card details body
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      product.title,
+                      style: AppTextStyles.headlineSmall.copyWith(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  if (onSocialTap != null)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: onSocialTap,
-                        icon: const Icon(Icons.share, size: 16),
-                        label: Text('social_media_helper'.tr()),
-                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                    const SizedBox(height: 4),
+                    Text(
+                      '₹${product.price.toStringAsFixed(0)}',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: AppColors.terracottaDark,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5,
                       ),
                     ),
-                ],
+                    if (onSocialTap != null) ...[
+                      const SizedBox(height: 2),
+                      GestureDetector(
+                        onTap: onSocialTap,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2.0),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.share_outlined,
+                                size: 13,
+                                color: AppColors.terracotta,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'social_media_helper'.tr(),
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.terracotta,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 10.5,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFallbackImage(String category) {
+    final cat = category.toLowerCase();
+    CustomPainter painter;
+    if (cat.contains('pot') || cat.contains('clay') || cat.contains('ceramic')) {
+      painter = CraftCategoryIcons.pottery(color: AppColors.terracottaDark);
+    } else if (cat.contains('silk') || cat.contains('textile') || cat.contains('saree')) {
+      painter = CraftCategoryIcons.textile(color: AppColors.terracottaDark);
+    } else if (cat.contains('wood') || cat.contains('toy')) {
+      painter = CraftCategoryIcons.woodwork(color: AppColors.terracottaDark);
+    } else if (cat.contains('jewel') || cat.contains('gold') || cat.contains('silver')) {
+      painter = CraftCategoryIcons.jewelry(color: AppColors.terracottaDark);
+    } else {
+      painter = CraftCategoryIcons.pottery(color: AppColors.terracottaDark);
+    }
+
+    return Container(
+      color: AppColors.parchmentDeep,
+      child: Center(
+        child: CustomPaint(
+          size: const Size(40, 40),
+          painter: painter,
         ),
       ),
     );
   }
 }
-

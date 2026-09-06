@@ -32,14 +32,15 @@ class OrderDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Order ID + status
+            // Order ID + status hero card
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.all(AppSpacing.cardPadding),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: AppColors.cardSurface,
                 borderRadius: BorderRadius.circular(AppRadii.card),
-                border: Border.all(color: AppColors.divider),
+                border: Border.all(color: AppColors.line),
+                boxShadow: AppElevation.cardShadow,
               ),
               child: Column(
                 children: [
@@ -52,13 +53,16 @@ class OrderDetailScreen extends ConsumerWidget {
                             Text(
                               liveOrder.id,
                               style: AppTextStyles.headlineSmall.copyWith(
-                                color: AppColors.terracotta,
+                                color: AppColors.terracottaDark,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               'Placed ${_formatFull(liveOrder.placedAt)}',
-                              style: AppTextStyles.caption,
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.inkFaint,
+                              ),
                             ),
                           ],
                         ),
@@ -67,16 +71,27 @@ class OrderDetailScreen extends ConsumerWidget {
                     ],
                   ),
                   if (liveOrder.trackingId != null) ...[
-                    const Divider(height: 20, color: AppColors.divider),
+                    const Divider(height: 24, color: AppColors.line),
                     Row(
                       children: [
-                        const Icon(Icons.local_shipping_outlined, size: 16, color: AppColors.terracotta),
+                        const Icon(
+                          Icons.local_shipping_outlined,
+                          size: 16,
+                          color: AppColors.terracotta,
+                        ),
                         const SizedBox(width: AppSpacing.xs),
-                        Text('tracking_id'.tr(), style: AppTextStyles.bodySmall),
+                        Text(
+                          'tracking_id'.tr(),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.inkSoft,
+                          ),
+                        ),
                         const SizedBox(width: AppSpacing.sm),
                         Text(
                           liveOrder.trackingId!,
-                          style: AppTextStyles.labelMedium.copyWith(color: AppColors.charcoal),
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.ink,
+                          ),
                         ),
                       ],
                     ),
@@ -92,11 +107,17 @@ class OrderDetailScreen extends ConsumerWidget {
               label: 'Product',
               children: [
                 _DetailRow(label: liveOrder.productTitle, value: liveOrder.productCategory),
-                _DetailRow(label: 'Quantity', value: '${liveOrder.quantity} unit${liveOrder.quantity > 1 ? 's' : ''}'),
+                _DetailRow(
+                  label: 'Quantity',
+                  value: '${liveOrder.quantity} unit${liveOrder.quantity > 1 ? 's' : ''}',
+                ),
                 _DetailRow(
                   label: 'Amount',
                   value: '₹${liveOrder.amount.toStringAsFixed(0)}',
-                  valueStyle: AppTextStyles.headlineSmall.copyWith(color: AppColors.terracotta),
+                  valueStyle: AppTextStyles.headlineSmall.copyWith(
+                    color: AppColors.terracottaDark,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -141,7 +162,7 @@ class OrderDetailScreen extends ConsumerWidget {
             AppButton(
               label: 'packaging_suggestions_title'.tr(),
               icon: Icons.inventory_2_outlined,
-              type: AppButtonType.outlined,
+              type: AppButtonType.secondary,
               onPressed: () => showPackagingSuggestionsSheet(
                 context,
                 category: liveOrder.productCategory,
@@ -165,8 +186,10 @@ class OrderDetailScreen extends ConsumerWidget {
   }
 
   String _formatFull(DateTime dt) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
 }
@@ -180,11 +203,12 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(AppRadii.card),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppElevation.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,9 +216,10 @@ class _SectionCard extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.textTertiary,
+              color: AppColors.inkFaint,
               letterSpacing: 1,
-              fontSize: 10,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -217,16 +242,22 @@ class _DetailRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 2,
-            child: Text(label, style: AppTextStyles.bodyMedium),
-          ),
           Expanded(
             flex: 3,
             child: Text(
+              label,
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: Text(
               value,
-              style: valueStyle ?? AppTextStyles.labelMedium,
+              style: valueStyle ??
+                  AppTextStyles.labelMedium.copyWith(color: AppColors.ink),
               textAlign: TextAlign.end,
             ),
           ),
@@ -248,43 +279,50 @@ class _StatusBadge extends StatelessWidget {
 
     switch (status) {
       case OrderStatus.newOrder:
-        bg = AppColors.terracotta.withOpacity(0.15);
-        fg = AppColors.terracottaDark;
+        bg = AppColors.statusActionBg;
+        fg = AppColors.statusActionFg;
         icon = Icons.auto_awesome;
         break;
       case OrderStatus.packed:
-        bg = AppColors.turmericLight.withOpacity(0.3);
-        fg = AppColors.turmericDark;
+        bg = AppColors.statusPendingBg;
+        fg = AppColors.statusPendingFg;
         icon = Icons.inventory_2_outlined;
         break;
       case OrderStatus.shipped:
-        bg = AppColors.terracottaDark.withOpacity(0.12);
-        fg = AppColors.terracottaDark;
+        bg = AppColors.statusSuccessBg;
+        fg = AppColors.statusSuccessFg;
         icon = Icons.local_shipping_outlined;
         break;
       case OrderStatus.delivered:
-        bg = AppColors.forestGreenLight.withOpacity(0.2);
-        fg = AppColors.forestGreenDark;
+        bg = AppColors.statusSuccessBg;
+        fg = AppColors.statusSuccessFg;
         icon = Icons.check_circle_outline;
         break;
       case OrderStatus.cancelled:
-        bg = AppColors.error.withOpacity(0.12);
-        fg = AppColors.error;
+        bg = AppColors.line;
+        fg = AppColors.inkSoft;
         icon = Icons.cancel_outlined;
         break;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadii.chip)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadii.chip),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: fg),
+          Icon(icon, size: 11, color: fg),
           const SizedBox(width: 4),
           Text(
             status.labelKey.tr(),
-            style: AppTextStyles.labelSmall.copyWith(color: fg, fontWeight: FontWeight.bold),
+            style: AppTextStyles.labelSmall.copyWith(
+              color: fg,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -309,11 +347,12 @@ class _StatusTimeline extends StatelessWidget {
     final isCancelled = currentStatus == OrderStatus.cancelled;
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(AppRadii.card),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppElevation.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,9 +360,10 @@ class _StatusTimeline extends StatelessWidget {
           Text(
             'ORDER TIMELINE',
             style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.textTertiary,
+              color: AppColors.inkFaint,
               letterSpacing: 1,
-              fontSize: 10,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -342,44 +382,72 @@ class _StatusTimeline extends StatelessWidget {
             Row(
               children: List.generate(allStatuses.length * 2 - 1, (i) {
                 if (i.isOdd) {
-                  // Connector line
+                  // Connector line with tanka stitch
                   final stepIdx = i ~/ 2;
                   final isDone = stepIdx < currentIdx;
                   return Expanded(
                     child: Container(
                       height: 2,
-                      color: isDone ? AppColors.terracotta : AppColors.surfaceVariant,
+                      color: isDone ? AppColors.success : AppColors.line,
                     ),
                   );
                 } else {
                   final stepIdx = i ~/ 2;
-                  final isDone = stepIdx <= currentIdx;
+                  final isDone = stepIdx < currentIdx;
                   final isCurrent = stepIdx == currentIdx;
+
+                  Color dotBg;
+                  Color dotFg;
+                  BoxBorder? dotBorder;
+                  List<BoxShadow>? dotShadow;
+
+                  if (isCurrent) {
+                    dotBg = AppColors.terracotta;
+                    dotFg = AppColors.textOnPrimary;
+                    dotShadow = const [
+                      BoxShadow(
+                        color: AppColors.terracottaLight,
+                        spreadRadius: 4,
+                      ),
+                    ];
+                  } else if (isDone) {
+                    dotBg = AppColors.success;
+                    dotFg = AppColors.textOnPrimary;
+                  } else {
+                    dotBg = AppColors.cardSurface;
+                    dotFg = AppColors.inkFaint;
+                    dotBorder = Border.all(color: AppColors.line, width: 1.5);
+                  }
+
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 28,
-                        height: 28,
+                        width: 30,
+                        height: 30,
                         decoration: BoxDecoration(
-                          color: isDone ? AppColors.terracotta : AppColors.surfaceVariant,
+                          color: dotBg,
                           shape: BoxShape.circle,
-                          border: isCurrent
-                              ? Border.all(color: AppColors.terracottaDark, width: 2)
-                              : null,
+                          border: dotBorder,
+                          boxShadow: dotShadow,
                         ),
                         child: Icon(
-                          isDone ? Icons.check : Icons.circle_outlined,
-                          color: isDone ? Colors.white : AppColors.textTertiary,
-                          size: 14,
+                          isDone
+                              ? Icons.check
+                              : (isCurrent ? Icons.circle : Icons.circle_outlined),
+                          color: dotFg,
+                          size: isCurrent ? 10 : 13,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         allStatuses[stepIdx].labelKey.tr(),
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: isDone ? AppColors.terracotta : AppColors.textTertiary,
-                          fontSize: 10,
+                          color: isCurrent
+                              ? AppColors.terracottaDark
+                              : (isDone ? AppColors.success : AppColors.inkFaint),
+                          fontSize: 11,
+                          fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
                         ),
                         textAlign: TextAlign.center,
                       ),

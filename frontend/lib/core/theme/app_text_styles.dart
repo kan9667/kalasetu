@@ -1,78 +1,119 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
-
-/// - Fraunces (warm serif) for headings, display numbers, brand feel
-/// - Inter (clean sans) for all body/UI text — legibility for low-literacy users
+/// Kalasetu v3 typography tokens.
+///
+/// Display font : Fraunces (variable OTF) — serif, warm, expressive.
+///   At display/headline sizes use opsz ≈ 9 (smaller optical size = more expressive
+///   "swash" character that reads more playfully at large sizes — opposite of most
+///   fonts; see Fraunces specimen).  At smaller UI headings use opsz ≈ 36.
+///
+/// Body/UI font : Manrope (variable TTF) — geometric sans, clean, legible.
+///   All body, label, caption, and overline styles.
+///
+/// Both fonts are bundled as assets — safe for offline/zero-connectivity use.
 class AppTextStyles {
-  // Headings — Fraunces
-  static TextStyle displayLarge = GoogleFonts.fraunces(
+  // --- Fraunces helpers ---
+  static const _fraunces = 'Fraunces';
+
+  /// Fraunces at "expressive" display opsz (9 = most swashy)
+  static List<FontVariation> _displayOpsz(double opsz) =>
+      [FontVariation('opsz', opsz)];
+
+  // ---------------------------------------------------------------------------
+  // Display  — Fraunces, large, opsz=9 (expressive optical size)
+  // ---------------------------------------------------------------------------
+  static TextStyle displayLarge = TextStyle(
+    fontFamily: _fraunces,
+    fontVariations: _displayOpsz(9),
     fontSize: 36,
     fontWeight: FontWeight.w600,
     height: 1.2,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle displayMedium = GoogleFonts.fraunces(
+  static TextStyle displayMedium = TextStyle(
+    fontFamily: _fraunces,
+    fontVariations: _displayOpsz(9),
     fontSize: 28,
     fontWeight: FontWeight.w600,
     height: 1.25,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle displaySmall = GoogleFonts.fraunces(
+  static TextStyle displaySmall = TextStyle(
+    fontFamily: _fraunces,
+    fontVariations: _displayOpsz(9),
     fontSize: 24,
     fontWeight: FontWeight.w600,
     height: 1.3,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle headlineLarge = GoogleFonts.fraunces(
+  // ---------------------------------------------------------------------------
+  // Headline — Fraunces, opsz=36 (slightly less expressive for smaller headings)
+  // ---------------------------------------------------------------------------
+  static TextStyle headlineLarge = TextStyle(
+    fontFamily: _fraunces,
+    fontVariations: _displayOpsz(36),
     fontSize: 22,
     fontWeight: FontWeight.w600,
     height: 1.3,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle headlineMedium = GoogleFonts.fraunces(
+  static TextStyle headlineMedium = TextStyle(
+    fontFamily: _fraunces,
+    fontVariations: _displayOpsz(36),
     fontSize: 20,
     fontWeight: FontWeight.w600,
     height: 1.3,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle headlineSmall = GoogleFonts.fraunces(
+  static TextStyle headlineSmall = TextStyle(
+    fontFamily: _fraunces,
+    fontVariations: _displayOpsz(36),
     fontSize: 18,
     fontWeight: FontWeight.w600,
     height: 1.4,
     color: AppColors.textPrimary,
   );
 
-  // Body & UI — Inter
-  static TextStyle bodyLarge = GoogleFonts.inter(
+  // ---------------------------------------------------------------------------
+  // Body — Manrope, regular
+  // ---------------------------------------------------------------------------
+  static const _manrope = 'Manrope';
+
+  static const TextStyle bodyLarge = TextStyle(
+    fontFamily: _manrope,
     fontSize: 17,
     fontWeight: FontWeight.w400,
     height: 1.5,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle bodyMedium = GoogleFonts.inter(
+  static const TextStyle bodyMedium = TextStyle(
+    fontFamily: _manrope,
     fontSize: 15,
     fontWeight: FontWeight.w400,
     height: 1.5,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle bodySmall = GoogleFonts.inter(
+  static const TextStyle bodySmall = TextStyle(
+    fontFamily: _manrope,
     fontSize: 13,
     fontWeight: FontWeight.w400,
     height: 1.5,
     color: AppColors.textSecondary,
   );
 
-  // Labels — bold, high contrast for buttons and tabs
-  static TextStyle labelLarge = GoogleFonts.inter(
+  // ---------------------------------------------------------------------------
+  // Labels — Manrope, bold, high contrast for buttons, tabs, chips
+  // ---------------------------------------------------------------------------
+  static const TextStyle labelLarge = TextStyle(
+    fontFamily: _manrope,
     fontSize: 16,
     fontWeight: FontWeight.w700,
     height: 1.3,
@@ -80,7 +121,8 @@ class AppTextStyles {
     color: AppColors.textPrimary,
   );
 
-  static TextStyle labelMedium = GoogleFonts.inter(
+  static const TextStyle labelMedium = TextStyle(
+    fontFamily: _manrope,
     fontSize: 14,
     fontWeight: FontWeight.w700,
     height: 1.3,
@@ -88,7 +130,8 @@ class AppTextStyles {
     color: AppColors.textPrimary,
   );
 
-  static TextStyle labelSmall = GoogleFonts.inter(
+  static const TextStyle labelSmall = TextStyle(
+    fontFamily: _manrope,
     fontSize: 12,
     fontWeight: FontWeight.w700,
     height: 1.3,
@@ -96,15 +139,19 @@ class AppTextStyles {
     color: AppColors.textSecondary,
   );
 
+  // ---------------------------------------------------------------------------
   // Utility
-  static TextStyle caption = GoogleFonts.inter(
+  // ---------------------------------------------------------------------------
+  static const TextStyle caption = TextStyle(
+    fontFamily: _manrope,
     fontSize: 12,
     fontWeight: FontWeight.w400,
     height: 1.4,
     color: AppColors.textTertiary,
   );
 
-  static TextStyle overline = GoogleFonts.inter(
+  static const TextStyle overline = TextStyle(
+    fontFamily: _manrope,
     fontSize: 11,
     fontWeight: FontWeight.w700,
     height: 1.3,

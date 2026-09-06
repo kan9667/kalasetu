@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/motifs/dotted_border_box.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../data/models/product.dart';
 import '../../orders/models/order.dart';
@@ -20,9 +21,39 @@ class MyStatsScreen extends ConsumerStatefulWidget {
   ConsumerState<MyStatsScreen> createState() => _MyStatsScreenState();
 }
 
-class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
+class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  late Animation<double> _animation;
   AnalyticsPeriod _selectedPeriod = AnalyticsPeriod.thisMonth;
   PopularSort _popularSort = PopularSort.bySales;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _animation = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    );
+    _animController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  void _onPeriodSelected(AnalyticsPeriod period) {
+    if (_selectedPeriod == period) return;
+    setState(() => _selectedPeriod = period);
+    _animController.reset();
+    _animController.forward();
+  }
 
   String? _topCategory(List<Product> products) {
     if (products.isEmpty) return null;
@@ -42,17 +73,22 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
 
     final products = productsAsync.value ?? const <Product>[];
     final totalListings = products.length;
-    final topCategory = _topCategory(products) ?? (profile.craftType.isNotEmpty ? profile.craftType : 'Terracotta Pottery');
+    final topCategory = _topCategory(products) ??
+        (profile.craftType.isNotEmpty ? profile.craftType : 'Terracotta Pottery');
 
     // Filter orders by selected period
     final now = DateTime.now();
     final List<Order> filteredOrders;
     switch (_selectedPeriod) {
       case AnalyticsPeriod.thisMonth:
-        filteredOrders = allOrders.where((o) => o.placedAt.isAfter(now.subtract(const Duration(days: 30)))).toList();
+        filteredOrders = allOrders
+            .where((o) => o.placedAt.isAfter(now.subtract(const Duration(days: 30))))
+            .toList();
         break;
       case AnalyticsPeriod.last3Months:
-        filteredOrders = allOrders.where((o) => o.placedAt.isAfter(now.subtract(const Duration(days: 90)))).toList();
+        filteredOrders = allOrders
+            .where((o) => o.placedAt.isAfter(now.subtract(const Duration(days: 90))))
+            .toList();
         break;
       case AnalyticsPeriod.allTime:
         filteredOrders = allOrders;
@@ -65,10 +101,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
       0.0,
       (sum, o) => sum + (o.amount * o.quantity),
     );
-    // Baseline if orders list is small in mock
     final totalSalesRevenue = calculatedSales > 0 ? calculatedSales : 11730.0;
-
-    // Average Order Value (AOV)
     final aov = activeOrders.isNotEmpty ? (totalSalesRevenue / activeOrders.length) : totalSalesRevenue;
 
     // Order Fulfillment metrics
@@ -90,7 +123,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
     }
     final repeatBuyers = buyerMap.values.where((c) => c > 1).length;
 
-    // Fair Wage Premium calculation (vs ~38% typical middleman payout)
+    // Fair Wage Premium calculation
     final middlemanPayout = totalSalesRevenue * 0.38;
     final fairWagePremium = totalSalesRevenue - middlemanPayout;
     final premiumPercentage = ((fairWagePremium / middlemanPayout) * 100).toStringAsFixed(0);
@@ -106,7 +139,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
     });
 
     return AppScaffold(
-      title: 'my_stats_title'.tr(),
+      title: 'Performance',
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.screenPadding,
@@ -127,7 +160,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
               aov: aov,
             ),
 
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
 
             // Fair Wage Premium vs Middleman Rate comparison card
             _buildFairWageComparisonCard(
@@ -137,12 +170,22 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
               premiumPercent: premiumPercentage,
             ),
 
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
+
+            // Dotted Rule motif divider
+            const DottedBorderBox.divider(
+              borderColor: AppColors.dottedBorder,
+              borderWidth: 1.5,
+              dashLength: 5.0,
+              dashGap: 4.0,
+            ),
+
+            const SizedBox(height: AppSpacing.md),
 
             // Sales Trend trajectory sparkline
             _buildSalesTrendSection(),
 
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
 
             // Order Reliability & Fulfillment Breakdown
             _buildFulfillmentBreakdownCard(
@@ -153,12 +196,12 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
               repeatBuyers: repeatBuyers,
             ),
 
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
 
             // Most Popular Crafts & Views
             _buildPopularCraftsSection(popularCrafts),
 
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
 
             // Retained listings & cluster context cards
             Row(
@@ -167,7 +210,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                   child: _StatCard(
                     title: 'total_listings'.tr(),
                     value: '$totalListings',
-                    icon: Icons.inventory_2,
+                    icon: Icons.inventory_2_outlined,
                     iconColor: AppColors.terracotta,
                   ),
                 ),
@@ -176,57 +219,34 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                   child: _StatCard(
                     title: 'pending_sync_count'.tr(),
                     value: '$pendingCount',
-                    icon: Icons.sync,
-                    iconColor: AppColors.turmericDark,
+                    icon: Icons.sync_rounded,
+                    iconColor: AppColors.goldDark,
                   ),
                 ),
               ],
             ),
+
             const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    title: 'craft_type'.tr(),
-                    value: profile.craftType.isNotEmpty ? profile.craftType : 'Pottery',
-                    icon: Icons.palette,
-                    iconColor: AppColors.charcoal,
-                    isSmallValue: true,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: _StatCard(
-                    title: 'location_cluster'.tr(),
-                    value: profile.locationCluster.isNotEmpty ? profile.locationCluster : 'Cluster Hub',
-                    icon: Icons.location_on,
-                    iconColor: AppColors.forestGreen,
-                    isSmallValue: true,
-                  ),
-                ),
-              ],
-            ),
 
-            const SizedBox(height: AppSpacing.lg),
-
-            // Top category insight (dynamic and localized)
+            // Top category insight
             Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.all(AppSpacing.cardPadding),
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: AppColors.cardSurface,
                 borderRadius: BorderRadius.circular(AppRadii.card),
-                border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                border: Border.all(color: AppColors.line),
+                boxShadow: AppElevation.cardShadow,
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.insights, color: AppColors.terracotta, size: 28),
-                  const SizedBox(width: AppSpacing.md),
+                  const Icon(Icons.insights_rounded, color: AppColors.terracotta, size: 24),
+                  const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
                       'stats_top_category_insight'.tr(namedArgs: {'category': topCategory}),
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: AppColors.charcoal,
+                        color: AppColors.ink,
                       ),
                     ),
                   ),
@@ -236,17 +256,30 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
 
             const SizedBox(height: AppSpacing.md),
 
-            // Floor Price Guarantee card
+            // Floor Price Guarantee Card
             Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.all(AppSpacing.cardPadding),
               decoration: BoxDecoration(
-                color: AppColors.cream,
+                color: AppColors.cardSurface,
                 borderRadius: BorderRadius.circular(AppRadii.card),
-                border: Border.all(color: AppColors.forestGreen.withValues(alpha: 0.4)),
+                border: Border.all(color: AppColors.line),
+                boxShadow: AppElevation.cardShadow,
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.security, color: AppColors.forestGreen, size: 36),
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: const BoxDecoration(
+                      color: AppColors.statusSuccessBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.security_rounded,
+                      color: AppColors.statusSuccessFg,
+                      size: 24,
+                    ),
+                  ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Column(
@@ -255,14 +288,14 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                         Text(
                           'floor_price_guarantee'.tr(),
                           style: AppTextStyles.labelMedium.copyWith(
-                            color: AppColors.forestGreenDark,
-                            fontWeight: FontWeight.bold,
+                            color: AppColors.statusSuccessFg,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.xs),
+                        const SizedBox(height: 2),
                         Text(
                           'All listings respect your material cost + fair labor floor price.',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                          style: AppTextStyles.caption.copyWith(color: AppColors.inkSoft),
                         ),
                       ],
                     ),
@@ -271,7 +304,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
               ),
             ),
 
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.xxl),
           ],
         ),
       ),
@@ -280,11 +313,11 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
 
   Widget _buildPeriodSelector() {
     return Container(
-      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(AppRadii.chip),
+        color: AppColors.parchmentDeep,
+        borderRadius: BorderRadius.circular(999),
       ),
+      padding: const EdgeInsets.all(4),
       child: Row(
         children: [
           _buildPeriodTab(AnalyticsPeriod.thisMonth, 'period_this_month'.tr()),
@@ -299,29 +332,32 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
     final isSelected = _selectedPeriod == period;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedPeriod = period),
+        onTap: () => _onPeriodSelected(period),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
           padding: const EdgeInsets.symmetric(vertical: 8),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.cream : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadii.chip),
+            color: isSelected ? AppColors.cardSurface : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
             boxShadow: isSelected
                 ? const [
                     BoxShadow(
-                      color: Color(0x12000000),
-                      blurRadius: 4,
-                      offset: Offset(0, 1),
-                    )
+                      color: Color(0x1A201A18),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
                   ]
                 : null,
           ),
           child: Text(
             label,
+            textAlign: TextAlign.center,
             style: AppTextStyles.labelSmall.copyWith(
-              color: isSelected ? AppColors.charcoal : AppColors.textSecondary,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 12.0,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? AppColors.ink : AppColors.inkSoft,
             ),
           ),
         ),
@@ -334,101 +370,110 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
     required int ordersCount,
     required double aov,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.terracotta, AppColors.terracottaDark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(AppRadii.card),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x28C97B5A),
-            blurRadius: 10,
-            offset: Offset(0, 4),
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        final currentRev = (totalRevenue * _animation.value).round();
+        final formattedRev = NumberFormat('#,##,###').format(currentRev);
+
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppColors.berry,
+            borderRadius: BorderRadius.circular(AppRadii.card),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.ink.withValues(alpha: 0.25),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Icon(Icons.monetization_on, color: AppColors.mustard, size: 22),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    'total_sales_revenue'.tr(),
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: AppColors.textOnPrimary,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+                  Row(
+                    children: [
+                      const Icon(Icons.trending_up_rounded, size: 16, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text(
+                        'total_sales_revenue'.tr(),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: Colors.white.withValues(alpha: 0.92),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$ordersCount orders',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 6),
+              Text(
+                '₹$formattedRev',
+                style: AppTextStyles.displayMedium.copyWith(
+                  color: Colors.white,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w600,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Estimated additional earnings',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 12,
+                ),
+              ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(AppRadii.chip),
-                ),
-                child: Text(
-                  '$ordersCount orders',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.textOnPrimary,
-                    fontWeight: FontWeight.w600,
+                height: 1,
+                color: Colors.white.withValues(alpha: 0.25),
+                margin: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'average_order_value'.tr(),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.90),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
+                  Text(
+                    '₹${NumberFormat('#,##,###').format(aov.round())}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            '₹${totalRevenue.toStringAsFixed(0)}',
-            style: AppTextStyles.displayLarge.copyWith(
-              color: AppColors.textOnPrimary,
-              fontWeight: FontWeight.bold,
-              fontSize: 34,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'estimated_earnings'.tr(),
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.cream.withValues(alpha: 0.85),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppRadii.sm),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'average_order_value'.tr(),
-                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.cream),
-                ),
-                Text(
-                  '₹${aov.toStringAsFixed(0)}',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.mustard,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -441,104 +486,154 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.cream,
+        color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(AppRadii.card),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A2A2420),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppElevation.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppColors.mustard.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.handshake_outlined, color: AppColors.charcoal, size: 20),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  'fair_wage_premium_title'.tr(),
-                  style: AppTextStyles.headlineSmall.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.charcoal,
-                  ),
+              const Icon(Icons.shield_outlined, color: AppColors.goldDark, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'fair_wage_premium_title'.tr(),
+                style: AppTextStyles.headlineSmall.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 6),
           Text(
             'fair_wage_premium_desc'.tr(namedArgs: {
-              'premiumAmount': '₹${premiumAmount.toStringAsFixed(0)}',
+              'premiumAmount': '₹${NumberFormat('#,##,###').format(premiumAmount.round())}',
               'premiumPercent': premiumPercent,
             }),
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.4),
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.inkSoft,
+              fontSize: 12.5,
+              height: 1.5,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceVariant,
-              borderRadius: BorderRadius.circular(AppRadii.sm),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              return Column(
+                children: [
+                  // Middleman row
+                  Row(
                     children: [
-                      Text(
-                        'middleman_rate_label'.tr(),
-                        style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                      SizedBox(
+                        width: 76,
+                        child: Text(
+                          'middleman_rate_label'.tr(),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.inkSoft,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '₹${middlemanRate.toStringAsFixed(0)}',
-                        style: AppTextStyles.labelLarge.copyWith(
-                          color: AppColors.charcoalSoft,
-                          decoration: TextDecoration.lineThrough,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: AppColors.parchmentDeep,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: (0.38 * _animation.value).clamp(0.0, 1.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.inkFaint,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  '₹${NumberFormat('#,##,###').format(middlemanRate.round())}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-                Container(width: 1, height: 32, color: AppColors.border),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 8),
+                  // Kalasetu row
+                  Row(
                     children: [
-                      Text(
-                        'kalasetu_earned_label'.tr(),
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.online,
-                          fontWeight: FontWeight.bold,
+                      SizedBox(
+                        width: 76,
+                        child: Text(
+                          'kalasetu_earned_label'.tr(),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.inkSoft,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '₹${totalEarned.toStringAsFixed(0)}',
-                        style: AppTextStyles.labelLarge.copyWith(
-                          color: AppColors.online,
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: AppColors.parchmentDeep,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: (1.0 * _animation.value).clamp(0.0, 1.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.blueAccent,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  '₹${NumberFormat('#,##,###').format(totalEarned.round())}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -554,80 +649,82 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
       ('Aug', 9800.0),
       ('Sep', 11730.0),
     ];
-    final maxAmount = 12000.0;
+    const maxAmount = 12000.0;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(AppRadii.card),
-        border: Border.all(color: AppColors.oak.withValues(alpha: 0.5), width: 0.8),
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppElevation.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.show_chart, color: AppColors.terracotta, size: 20),
+              const Icon(Icons.trending_up_rounded, color: AppColors.terracotta, size: 20),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 'sales_trend_title'.tr(),
                 style: AppTextStyles.labelMedium.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: AppColors.charcoal,
+                  color: AppColors.ink,
                 ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            height: 120,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: bars.map((bar) {
-                final ratio = (bar.$2 / maxAmount).clamp(0.15, 1.0);
-                final isPeak = bar == bars.last;
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (isPeak)
-                      Text(
-                        '₹11.7k',
-                        style: AppTextStyles.caption.copyWith(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.terracottaDark,
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              return SizedBox(
+                height: 130,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: bars.map((bar) {
+                    final ratio = (bar.$2 / maxAmount).clamp(0.15, 1.0);
+                    final isPeak = bar == bars.last;
+                    final currentH = (80 * ratio * _animation.value).clamp(10.0, 90.0);
+                    return Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Opacity(
+                          opacity: _animation.value,
+                          child: Text(
+                            '₹${(bar.$2 / 1000).toStringAsFixed(1)}k',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: isPeak ? AppColors.terracottaDark : AppColors.inkSoft,
+                            ),
+                          ),
                         ),
-                      ),
-                    const SizedBox(height: 2),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      width: 28,
-                      height: 80 * ratio,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: isPeak
-                              ? [AppColors.terracotta, AppColors.terracottaDark]
-                              : [AppColors.terracottaLight, AppColors.terracotta],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
+                        const SizedBox(height: 4),
+                        Container(
+                          width: 26,
+                          height: currentH,
+                          decoration: BoxDecoration(
+                            color: isPeak ? AppColors.terracotta : AppColors.terracottaLight,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                          ),
                         ),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      bar.$1,
-                      style: AppTextStyles.caption.copyWith(
-                        fontWeight: isPeak ? FontWeight.bold : FontWeight.w500,
-                        color: isPeak ? AppColors.charcoal : AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
+                        const SizedBox(height: 6),
+                        Text(
+                          bar.$1,
+                          style: AppTextStyles.caption.copyWith(
+                            fontWeight: isPeak ? FontWeight.bold : FontWeight.w500,
+                            color: isPeak ? AppColors.ink : AppColors.inkFaint,
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -644,9 +741,10 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(AppRadii.card),
-        border: Border.all(color: AppColors.oak.withValues(alpha: 0.5), width: 0.8),
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppElevation.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -658,19 +756,19 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                 'order_fulfillment_title'.tr(),
                 style: AppTextStyles.labelMedium.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: AppColors.charcoal,
+                  color: AppColors.ink,
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.online.withValues(alpha: 0.15),
+                  color: AppColors.statusSuccessBg,
                   borderRadius: BorderRadius.circular(AppRadii.chip),
                 ),
                 child: Text(
                   '$rate% Reliability',
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.online,
+                    color: AppColors.statusSuccessFg,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -680,27 +778,30 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              _buildFulfillmentPill('delivered_label'.tr(), '$delivered', AppColors.online),
+              _buildFulfillmentPill('delivered_label'.tr(), '$delivered', AppColors.success),
               const SizedBox(width: AppSpacing.xs),
-              _buildFulfillmentPill('in_progress_label'.tr(), '$inProgress', AppColors.syncing),
+              _buildFulfillmentPill('in_progress_label'.tr(), '$inProgress', AppColors.goldDark),
               const SizedBox(width: AppSpacing.xs),
-              _buildFulfillmentPill('cancelled_label'.tr(), '$cancelled', AppColors.brick),
+              _buildFulfillmentPill('cancelled_label'.tr(), '$cancelled', AppColors.terracottaDark),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Divider(color: AppColors.border.withValues(alpha: 0.3)),
+          const Divider(color: AppColors.line),
           Row(
             children: [
               const Icon(Icons.repeat, size: 16, color: AppColors.terracotta),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 'repeat_buyers'.tr(),
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
               ),
               const Spacer(),
               Text(
                 '$repeatBuyers repeat customers',
-                style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.bold),
+                style: AppTextStyles.labelSmall.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.ink,
+                ),
               ),
             ],
           ),
@@ -714,9 +815,9 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppRadii.sm),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
         child: Column(
           children: [
@@ -731,7 +832,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
             Text(
               label,
               style: AppTextStyles.caption.copyWith(
-                color: AppColors.textSecondary,
+                color: AppColors.inkSoft,
                 fontSize: 10,
               ),
             ),
@@ -745,9 +846,10 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.cream,
+        color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(AppRadii.card),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppElevation.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -760,14 +862,13 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                   'popular_crafts_title'.tr(),
                   style: AppTextStyles.labelMedium.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: AppColors.charcoal,
+                    color: AppColors.ink,
                   ),
                 ),
               ),
-              // Sort toggle
               Container(
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
+                  color: AppColors.parchmentDeep,
                   borderRadius: BorderRadius.circular(AppRadii.chip),
                 ),
                 child: Row(
@@ -784,10 +885,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: crafts.length,
-            separatorBuilder: (_, _) => Divider(
-              color: AppColors.border.withValues(alpha: 0.3),
-              height: 16,
-            ),
+            separatorBuilder: (_, _) => const Divider(color: AppColors.line, height: 16),
             itemBuilder: (context, index) {
               final craft = crafts[index];
               return Row(
@@ -797,7 +895,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                     height: 24,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: index < 3 ? AppColors.terracotta : AppColors.surfaceVariant,
+                      color: index < 3 ? AppColors.terracotta : AppColors.parchmentDeep,
                       shape: BoxShape.circle,
                     ),
                     child: Text(
@@ -805,7 +903,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                       style: TextStyle(
                         fontSize: 10.5,
                         fontWeight: FontWeight.bold,
-                        color: index < 3 ? Colors.white : AppColors.charcoal,
+                        color: index < 3 ? Colors.white : AppColors.ink,
                       ),
                     ),
                   ),
@@ -814,7 +912,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
+                      color: AppColors.parchmentDeep,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.brush, color: AppColors.terracotta, size: 22),
@@ -828,6 +926,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                           craft.title,
                           style: AppTextStyles.bodyMedium.copyWith(
                             fontWeight: FontWeight.w600,
+                            color: AppColors.ink,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -835,7 +934,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                         const SizedBox(height: 2),
                         Text(
                           craft.category,
-                          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                          style: AppTextStyles.caption.copyWith(color: AppColors.inkSoft),
                         ),
                       ],
                     ),
@@ -845,19 +944,28 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
                     children: [
                       Text(
                         '${craft.views} views',
-                        style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.bold),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.ink,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Row(
                         children: [
                           Text(
                             '${craft.unitsSold} sold',
-                            style: AppTextStyles.caption.copyWith(color: AppColors.online, fontWeight: FontWeight.w600),
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.success,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(width: 4),
                           Text(
                             '(${craft.conversionRate}%)',
-                            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 9.5),
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.inkSoft,
+                              fontSize: 9.5,
+                            ),
                           ),
                         ],
                       ),
@@ -887,7 +995,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : AppColors.textSecondary,
+            color: isSelected ? Colors.white : AppColors.inkSoft,
           ),
         ),
       ),
@@ -897,7 +1005,11 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
   List<_CraftMetric> _generateCraftMetrics(List<Product> products, List<Order> orders) {
     if (products.isNotEmpty) {
       return products.map((p) {
-        final units = orders.where((o) => o.productTitle.toLowerCase().contains(p.title.toLowerCase()) || p.title.toLowerCase().contains(o.productTitle.toLowerCase())).length;
+        final units = orders
+            .where((o) =>
+                o.productTitle.toLowerCase().contains(p.title.toLowerCase()) ||
+                p.title.toLowerCase().contains(o.productTitle.toLowerCase()))
+            .length;
         final views = (p.price * 0.32 + 85).round();
         final conv = views > 0 ? ((units / views) * 100).toStringAsFixed(1) : '0.0';
         return _CraftMetric(
@@ -910,7 +1022,6 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen> {
       }).toList();
     }
 
-    // Default craft showcase metrics
     return [
       _CraftMetric(
         title: 'Terracotta Water Pot (Matka)',
@@ -985,25 +1096,34 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(AppRadii.card),
-        border: Border.all(color: AppColors.oak.withValues(alpha: 0.5), width: 0.8),
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppElevation.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 28, color: iconColor),
-          const SizedBox(height: AppSpacing.sm),
+          Icon(icon, size: 24, color: iconColor),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             value,
-            style: isSmallValue ? AppTextStyles.headlineSmall : AppTextStyles.headlineLarge,
-            maxLines: 2,
+            style: isSmallValue
+                ? AppTextStyles.headlineSmall.copyWith(fontWeight: FontWeight.w700)
+                : AppTextStyles.headlineLarge.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(title, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            style: AppTextStyles.labelSmall.copyWith(color: AppColors.inkSoft),
+          ),
         ],
       ),
     );

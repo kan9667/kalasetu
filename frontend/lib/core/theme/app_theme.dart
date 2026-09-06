@@ -3,65 +3,63 @@ import 'app_colors.dart';
 import 'app_text_styles.dart';
 import 'app_spacing.dart';
 
-/// Centralized theme configuration for ArtisanLink
+/// Centralized ThemeData for Kalasetu v3
 class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
 
-      // Color scheme — built from the earthy ArtisanLink palette
+      // Color scheme — v3 palette
       colorScheme: ColorScheme.light(
-        primary: AppColors.terracotta,
-        onPrimary: AppColors.textOnPrimary,
-        primaryContainer: AppColors.plasterDark,
+        primary:            AppColors.terracotta,
+        onPrimary:          AppColors.textOnPrimary,
+        primaryContainer:   AppColors.terracottaLight,
         onPrimaryContainer: AppColors.terracottaDark,
 
-        secondary: AppColors.oak,
-        onSecondary: AppColors.textOnPrimary,
-        secondaryContainer: AppColors.plasterDark,
-        onSecondaryContainer: AppColors.charcoal,
+        secondary:            AppColors.gold,
+        onSecondary:          AppColors.textOnPrimary,
+        secondaryContainer:   AppColors.goldLight,
+        onSecondaryContainer: AppColors.goldDark,
 
-        tertiary: AppColors.mustard,
-        onTertiary: AppColors.textPrimary,
-        tertiaryContainer: AppColors.plasterDark,
-        onTertiaryContainer: AppColors.charcoal,
+        tertiary:             AppColors.berry,      // accent — rarely used
+        onTertiary:           AppColors.textOnPrimary,
+        tertiaryContainer:    AppColors.berryLight,
+        onTertiaryContainer:  AppColors.berryDark,
 
-        error: AppColors.brick,
-        onError: AppColors.textOnPrimary,
+        error:    AppColors.terracottaDark,
+        onError:  AppColors.textOnPrimary,
 
-        surface: AppColors.surface,
-        onSurface: AppColors.textPrimary,
-        surfaceContainerHighest: AppColors.surfaceVariant,
+        surface:                   AppColors.cardSurface,
+        onSurface:                 AppColors.textPrimary,
+        surfaceContainerHighest:   AppColors.parchmentDeep,
 
-        outline: AppColors.border,
-        outlineVariant: AppColors.divider,
-
-        shadow: AppColors.shadow,
+        outline:        AppColors.dottedBorder,
+        outlineVariant: AppColors.line,
+        shadow:         AppColors.shadow,
       ),
 
-      scaffoldBackgroundColor: AppColors.background,
+      scaffoldBackgroundColor: AppColors.parchment,
 
-      // Typography
+      // Typography — Fraunces + Manrope (bundled assets, no GoogleFonts)
       textTheme: TextTheme(
-        displayLarge: AppTextStyles.displayLarge,
-        displayMedium: AppTextStyles.displayMedium,
-        displaySmall: AppTextStyles.displaySmall,
-        headlineLarge: AppTextStyles.headlineLarge,
+        displayLarge:   AppTextStyles.displayLarge,
+        displayMedium:  AppTextStyles.displayMedium,
+        displaySmall:   AppTextStyles.displaySmall,
+        headlineLarge:  AppTextStyles.headlineLarge,
         headlineMedium: AppTextStyles.headlineMedium,
-        headlineSmall: AppTextStyles.headlineSmall,
-        bodyLarge: AppTextStyles.bodyLarge,
-        bodyMedium: AppTextStyles.bodyMedium,
-        bodySmall: AppTextStyles.bodySmall,
-        labelLarge: AppTextStyles.labelLarge,
-        labelMedium: AppTextStyles.labelMedium,
-        labelSmall: AppTextStyles.labelSmall,
+        headlineSmall:  AppTextStyles.headlineSmall,
+        bodyLarge:      AppTextStyles.bodyLarge,
+        bodyMedium:     AppTextStyles.bodyMedium,
+        bodySmall:      AppTextStyles.bodySmall,
+        labelLarge:     AppTextStyles.labelLarge,
+        labelMedium:    AppTextStyles.labelMedium,
+        labelSmall:     AppTextStyles.labelSmall,
       ),
 
-      // AppBar — flat, matches the background so it doesn't feel like a
-      // separate "app chrome" layer
+      // AppBar — flat parchment background
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.parchment,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         centerTitle: false,
@@ -72,13 +70,14 @@ class AppTheme {
         ),
       ),
 
-      // Card — flat with a thin oak border instead of a Material shadow
+      // Card — warm shadow instead of border
       cardTheme: CardThemeData(
-        color: AppColors.surface,
-        elevation: AppElevation.none,
+        color: AppColors.cardSurface,
+        elevation: 0,
+        shadowColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.card),
-          side: const BorderSide(color: AppColors.oak, width: 0.6),
+          side: BorderSide(color: AppColors.line, width: 1),
         ),
         margin: const EdgeInsets.symmetric(
           horizontal: AppSpacing.screenPadding,
@@ -86,7 +85,7 @@ class AppTheme {
         ),
       ),
 
-      // Elevated Button — the single dominant primary action per screen
+      // Elevated Button — primary action: terracotta pill with inset shadow
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.terracotta,
@@ -99,15 +98,17 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.button),
           ),
-          elevation: AppElevation.none,
+          elevation: 0,
+          shadowColor: Colors.transparent,
           textStyle: AppTextStyles.labelLarge,
         ),
       ),
 
-      // Outlined Button — secondary action, visually subordinate
+      // Outlined Button — card surface bg, line border, ink text — pill
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.charcoal,
+          backgroundColor: AppColors.cardSurface,
+          foregroundColor: AppColors.ink,
           minimumSize: const Size(double.infinity, AppSpacing.minTouchTarget),
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
@@ -116,108 +117,87 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.button),
           ),
-          side: const BorderSide(
-            color: AppColors.oak,
-            width: 1.5,
-          ),
+          side: BorderSide(color: AppColors.line, width: 1.5),
           textStyle: AppTextStyles.labelLarge,
         ),
       ),
 
-      // Text Button
+      // Text Button — ghost / link style
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.terracotta,
           minimumSize: const Size(0, AppSpacing.minTouchTarget),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           textStyle: AppTextStyles.labelMedium,
         ),
       ),
 
-      // Input Decoration
+      // Input Decoration — card surface, line border, terracotta focus ring
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: AppColors.cardSurface,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: AppSpacing.md,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-          borderSide: const BorderSide(
-            color: AppColors.oak,
-            width: 1.5,
-          ),
+          borderRadius: BorderRadius.circular(AppRadii.inputField),
+          borderSide: BorderSide(color: AppColors.line, width: 1.5),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-          borderSide: const BorderSide(
-            color: AppColors.oak,
-            width: 1.5,
-          ),
+          borderRadius: BorderRadius.circular(AppRadii.inputField),
+          borderSide: BorderSide(color: AppColors.line, width: 1.5),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-          borderSide: const BorderSide(
-            color: AppColors.terracotta,
-            width: 2,
-          ),
+          borderRadius: BorderRadius.circular(AppRadii.inputField),
+          borderSide: const BorderSide(color: AppColors.terracotta, width: 2),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-          borderSide: const BorderSide(
-            color: AppColors.brick,
-            width: 1.5,
-          ),
+          borderRadius: BorderRadius.circular(AppRadii.inputField),
+          borderSide: const BorderSide(color: AppColors.terracottaDark, width: 1.5),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-          borderSide: const BorderSide(
-            color: AppColors.brick,
-            width: 2,
-          ),
+          borderRadius: BorderRadius.circular(AppRadii.inputField),
+          borderSide: const BorderSide(color: AppColors.terracottaDark, width: 2),
         ),
-        labelStyle: AppTextStyles.bodyMedium.copyWith(
-          color: AppColors.textSecondary,
-        ),
-        hintStyle: AppTextStyles.bodyMedium.copyWith(
-          color: AppColors.textTertiary,
-        ),
-        errorStyle: AppTextStyles.bodySmall.copyWith(
-          color: AppColors.brick,
-        ),
+        labelStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textTertiary),
+        errorStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.terracottaDark),
       ),
 
-      // Chip — used for language chips, filter chips, keyword tags
+      // Chip — pill shape; selected = terracotta fill
+      // NOTE: cascades globally — accepted risk per design brief.
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.surfaceVariant,
+        backgroundColor: AppColors.parchmentDeep,
         selectedColor: AppColors.terracotta,
+        disabledColor: AppColors.parchmentDeep,
         labelStyle: AppTextStyles.labelSmall.copyWith(color: AppColors.textPrimary),
+        secondaryLabelStyle: AppTextStyles.labelSmall.copyWith(
+            color: AppColors.textOnPrimary),
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: AppSpacing.sm,
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.chip),
-          side: const BorderSide(color: AppColors.oak, width: 0.6),
+          side: BorderSide(color: AppColors.line, width: 1.5),
         ),
+        elevation: 0,
+        pressElevation: 0,
       ),
 
-      // Bottom Navigation Bar — 4 tabs, center "New Product" visually emphasized
-      // at the widget level (handled in the nav bar widget, not here)
+      // Bottom Navigation Bar
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: AppColors.surface,
+        backgroundColor: AppColors.cardSurface,
         selectedItemColor: AppColors.terracotta,
-        unselectedItemColor: AppColors.textSecondary,
+        unselectedItemColor: AppColors.inkFaint,
         selectedLabelStyle: AppTextStyles.labelSmall,
         unselectedLabelStyle: AppTextStyles.labelSmall,
         type: BottomNavigationBarType.fixed,
-        elevation: AppElevation.subtle,
+        elevation: 0,
       ),
 
-      // Floating Action Button
+      // FAB
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: AppColors.terracotta,
         foregroundColor: AppColors.textOnPrimary,
@@ -229,32 +209,33 @@ class AppTheme {
 
       // Dialog
       dialogTheme: DialogThemeData(
-        backgroundColor: AppColors.surface,
+        backgroundColor: AppColors.cardSurface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg),
+          borderRadius: BorderRadius.circular(AppRadii.dialog),
         ),
         titleTextStyle: AppTextStyles.headlineMedium,
         contentTextStyle: AppTextStyles.bodyMedium,
       ),
 
-      // Bottom Sheet
+      // Bottom Sheet — the MehrabClipper replaces the plain rounded rect in
+      // packaging_suggestions_sheet.dart; this theme applies to all other sheets.
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: AppColors.surface,
+        backgroundColor: AppColors.cardSurface,
+        modalBackgroundColor: AppColors.cardSurface,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(AppRadii.bottomSheet),
           ),
         ),
-        modalBackgroundColor: AppColors.surface,
-        modalElevation: AppElevation.medium,
+        modalElevation: 0,
+        shadowColor: AppColors.shadowLifted,
       ),
 
-      // Snackbar — calm, never alarming (used for routine sync status too)
+      // Snackbar
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.charcoal,
-        contentTextStyle: AppTextStyles.bodyMedium.copyWith(
-          color: AppColors.textOnPrimary,
-        ),
+        backgroundColor: AppColors.ink,
+        contentTextStyle:
+            AppTextStyles.bodyMedium.copyWith(color: AppColors.textOnPrimary),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.sm),
         ),
@@ -268,7 +249,7 @@ class AppTheme {
 
       // Divider
       dividerTheme: const DividerThemeData(
-        color: AppColors.divider,
+        color: AppColors.line,
         thickness: 1,
         space: 1,
       ),

@@ -77,7 +77,7 @@ class AppHeader extends ConsumerWidget implements PreferredSizeWidget {
                           child: Text(
                             unreadCount > 99 ? '99+' : '$unreadCount',
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: AppColors.textOnPrimary,
                               fontSize: 9,
                               fontWeight: FontWeight.bold,
                               height: 1,
