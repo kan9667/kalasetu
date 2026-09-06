@@ -1663,48 +1663,94 @@ final addProductFlowProvider =
     });
 
 // --- Notifications Provider ---
-enum NotificationType { listingLive, pendingSync, buyerView, priceSuggestion }
+enum NotificationType { listingLive, pendingSync, buyerView, priceSuggestion, newOrder }
 
 class NotificationItem {
   final String id;
   final NotificationType type;
   final String messageKey;
   final DateTime timestamp;
+  final bool isRead;
 
   const NotificationItem({
     required this.id,
     required this.type,
     required this.messageKey,
     required this.timestamp,
+    this.isRead = false,
   });
+
+  NotificationItem copyWith({bool? isRead}) => NotificationItem(
+        id: id,
+        type: type,
+        messageKey: messageKey,
+        timestamp: timestamp,
+        isRead: isRead ?? this.isRead,
+      );
 }
 
-final notificationsProvider = Provider<List<NotificationItem>>((ref) {
-  final now = DateTime.now();
-  return [
-    NotificationItem(
-      id: 'n1',
-      type: NotificationType.listingLive,
-      messageKey: 'notif_listing_live',
-      timestamp: now.subtract(const Duration(hours: 2)),
-    ),
-    NotificationItem(
-      id: 'n2',
-      type: NotificationType.buyerView,
-      messageKey: 'notif_buyer_viewed',
-      timestamp: now.subtract(const Duration(hours: 5)),
-    ),
-    NotificationItem(
-      id: 'n3',
-      type: NotificationType.pendingSync,
-      messageKey: 'notif_pending_sync',
-      timestamp: now.subtract(const Duration(days: 1)),
-    ),
-    NotificationItem(
-      id: 'n4',
-      type: NotificationType.priceSuggestion,
-      messageKey: 'notif_price_suggestion',
-      timestamp: now.subtract(const Duration(days: 2)),
-    ),
-  ];
+class NotificationsNotifier extends StateNotifier<List<NotificationItem>> {
+  NotificationsNotifier() : super(_initialNotifications());
+
+  static List<NotificationItem> _initialNotifications() {
+    final now = DateTime.now();
+    return [
+      NotificationItem(
+        id: 'n1',
+        type: NotificationType.newOrder,
+        messageKey: 'notif_new_order',
+        timestamp: now.subtract(const Duration(minutes: 15)),
+      ),
+      NotificationItem(
+        id: 'n2',
+        type: NotificationType.listingLive,
+        messageKey: 'notif_listing_live',
+        timestamp: now.subtract(const Duration(hours: 2)),
+      ),
+      NotificationItem(
+        id: 'n3',
+        type: NotificationType.buyerView,
+        messageKey: 'notif_buyer_viewed',
+        timestamp: now.subtract(const Duration(hours: 5)),
+      ),
+      NotificationItem(
+        id: 'n4',
+        type: NotificationType.pendingSync,
+        messageKey: 'notif_pending_sync',
+        timestamp: now.subtract(const Duration(days: 1)),
+      ),
+      NotificationItem(
+        id: 'n5',
+        type: NotificationType.priceSuggestion,
+        messageKey: 'notif_price_suggestion',
+        timestamp: now.subtract(const Duration(days: 2)),
+      ),
+    ];
+  }
+
+  void markRead(String id) {
+    state = [
+      for (final item in state)
+        if (item.id == id) item.copyWith(isRead: true) else item,
+    ];
+  }
+
+  void markAllRead() {
+    state = [for (final item in state) item.copyWith(isRead: true)];
+  }
+
+  void addNotification(NotificationItem item) {
+    state = [item, ...state];
+  }
+}
+
+final notificationsProvider =
+    StateNotifierProvider<NotificationsNotifier, List<NotificationItem>>((ref) {
+  return NotificationsNotifier();
 });
+
+/// Derived provider — number of unread notifications (drives the bell badge).
+final unreadNotificationCountProvider = Provider<int>((ref) {
+  return ref.watch(notificationsProvider).where((n) => !n.isRead).length;
+});
+

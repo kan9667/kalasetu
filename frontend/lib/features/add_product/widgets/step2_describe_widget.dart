@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/cycling_guidance_cue.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/offline_sync/models/queue_item.dart';
 
@@ -26,6 +27,7 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
   bool _showCheckmark = false;
   late AnimationController _pulseController;
   final TextEditingController _textController = TextEditingController();
+  final FocusNode _textFocusNode = FocusNode();
   final AudioPlayer _audioPlayer = AudioPlayer();
   final AudioRecorder _recorder = AudioRecorder();
   bool _isPlayingAudio = false;
@@ -37,6 +39,10 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
+
+    _textFocusNode.addListener(() {
+      if (mounted) setState(() {});
+    });
 
     final draft = ref.read(addProductFlowProvider);
     if (draft.voiceTranscript.isNotEmpty) {
@@ -50,6 +56,7 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
   void dispose() {
     _pulseController.dispose();
     _textController.dispose();
+    _textFocusNode.dispose();
     _audioPlayer.dispose();
     _recorder.dispose();
     super.dispose();
@@ -145,6 +152,25 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
       }
     }
   }
+
+  static const List<GuidanceCue> _describeCues = [
+    GuidanceCue(
+      text: 'Mention the material (e.g. Pure Clay, Silk, Brass)',
+      icon: Icons.texture_rounded,
+    ),
+    GuidanceCue(
+      text: 'Say how it was crafted (e.g. Hand-spun, Hand-carved)',
+      icon: Icons.handyman_outlined,
+    ),
+    GuidanceCue(
+      text: 'Include size or weight (e.g. 10 inches, 500 grams)',
+      icon: Icons.scale_outlined,
+    ),
+    GuidanceCue(
+      text: 'Share the inspiration & heritage story behind it',
+      icon: Icons.auto_stories_outlined,
+    ),
+  ];
 
   Future<void> _rerecord() async {
     if (_isPlayingAudio) {
@@ -385,10 +411,24 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
             ],
           ),
 
-          const SizedBox(height: 16),
+              const SizedBox(height: 14),
+
+              // Guidance prompt cycling cues
+              CyclingGuidanceCue(
+                headerTitle: 'WHAT TO MENTION',
+                headerIcon: Icons.lightbulb_outline,
+                cues: _describeCues,
+                isPaused: _isRecording || _isPlayingAudio || _textFocusNode.hasFocus,
+                onCueChanged: (cue) {
+                  // TODO: hook TTS playback here via onCueChanged
+                },
+              ),
+
+              const SizedBox(height: 14),
 
           TextField(
             controller: _textController,
+            focusNode: _textFocusNode,
             maxLines: 4,
             style: const TextStyle(fontSize: 15, color: Color(0xFF3F342B)),
             decoration: InputDecoration(

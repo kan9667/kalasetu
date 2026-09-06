@@ -6,7 +6,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../catalogue/screens/catalogue_screen.dart';
 import '../../add_product/screens/add_product_flow_screen.dart';
-import '../../notifications/screens/notifications_screen.dart';
+import '../../orders/screens/my_orders_screen.dart';
 import '../../profile/screens/profile_screen.dart';
 
 final homeTabIndexProvider = StateProvider<int>((ref) => 1); // Default to Catalogue
@@ -52,10 +52,10 @@ class HomeShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentIndex = ref.watch(homeTabIndexProvider);
 
-    final screens = const [
+    const screens = [
       AddProductFlowScreen(),
       CatalogueScreen(),
-      NotificationsScreen(),
+      MyOrdersScreen(),
       ProfileScreen(),
     ];
 
@@ -106,9 +106,9 @@ class HomeShell extends ConsumerWidget {
                 decoration: currentIndex == 2
                     ? BoxDecoration(color: AppColors.terracottaLight.withOpacity(0.25), shape: BoxShape.circle)
                     : null,
-                child: const Icon(Icons.notifications_outlined, size: 24),
+                child: const Icon(Icons.receipt_long_outlined, size: 24),
               ),
-              label: 'tab_notifications'.tr(),
+              label: 'tab_my_orders'.tr(),
             ),
             BottomNavigationBarItem(
               icon: Container(
