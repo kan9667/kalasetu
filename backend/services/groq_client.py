@@ -150,7 +150,7 @@ class GroqClient:
         messages: List[Dict[str, str]],
         model: Optional[str] = None,
         temperature: float = 0.2,
-        max_tokens: int = 1024,
+        max_tokens: int = 800,
     ) -> Dict[str, Any]:
         """
         Send a chat completion and parse the output directly as a JSON dict.
@@ -173,7 +173,7 @@ class GroqClient:
         messages: List[Dict[str, str]],
         model: Optional[str] = None,
         temperature: float = 0.2,
-        max_tokens: int = 1024,
+        max_tokens: int = 800,
         response_format_json: bool = False,
         timeout: float = 20.0,
     ) -> str:

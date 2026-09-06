@@ -32,6 +32,33 @@ from .base_transcriber import BaseTranscriber
 
 logger = logging.getLogger(__name__)
 
+LANGUAGE_NAME_TO_CODE = {
+    "hindi": "hi",
+    "hi": "hi",
+    "english": "en",
+    "en": "en",
+    "tamil": "ta",
+    "ta": "ta",
+    "bengali": "bn",
+    "bn": "bn",
+    "marathi": "mr",
+    "mr": "mr",
+    "telugu": "te",
+    "te": "te",
+    "gujarati": "gu",
+    "gu": "gu",
+    "kannada": "kn",
+    "kn": "kn",
+    "malayalam": "ml",
+    "ml": "ml",
+    "punjabi": "pa",
+    "pa": "pa",
+    "odia": "or",
+    "or": "or",
+    "urdu": "ur",
+    "ur": "ur",
+}
+
 
 class WhisperTranscriber(BaseTranscriber):
     """Speech-to-text backed by a Whisper model."""
@@ -43,26 +70,26 @@ class WhisperTranscriber(BaseTranscriber):
 
     @staticmethod
     def _is_audio_silent(path: Path) -> bool:
-        """Check if audio has no audible sound using ffmpeg volumedetect."""
+        """
+        Quick volume check using ffmpeg's volumedetect filter.
+        Returns True if max volume is below -40dB (essentially silent/ambient).
+        """
         try:
-            result = subprocess.run(
-                [
-                    "ffmpeg", "-i", str(path), "-af", "volumedetect",
-                    "-vn", "-sn", "-dn", "-f", "null", "/dev/null"
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=5,
-            )
-            for line in result.stderr.splitlines():
+            cmd = [
+                "ffmpeg",
+                "-hide_banner",
+                "-i", str(path),
+                "-af", "volumedetect",
+                "-vn", "-sn", "-dn",
+                "-f", "null",
+                "/dev/null",
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            for line in res.stderr.splitlines():
                 if "max_volume:" in line:
-                    parts = line.split("max_volume:")
-                    if len(parts) > 1:
-                        vol_str = parts[1].replace("dB", "").strip()
-                        max_vol = float(vol_str)
-                        # Inaudible audio or pure silence sits at -40 dB to -91 dB
-                        return max_vol < -40.0
+                    val_str = line.split("max_volume:")[1].replace("dB", "").strip()
+                    max_vol = float(val_str)
+                    return max_vol < -40.0
         except Exception:
             pass
         return False
@@ -114,6 +141,22 @@ class WhisperTranscriber(BaseTranscriber):
                 note, "No audible speech detected. Please speak closer to the microphone."
             )
 
+        # Prepare request payload. When language_code is "auto", "detect", or None,
+        # omit the language parameter so Whisper auto-detects the spoken language.
+        is_auto_lang = (
+            not note.language_code
+            or str(note.language_code).strip().lower() in ["auto", "detect", "none", ""]
+        )
+
+        request_data = {
+            "model": self.settings.whisper_model,
+            "prompt": prompt,
+            "response_format": "verbose_json",
+            "temperature": 0,
+        }
+        if not is_auto_lang:
+            request_data["language"] = note.language_code
+
         for attempt in range(1, self.settings.stt_retry_attempts + 1):
             try:
                 with path.open("rb") as audio:
@@ -121,17 +164,23 @@ class WhisperTranscriber(BaseTranscriber):
                         url,
                         headers={"Authorization": f"Bearer {self.settings.whisper_api_key}"},
                         files={"file": (path.name, audio, f"audio/{audio_format}")},
-                        data={
-                            "model": self.settings.whisper_model,
-                            "language": note.language_code,
-                            "prompt": prompt,
-                            "response_format": "json",
-                            "temperature": 0,
-                        },
+                        data=request_data,
                         timeout=self.settings.stt_request_timeout,
                     )
                 response.raise_for_status()
-                text = response.json().get("text", "").strip()
+                resp_json = response.json()
+                if isinstance(resp_json, dict):
+                    text = resp_json.get("text", "").strip()
+                    detected_raw = resp_json.get("language", "")
+                    detected_code = LANGUAGE_NAME_TO_CODE.get(
+                        str(detected_raw).lower().strip(),
+                        None
+                    )
+                else:
+                    text = str(resp_json).strip()
+                    detected_code = None
+
+                effective_lang = detected_code or (note.language_code if not is_auto_lang else "hi")
 
                 if not text:
                     return self.fallback_transcript(note, "empty transcript returned")
@@ -168,10 +217,15 @@ class WhisperTranscriber(BaseTranscriber):
                         note, "No audible speech detected. Please speak closer to the microphone."
                     )
 
-                logger.info("Transcription complete (%d characters)", len(text))
+                logger.info(
+                    "Transcription complete (%d characters, detected_lang=%s, effective_lang=%s)",
+                    len(text),
+                    detected_code,
+                    effective_lang,
+                )
                 return Transcript(
                     text=text,
-                    language_code=note.language_code,
+                    language_code=effective_lang,
                     provider=self.provider,
                     duration_seconds=note.duration_seconds,
                 )
@@ -183,7 +237,8 @@ class WhisperTranscriber(BaseTranscriber):
                     self.settings.stt_retry_attempts,
                     e,
                 )
-                if attempt == self.settings.stt_retry_attempts:
-                    return self.fallback_transcript(note, str(e))
+                if attempt < self.settings.stt_retry_attempts:
+                    import time
+                    time.sleep(self.settings.stt_retry_backoff_seconds * attempt)
 
-        return self.fallback_transcript(note, "exhausted retry attempts")
+        return self.fallback_transcript(note, "all retry attempts exhausted")

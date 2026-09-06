@@ -309,6 +309,7 @@ class ChatRequestSchema(BaseModel):
     history: List[ChatMessageSchema] = Field(default_factory=list, description="Recent conversation turns")
     language_code: Optional[str] = Field(default="en", description="Preferred response language ('en', 'hi', etc.)")
     current_screen: Optional[str] = Field(default=None, description="Identifier of the screen the user is currently on")
+    artisan_craft: Optional[str] = Field(default=None, description="Registered craft type from artisan profile (e.g. 'Terracotta Pottery', 'Chanderi Handloom')")
 
 
 class ChatResponseSchema(BaseModel):

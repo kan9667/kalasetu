@@ -155,7 +155,7 @@ class CatalogService:
     async def transcribe_audio(
         self,
         audio_file_path: str,
-        language_code: str = "hi",
+        language_code: str = "auto",
         category_hint: Optional[str] = None,
         note_id: Optional[str] = None,
     ) -> AudioTranscribeResponse:
@@ -412,7 +412,7 @@ Return ONLY JSON matching the schema."""
     async def process_voice_to_product(
         self,
         audio_file_path: str,
-        language_code: str = "hi",
+        language_code: str = "auto",
         category_hint: Optional[str] = None,
         image_url: Optional[str] = None,
         audio_url: Optional[str] = None,
@@ -436,9 +436,10 @@ Return ONLY JSON matching the schema."""
         transcript = transcribe_res.transcript
 
         # Step 2: Generate Bilingual Listing (Description, Tags, Title, Category)
+        detected_lang = transcribe_res.language_code or language_code
         listing_req = ListingGenerateRequest(
             transcript=transcript,
-            language_code=language_code,
+            language_code=detected_lang,
             category_hint=category_hint,
             image_url=image_url,
         )

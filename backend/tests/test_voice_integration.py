@@ -54,13 +54,19 @@ def generate_synthetic_wav_bytes(duration_seconds: float = 1.0, framerate: int =
 @pytest.fixture
 def mock_voice_processor():
     """Mock ArtisanVoiceProcessor to return realistic transcripts for offline testing."""
-    def mock_process(audio_path, language_code="hi", category_hint=None, note_id=None, product_draft_id=None):
+    def mock_process(audio_path, language_code="auto", category_hint=None, note_id=None, product_draft_id=None):
+        effective_lang = "en" if language_code == "en" else "hi"
+        text = (
+            "This is a handcrafted terracotta flower vase made on traditional potter's wheel"
+            if effective_lang == "en"
+            else "यह हाथ से बना मिट्टी का सुराहीदार फूलदान है, 200 रुपये का मटेरियल और 4 घंटे का काम लगा"
+        )
         return VoicePipelineResult(
             voice_note_id=note_id or "voice_mock_123",
             status=JobStatus.COMPLETED,
             transcript=Transcript(
-                text="यह हाथ से बना मिट्टी का सुराहीदार फूलदान है, 200 रुपये का मटेरियल और 4 घंटे का काम लगा",
-                language_code=language_code,
+                text=text,
+                language_code=effective_lang,
                 provider=STTProvider.WHISPER,
                 duration_seconds=3.5,
             ),
@@ -105,6 +111,27 @@ def test_voice_transcribe_endpoint(mock_voice_processor):
     assert res_catalog.status_code == 200
     assert "मिट्टी का" in res_catalog.json()["transcript"]
     print("✅ /api/v1/catalog/transcribe Passed")
+
+
+def test_voice_auto_language_detection(mock_voice_processor):
+    """Test auto language detection: English voice produces English, Hindi produces Hindi."""
+    wav_bytes = generate_synthetic_wav_bytes(duration_seconds=2.0)
+
+    # 1. Spoken English voice note
+    files_en = {"audio": ("english_desc.wav", wav_bytes, "audio/wav")}
+    res_en = client.post("/api/v1/voice/transcribe", files=files_en, data={"language_code": "en"})
+    assert res_en.status_code == 200
+    json_en = res_en.json()
+    assert "handcrafted terracotta flower vase" in json_en["transcript"].lower()
+    assert json_en["language_code"] == "en"
+
+    # 2. Default auto parameter without explicit language code
+    files_auto = {"audio": ("auto_desc.wav", wav_bytes, "audio/wav")}
+    res_auto = client.post("/api/v1/voice/transcribe", files=files_auto)
+    assert res_auto.status_code == 200
+    json_auto = res_auto.json()
+    assert json_auto["status"] == "completed"
+    assert json_auto["transcript"] != ""
 
 
 def test_voice_to_listing_endpoint(mock_voice_processor):

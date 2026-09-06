@@ -216,7 +216,7 @@ class HttpSpeechService implements SpeechService {
           audioPath,
           filename: fileName.isNotEmpty ? fileName : 'recording.m4a',
         ),
-        'language_code': languageCode.isNotEmpty ? languageCode : 'hi',
+        'language_code': languageCode.isNotEmpty ? languageCode : 'auto',
       });
 
       debugPrint('[HttpSpeechService] POST $activeUrl/api/v1/voice/transcribe (lang: $languageCode)');

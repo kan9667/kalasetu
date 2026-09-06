@@ -80,10 +80,10 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
         final audioFile = File(path);
         await ref.read(addProductFlowProvider.notifier).queueVoiceRecording(audioFile);
 
-        // Immediately trigger real voice pipeline transcription in the background
+        // Immediately trigger real voice pipeline transcription in the background with language auto-detection
         unawaited(ref.read(addProductFlowProvider.notifier).transcribeVoiceDirectly(
           audioFile,
-          languageCode: localeCode,
+          languageCode: 'auto',
         ));
       }
 

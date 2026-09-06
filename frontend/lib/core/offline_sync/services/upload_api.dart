@@ -223,7 +223,7 @@ class RealUploadApi implements UploadApi {
         file.path,
         filename: fileName.isNotEmpty ? fileName : 'recording.m4a',
       ),
-      'language_code': 'hi',
+      'language_code': 'auto',
     });
 
     try {

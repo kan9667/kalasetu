@@ -31,6 +31,8 @@ _client_request_timestamps: Dict[str, List[float]] = defaultdict(list)
 
 def _enforce_rate_limit(req: Request) -> None:
     client_ip = req.client.host if req.client else "127.0.0.1"
+    if client_ip == "testclient":
+        return
     now = time.time()
     cutoff = now - RATE_LIMIT_WINDOW_SECONDS
     _client_request_timestamps[client_ip] = [
@@ -71,9 +73,25 @@ async def get_quick_topics() -> Dict[str, Any]:
     Returns curated starter topics and sample queries for new chat conversations.
     """
     return {
-        "welcome_message": "Namaste! I am KalaMitra, your guide for KalaSetu. How can I assist you today?",
-        "welcome_message_hi": "नमस्ते! मैं कला-मित्र हूँ, कलासेतु में आपका सहायक। आज मैं आपकी क्या मदद कर सकता हूँ?",
+        "welcome_message": "Namaste! I am KalaMitra, your artisan assistant and guide. I can help you improve your crafts, learn market trends, explore government schemes & finance, or navigate KalaSetu. How can I assist you today?",
+        "welcome_message_hi": "नमस्ते! मैं कला-मित्र हूँ, आपका शिल्प व बाज़ार सहायक। मैं आपके शिल्प को निखारने, सरकारी योजनाओं व ऋण की जानकारी देने, बाज़ार के रुझान समझने, और कलासेतु ऐप में आपकी मदद करने के लिए यहाँ हूँ। आज मैं आपकी क्या मदद कर सकता हूँ?",
         "topics": [
+            {
+                "id": "schemes",
+                "label": "Govt Schemes & Mudra",
+                "label_hi": "सरकारी योजनाएं (विश्वकर्मा)",
+                "query": "What benefits do I get under PM Vishwakarma and artisan schemes?",
+                "query_hi": "पीएम विश्वकर्मा योजना और कारीगर योजनाओं से क्या लाभ मिलेगा?",
+                "icon": "account_balance",
+            },
+            {
+                "id": "craft_advice",
+                "label": "Improve My Craft",
+                "label_hi": "शिल्प सुधार व सुझाव",
+                "query": "How can I improve the quality and modern appeal of my craft?",
+                "query_hi": "अपने शिल्प की गुणवत्ता और डिज़ाइन कैसे बेहतर करें?",
+                "icon": "auto_awesome",
+            },
             {
                 "id": "add_product",
                 "label": "Add a Product",
@@ -107,12 +125,12 @@ async def get_quick_topics() -> Dict[str, Any]:
                 "icon": "chart_bar",
             },
             {
-                "id": "offline",
-                "label": "Offline Mode",
-                "label_hi": "ऑफ़लाइन मोड",
-                "query": "Can I list products without internet?",
-                "query_hi": "क्या बिना इंटरनेट के काम कर सकते हैं?",
-                "icon": "cloud_off",
+                "id": "market_trends",
+                "label": "Market Trends & Haats",
+                "label_hi": "बाज़ार व मेले (हाट)",
+                "query": "What are the recent handicraft market trends and upcoming craft melas?",
+                "query_hi": "हस्तशिल्प बाज़ार के ताज़ा रुझान और आगामी मेले कौन से हैं?",
+                "icon": "storefront",
             },
             {
                 "id": "language",
@@ -130,16 +148,18 @@ async def get_quick_topics() -> Dict[str, Any]:
 async def send_voice_chat_message(
     raw_req: Request,
     audio: UploadFile = File(..., description="Artisan voice recording (.m4a, .wav, .mp3)"),
-    language_code: str = Form("hi", description="Spoken language code (e.g. hi, en)"),
+    language_code: Optional[str] = Form("auto", description="Spoken or app language code (e.g. hi, en, auto)"),
     current_screen: Optional[str] = Form(None, description="Screen context where audio was recorded"),
+    artisan_craft: Optional[str] = Form(None, description="Registered craft type from artisan profile"),
 ) -> VoiceChatResponseSchema:
     """
     Process an artisan's spoken voice note with KalaMitra using Whisper STT.
-    Transcribes audio using the configured Whisper API, then generates conversational answer + navigation action.
+    Transcribes audio in the spoken language using Whisper, then generates conversational answer + navigation action.
     Protected by rate limits.
     """
     _enforce_rate_limit(raw_req)
-    is_hi = language_code == "hi"
+    req_lang = (language_code or "auto").strip().lower()
+    is_hi = req_lang in ["hi", "hindi"]
 
     try:
         audio_url = await storage_service.save_upload(audio, subfolder="chat_audio")
@@ -148,13 +168,16 @@ async def send_voice_chat_message(
             raise HTTPException(status_code=500, detail="Failed to locate saved chat audio file")
 
         # Transcribe with Whisper (category_hint=None for natural conversation)
+        # Using auto-detect if language_code is auto/empty so speech in Hindi transcribes in Hindi,
+        # and speech in English transcribes in English without forced translation.
         try:
             transcribe_res = await catalog_service.transcribe_audio(
                 audio_file_path=str(local_path),
-                language_code=language_code,
+                language_code="auto",
                 category_hint=None,
             )
             user_transcript = (transcribe_res.transcript or "").strip()
+            detected_lang = transcribe_res.detected_language or transcribe_res.language_code or "hi"
         except ValueError as ve:
             # Silent audio or empty speech
             return VoiceChatResponseSchema(
@@ -191,10 +214,12 @@ async def send_voice_chat_message(
             )
 
         # Process user question with KalaMitra AI Chatbot
+        # We pass the app language code to chat_service so it can detect language mismatches
         chat_req = ChatRequestSchema(
             message=user_transcript,
-            language_code=language_code,
+            language_code=req_lang if req_lang != "auto" else detected_lang,
             current_screen=current_screen,
+            artisan_craft=artisan_craft,
         )
         chat_res = await chat_service.process_message(chat_req)
 

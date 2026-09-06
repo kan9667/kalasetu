@@ -1264,7 +1264,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     return '';
   }
 
-  Future<void> transcribeVoiceDirectly(File audioFile, {String languageCode = 'hi'}) async {
+  Future<void> transcribeVoiceDirectly(File audioFile, {String languageCode = 'auto'}) async {
     if (kMockAiBackend) {
       await Future.delayed(const Duration(milliseconds: 700));
       const fakeTranscript = 'Mock transcription (backend bypassed for testing)';
