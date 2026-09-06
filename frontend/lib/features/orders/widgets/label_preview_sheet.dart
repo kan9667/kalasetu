@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/motifs/mehrab_clipper.dart';
 import '../../../core/providers/app_providers.dart';
 import '../models/order.dart';
 import '../services/label_maker_service.dart';
@@ -17,6 +18,7 @@ void showLabelPreviewSheet(BuildContext context, {required Order order}) {
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    barrierColor: AppColors.overlay,
     builder: (ctx) => _LabelPreviewSheet(order: order),
   );
 }
@@ -73,7 +75,7 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('label_generated_success'.tr()),
-            backgroundColor: AppColors.forestGreenDark,
+            backgroundColor: AppColors.success,
           ),
         );
       } else {
@@ -92,27 +94,29 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
     final profile = ref.watch(userProfileProvider);
     final (washEn, washHi) = LabelMakerService.defaultWashCareFor(widget.order.productCategory);
 
-    // TODO: Stub URL until ONDC profile endpoint is live; swap in production URL here.
     final ondcProfileStub = 'https://kalasetu.ondc.org/artisan/artisan_01';
 
     return DraggableScrollableSheet(
       initialChildSize: 0.88,
       maxChildSize: 0.95,
       minChildSize: 0.5,
-      builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.bottomSheet)),
-        ),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
+      builder: (_, scrollController) => ClipPath(
+        clipper: const MehrabClipper(),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.cardSurface,
+            boxShadow: AppElevation.cardShadowLifted,
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.divider,
+                color: AppColors.line,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -126,27 +130,44 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Artisan Story & Packaging Label',
-                        style: AppTextStyles.headlineSmall,
-                      ),
-                      Text(
-                        'Preview for Order ${widget.order.id}',
-                        style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                      ),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Artisan Story & Label',
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Preview for Order ${widget.order.id}',
+                          style: AppTextStyles.caption.copyWith(color: AppColors.inkSoft),
+                        ),
+                      ],
+                    ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: const BoxDecoration(
+                        color: AppColors.parchmentDeep,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.close, size: 16, color: AppColors.inkSoft),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
+            const Divider(height: 1, color: AppColors.line),
 
             // Preview Scrollable Body
             Expanded(
@@ -156,11 +177,12 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                 children: [
                   // Label Card Preview
                   Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
+                    padding: const EdgeInsets.all(AppSpacing.cardPadding),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                      color: AppColors.parchment,
                       borderRadius: BorderRadius.circular(AppRadii.card),
-                      border: Border.all(color: AppColors.terracotta.withValues(alpha: 0.5), width: 1.5),
+                      border: Border.all(color: AppColors.line, width: 1.5),
+                      boxShadow: AppElevation.cardShadow,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,21 +243,21 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                                   Text(profile.name, style: AppTextStyles.labelMedium),
                                   Text(
                                     '${profile.craftType} • ${profile.locationCluster}',
-                                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                                    style: AppTextStyles.caption.copyWith(color: AppColors.inkSoft),
                                   ),
                                 ],
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: AppColors.forestGreenLight.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(4),
+                                color: AppColors.statusSuccessBg,
+                                borderRadius: BorderRadius.circular(AppRadii.chip),
                               ),
                               child: Text(
                                 'ONDC Verified',
                                 style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.forestGreenDark,
+                                  color: AppColors.statusSuccessFg,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 10,
                                 ),
@@ -250,9 +272,9 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                         Container(
                           padding: const EdgeInsets.all(AppSpacing.sm),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: AppColors.cardSurface,
                             borderRadius: BorderRadius.circular(AppRadii.sm),
-                            border: Border.all(color: AppColors.divider),
+                            border: Border.all(color: AppColors.line),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,21 +285,23 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                                   Text(
                                     'CRAFT STORY',
                                     style: AppTextStyles.labelSmall.copyWith(
-                                      color: AppColors.terracotta,
+                                      color: AppColors.terracottaDark,
                                       letterSpacing: 0.8,
+                                      fontSize: 10.5,
                                     ),
                                   ),
                                   TextButton.icon(
                                     style: TextButton.styleFrom(
                                       padding: EdgeInsets.zero,
                                       minimumSize: const Size(50, 24),
+                                      foregroundColor: AppColors.terracotta,
                                     ),
                                     onPressed: () {
                                       setState(() => _isEditingStory = !_isEditingStory);
                                     },
                                     icon: Icon(_isEditingStory ? Icons.check : Icons.edit, size: 14),
                                     label: Text(
-                                      _isEditingStory ? 'Done Editing' : 'Edit Story',
+                                      _isEditingStory ? 'Done' : 'Edit',
                                       style: const TextStyle(fontSize: 11),
                                     ),
                                   ),
@@ -287,12 +311,12 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                                 const SizedBox(height: 4),
                                 Text(
                                   _storyEnCtrl.text,
-                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.charcoal),
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.ink),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   _storyHiCtrl.text,
-                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
                                 ),
                               ] else ...[
                                 const SizedBox(height: 6),
@@ -312,7 +336,7 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                                   maxLines: 2,
                                   style: AppTextStyles.bodySmall,
                                   decoration: const InputDecoration(
-                                    labelText: 'Regional Language Story (Hindi)',
+                                    labelText: 'Hindi Story',
                                     isDense: true,
                                   ),
                                   onChanged: (_) => _hasCustomizedStory = true,
@@ -333,9 +357,9 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                               child: Container(
                                 padding: const EdgeInsets.all(AppSpacing.sm),
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: AppColors.cardSurface,
                                   borderRadius: BorderRadius.circular(AppRadii.sm),
-                                  border: Border.all(color: AppColors.divider),
+                                  border: Border.all(color: AppColors.line),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,14 +367,15 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                                     Text(
                                       'CARE & HANDLING',
                                       style: AppTextStyles.labelSmall.copyWith(
-                                        color: AppColors.terracotta,
+                                        color: AppColors.terracottaDark,
                                         fontSize: 10,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                     const SizedBox(height: 3),
-                                    Text(washEn, style: AppTextStyles.caption),
+                                    Text(washEn, style: AppTextStyles.caption.copyWith(color: AppColors.ink)),
                                     const SizedBox(height: 3),
-                                    Text(washHi, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                                    Text(washHi, style: AppTextStyles.caption.copyWith(color: AppColors.inkSoft)),
                                   ],
                                 ),
                               ),
@@ -361,9 +386,9 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                               child: Container(
                                 padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: AppColors.cardSurface,
                                   borderRadius: BorderRadius.circular(AppRadii.sm),
-                                  border: Border.all(color: AppColors.divider),
+                                  border: Border.all(color: AppColors.line),
                                 ),
                                 child: Column(
                                   children: [
@@ -381,7 +406,7 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                                       'Scan for ONDC',
                                       style: AppTextStyles.caption.copyWith(
                                         fontSize: 9,
-                                        color: AppColors.terracotta,
+                                        color: AppColors.terracottaDark,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
@@ -398,22 +423,33 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              widget.order.productTitle,
-                              style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.bold),
+                            Expanded(
+                              child: Text(
+                                widget.order.productTitle,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.ink,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             Text(
                               '₹${widget.order.amount.toStringAsFixed(0)}',
                               style: AppTextStyles.labelSmall.copyWith(
-                                color: AppColors.terracotta,
-                                fontWeight: FontWeight.bold,
+                                color: AppColors.terracottaDark,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           'Deliver to: ${widget.order.buyerName}, ${widget.order.buyerLocation}',
-                          style: AppTextStyles.caption,
+                          style: AppTextStyles.caption.copyWith(color: AppColors.inkSoft),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -437,6 +473,7 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }

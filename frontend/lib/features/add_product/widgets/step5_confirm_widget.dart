@@ -70,14 +70,16 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
         barrierDismissible: false,
         builder: (dialogCtx) {
           return AlertDialog(
+            backgroundColor: AppColors.parchment,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.card)),
             title: Row(
               children: [
                 Icon(
                   isOnline ? Icons.check_circle : Icons.cloud_queue,
-                  color: isOnline ? AppColors.forestGreen : AppColors.turmericDark,
-                  size: 32,
+                  color: isOnline ? AppColors.success : AppColors.goldDark,
+                  size: 28,
                 ),
-                const SizedBox(width: AppSpacing.xs),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     isOnline ? 'listing_online_success'.tr() : 'queued_offline_success'.tr(),
@@ -90,7 +92,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
               isOnline
                   ? 'Your craft listing is live and visible to buyers.'
                   : 'Product saved locally. KalaSetu will automatically upload it when internet returns.',
-              style: AppTextStyles.bodyMedium,
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
             ),
             actions: [
               AppButton(
@@ -115,42 +117,52 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
     final displayImage = draft.isEnhanced ? draft.enhancedImagePath : draft.originalImagePath;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.screenPadding),
+      physics: const ClampingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              const Icon(Icons.fact_check, color: AppColors.terracotta),
-              const SizedBox(width: AppSpacing.xs),
-              Text('confirm_title'.tr(), style: AppTextStyles.headlineLarge),
+              const Icon(Icons.fact_check_outlined, color: AppColors.terracotta, size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('confirm_title'.tr(), style: AppTextStyles.headlineLarge),
+              ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: 4),
           Text(
             'confirm_subtitle'.tr(),
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: 20),
 
-          Card(
-            elevation: 0,
+          // Product Summary Card
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.cardSurface,
+              borderRadius: BorderRadius.circular(AppRadii.card),
+              border: Border.all(color: AppColors.line),
+              boxShadow: AppElevation.cardShadow,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  height: 220,
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.card)),
+                // Hero Image
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.card)),
+                  child: Container(
+                    height: 220,
+                    width: double.infinity,
+                    color: AppColors.parchmentDeep,
+                    child: AppImage(imageUrl: displayImage, fit: BoxFit.cover),
                   ),
-                  child: AppImage(imageUrl: displayImage, fit: BoxFit.cover),
                 ),
 
                 if (draft.additionalImagePaths.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     child: SizedBox(
                       height: 56,
                       child: ListView(
@@ -158,7 +170,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                         children: [
                           for (final path in draft.additionalImagePaths)
                             Padding(
-                              padding: const EdgeInsets.only(right: AppSpacing.xs),
+                              padding: const EdgeInsets.only(right: 8),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(AppRadii.sm),
                                 child: SizedBox(
@@ -174,37 +186,50 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                   ),
 
                 Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Chip(
-                            label: Text(draft.category),
-                            backgroundColor: AppColors.terracottaLight.withValues(alpha: 0.3),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.parchmentDeep,
+                              borderRadius: BorderRadius.circular(AppRadii.button),
+                              border: Border.all(color: AppColors.line),
+                            ),
+                            child: Text(
+                              draft.category,
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.ink,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: isOnline
-                                  ? AppColors.forestGreenLight.withValues(alpha: 0.2)
-                                  : AppColors.turmericLight.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(AppRadii.chip),
+                              color: isOnline ? AppColors.statusSuccessBg : AppColors.statusPendingBg,
+                              borderRadius: BorderRadius.circular(AppRadii.button),
                             ),
                             child: Row(
                               children: [
-                                Icon(
-                                  isOnline ? Icons.circle : Icons.cloud_queue,
-                                  size: 10,
-                                  color: isOnline ? AppColors.forestGreen : AppColors.turmericDark,
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isOnline ? AppColors.statusSuccessFg : AppColors.statusPendingFg,
+                                  ),
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: 5),
                                 Text(
                                   isOnline ? 'status_live'.tr() : 'status_pending_sync'.tr(),
                                   style: AppTextStyles.labelSmall.copyWith(
-                                    color: isOnline ? AppColors.forestGreenDark : AppColors.turmericDark,
+                                    color: isOnline ? AppColors.statusSuccessFg : AppColors.statusPendingFg,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
@@ -213,7 +238,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                         ],
                       ),
 
-                      const SizedBox(height: AppSpacing.sm),
+                      const SizedBox(height: 12),
 
                       Text(
                         draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted ${draft.category}',
@@ -223,45 +248,52 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                         const SizedBox(height: 2),
                         Text(
                           draft.titleHi,
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
                         ),
                       ],
 
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: 12),
 
                       Text(
                         '₹${draft.finalPrice.toStringAsFixed(0)}',
-                        style: AppTextStyles.headlineLarge.copyWith(
-                          color: AppColors.terracotta,
+                        style: AppTextStyles.displaySmall.copyWith(
+                          color: AppColors.terracottaDark,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
 
-                      const SizedBox(height: AppSpacing.sm),
+                      const SizedBox(height: 10),
 
                       Text(
                         draft.descriptionEn.isNotEmpty ? draft.descriptionEn : draft.voiceTranscript,
-                        style: AppTextStyles.bodySmall,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.inkSoft,
+                          height: 1.4,
+                        ),
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
 
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: 14),
 
                       Container(
-                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.forestGreenLight.withValues(alpha: 0.15),
+                          color: AppColors.successLight,
                           borderRadius: BorderRadius.circular(AppRadii.sm),
+                          border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.verified, color: AppColors.forestGreen, size: 18),
-                            const SizedBox(width: AppSpacing.xs),
+                            const Icon(Icons.verified, color: AppColors.success, size: 18),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'floor_price_guarantee'.tr(),
-                                style: AppTextStyles.labelSmall.copyWith(color: AppColors.forestGreenDark),
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.success,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
@@ -274,12 +306,13 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
             ),
           ),
 
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: 20),
 
-          if (draft.originalImagePath.isNotEmpty || draft.additionalImagePaths.isNotEmpty)
-            OutlinedButton.icon(
-              icon: const Icon(Icons.share),
-              label: Text('social_media_helper'.tr()),
+          if (draft.originalImagePath.isNotEmpty || draft.additionalImagePaths.isNotEmpty) ...[
+            AppButton(
+              label: 'social_media_helper'.tr(),
+              icon: Icons.share,
+              type: AppButtonType.secondary,
               onPressed: () {
                 final images = [
                   if (draft.isEnhanced && draft.enhancedImagePath.isNotEmpty)
@@ -305,16 +338,16 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                 );
               },
             ),
-
-          if (draft.originalImagePath.isNotEmpty || draft.additionalImagePaths.isNotEmpty)
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: 12),
+          ],
 
           AppButton(
             label: 'list_product_btn'.tr(),
-            icon: Icons.cloud_upload,
+            icon: Icons.cloud_upload_outlined,
             isLoading: _isPublishing,
             onPressed: _handleListProduct,
           ),
+          const SizedBox(height: 20),
         ],
       ),
     );

@@ -1,68 +1,131 @@
 import 'package:flutter/material.dart';
 
-
+/// Kalasetu v3 design-token palette.
+///
+/// Role hierarchy:
+///   terracotta  → every primary action button
+///   gold        → every secondary/alternate-path button
+///   berry       → accent only (at most one hero card per screen — Analytics only)
+///   blueAccent  → accent only (comparison bars, text-link icons — never a button fill)
+///   success     → dispatched / delivered / confirmed
 class AppColors {
-  // --- Core palette (per design spec) ---
-  static const plaster = Color(0xFFF3ECDF);        // background
-  static const plasterDark = Color(0xFFE7DCC7);    // secondary surface
-  static const charcoal = Color(0xFF2A2420);        // primary text / frame
-  static const charcoalSoft = Color(0xFF655A4E);    // secondary text
-  static const terracotta = Color(0xFFC97B5A);      // primary actions
-  static const terracottaDark = Color(0xFFAD5F3F);  // pressed / emphasis
-  static const terracottaLight = Color(0xFFE3A688);
-  static const brick = Color(0xFF96392C);           // alerts / underpriced
-  static const mustard = Color(0xFFD9A441);         // positive / fair price
-  static const oak = Color(0xFFA9835F);             // borders / secondary
-  static const cream = Color(0xFFFBF7EF);           // card surfaces
+  // ---------------------------------------------------------------------------
+  // Core palette — exact matches to kalasetu-redesign-v3.html CSS variables
+  // ---------------------------------------------------------------------------
 
-  static const aboveRange = Color(0xFF6E5A78);
+  /// Primary action (terracotta)
+  static const terracotta     = Color(0xFFB84A29); // --terracotta
+  static const terracottaDark = Color(0xFF8C371A); // --terracotta-press
+  static const terracottaLight= Color(0xFFF3DBCC); // --terracotta-tint
 
-  // --- Connectivity / sync status ---
-  static const online = Color(0xFF4A7C59);
-  static const syncing = Color(0xFFB8863A);
-  static const offline = charcoalSoft;
+  /// Secondary action (gold) — drives every secondary / alternate-path button
+  static const gold           = Color(0xFFE59A2C); // --gold
+  static const goldDark       = Color(0xFFB87A1E); // --gold-press
+  static const goldLight      = Color(0xFFFBEACB); // --gold-tint
 
-  // --- Semantic text roles ---
-  static const textPrimary = charcoal;
-  static const textSecondary = charcoalSoft;
-  static const textTertiary = Color(0xFF8F7E68);
-  static const textOnPrimary = cream;
+  /// Accent 1 (berry) — at most one hero-metric card per screen; never a button
+  static const berry          = Color(0xFF924C6C); // --berry
+  static const berryDark      = Color(0xFF743A54); // --berry-press
+  static const berryLight     = Color(0xFFF0DEE6); // --berry-tint
 
-  // --- Semantic surface roles ---
-  static const background = plaster;
-  static const surface = cream;
-  static const surfaceVariant = plasterDark;
+  /// Accent 2 (blue) — comparison bars, text-link icons; never a button fill
+  static const blueAccent     = Color(0xFF265067); // --blue
+  static const blueAccentDark = Color(0xFF1B3A4C); // --blue-press
+  static const blueAccentLight= Color(0xFFDCE6EB); // --blue-tint
 
-  // --- Semantic state roles ---
-  static const error = brick;
-  static const warning = mustard;
-  static const success = online;
-  static const info = terracottaDark;
+  /// Success / dispatched / delivered / payment confirmed
+  static const success        = Color(0xFF3B5E3C); // --success
+  static const successLight   = Color(0xFFDEE8DA); // --success-tint
 
-  // --- Listing status badges ---
-  static const statusLive = online;
-  static const statusPending = syncing;
-  static const statusDraft = charcoalSoft;
-  static const statusSold = mustard;
+  // ---------------------------------------------------------------------------
+  // Ink — warm near-black text instead of pure black
+  // ---------------------------------------------------------------------------
+  static const ink            = Color(0xFF201A18); // --ink
+  static const inkSoft        = Color(0xFF6E645F); // --ink-soft
+  static const inkFaint       = Color(0xFFA79C93); // --ink-faint
 
-  // --- Structure ---
-  static const border = oak;
-  static const divider = Color(0x66A9835F); // oak @ ~40% alpha
-  static const overlay = Color(0x40000000);
-  static const shadow = Color(0x1A2A2420);  // soft charcoal — never harsh
+  // ---------------------------------------------------------------------------
+  // Surfaces
+  // ---------------------------------------------------------------------------
+  static const parchment      = Color(0xFFF8F5F0); // --parchment (page bg)
+  static const parchmentDeep  = Color(0xFFEFE6D8); // --parchment-deep (track/segmented)
+  static const cardSurface    = Color(0xFFFFFDF9); // --card
 
-  // --- Legacy aliases ---
-  // Kept temporarily so screens I haven't migrated yet still compile.
-  // Send me those screens and I'll remove the alias once they're updated.
-  static const indigo = terracottaDark;
-  static const indigoLight = terracotta;
-  static const indigoDark = charcoal;
-  static const turmeric = mustard;
-  static const turmericLight = Color(0xFFE6BC6E);
-  static const turmericDark = Color(0xFFB8863A);
-  static const forestGreen = online;
-  static const forestGreenLight = Color(0xFF6FA37E);
-  static const forestGreenDark = Color(0xFF35603F);
+  // ---------------------------------------------------------------------------
+  // Structural
+  // ---------------------------------------------------------------------------
+  static const dottedBorder   = Color(0xFFD6CCC2); // --dotted
+  /// rgba(32,26,24,0.14) — used for borders, field outlines, card outlines
+  static const line           = Color(0x24201A18);
+  /// resting card shadow rgba(32,26,24,0.08)
+  static const shadow         = Color(0x14201A18);
+  /// lifted / sheet shadow rgba(32,26,24,0.28)
+  static const shadowLifted   = Color(0x47201A18);
+  static const overlay        = Color(0x6B1C1613); // rgba(28,22,19,0.42)
+
+  // ---------------------------------------------------------------------------
+  // Semantic convenience aliases
+  // ---------------------------------------------------------------------------
+  static const textPrimary    = ink;
+  static const textSecondary  = inkSoft;
+  static const textTertiary   = inkFaint;
+  static const textOnPrimary  = Color(0xFFFFFFFF);
+
+  static const background     = parchment;
+  static const surface        = cardSurface;
+  static const surfaceVariant = parchmentDeep;
+
+  static const error          = terracotta;   // use sparingly; terracotta IS the error primary
+  static const warning        = gold;
+  static const border         = dottedBorder;
+  static const divider        = line;
+
+  // ---------------------------------------------------------------------------
+  // Status badge roles (order cards + filter chips)
+  // ---------------------------------------------------------------------------
+  static const statusActionBg   = terracottaLight;  // "New" / action required
+  static const statusActionFg   = terracottaDark;
+  static const statusPendingBg  = goldLight;        // "Packed" / processing
+  static const statusPendingFg  = goldDark;
+  static const statusSuccessBg  = successLight;     // Dispatched / delivered
+  static const statusSuccessFg  = success;
+
+  // ---------------------------------------------------------------------------
+  // Legacy aliases — kept so un-migrated screens still compile.
+  // Updated to point to new v3 token values.
+  // ---------------------------------------------------------------------------
+  static const plaster         = parchment;
+  static const plasterDark     = parchmentDeep;
+  static const charcoal        = ink;
+  static const charcoalSoft    = inkSoft;
+  static const cream           = cardSurface;
+  static const oak             = dottedBorder;
+  static const mustard         = gold;
+  static const brick           = terracottaDark;
+  static const aboveRange      = berry;
+
+  static const online          = success;
+  static const syncing         = gold;
+  static const offline         = inkSoft;
+
+  static const statusLive      = success;
+  static const statusPending   = gold;
+  static const statusDraft     = inkSoft;
+  static const statusSold      = gold;
+
+  static const indigo          = terracottaDark;
+  static const indigoLight     = terracotta;
+  static const indigoDark      = ink;
+  static const turmeric        = gold;
+  static const turmericLight   = goldLight;
+  static const turmericDark    = goldDark;
+  static const forestGreen     = success;
+  static const forestGreenLight= successLight;
+  static const forestGreenDark = Color(0xFF2B4A2C);
+
+  // Keep old terracottaLight alias pointing to new tint
+  // (some screens still reference it via the old name)
+  static const info            = blueAccent;
 
   AppColors._();
 }

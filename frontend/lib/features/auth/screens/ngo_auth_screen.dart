@@ -10,6 +10,8 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../providers/auth_provider.dart';
 
+import '../../../core/widgets/language_picker.dart';
+
 class NgoAuthScreen extends ConsumerStatefulWidget {
   const NgoAuthScreen({super.key});
 
@@ -33,9 +35,6 @@ class _NgoAuthScreenState extends ConsumerState<NgoAuthScreen> {
     setState(() => _isSubmitting = true);
     final coordinatorId = _coordinatorIdController.text.trim();
 
-    // ASSUMPTION: I haven't seen auth_provider.dart, so this assumes
-    // AuthController exposes a signInWithCoordinator method. Adjust the
-    // method name/signature to match your real implementation.
     await ref.read(authStateProvider.notifier).signInWithCoordinator(coordinatorId);
 
     if (mounted) {
@@ -49,72 +48,156 @@ class _NgoAuthScreenState extends ConsumerState<NgoAuthScreen> {
     final screenPadding = AppSpacing.getScreenPadding(context);
 
     return AppScaffold(
+      showConnectivityPill: false,
       rawAppBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: AppSpacing.sm),
+            child: LanguagePicker(),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(screenPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: AppSpacing.md),
-            const Icon(Icons.support_agent, size: 56, color: AppColors.terracotta),
+            const SizedBox(height: AppSpacing.sm),
+            Center(
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  color: AppColors.terracottaLight,
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.support_agent,
+                    size: 36,
+                    color: AppColors.terracottaDark,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: AppSpacing.md),
             Text(
               'ngo_assist_title'.tr(),
-              style: AppTextStyles.headlineLarge,
+              style: AppTextStyles.headlineLarge.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.bold,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'ngo_assist_description'.tr(),
-              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.inkSoft,
+                height: 1.45,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.lg),
 
-            // QR placeholder — a real implementation would show a scannable
-            // code for the coordinator's device to read and link accounts.
-            Container(
-              height: 220,
-              width: 220,
-              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(AppRadii.card),
-                border: Border.all(color: AppColors.oak, width: 1.5),
+            // QR container
+            Center(
+              child: Container(
+                height: 210,
+                width: 210,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.cardSurface,
+                  borderRadius: BorderRadius.circular(AppRadii.card),
+                  border: Border.all(color: AppColors.line, width: 1.5),
+                  boxShadow: AppElevation.cardShadow,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.qr_code_2,
+                      size: 110,
+                      color: AppColors.ink,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                      child: Text(
+                        'qr_placeholder_label'.tr(),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.inkSoft,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            // Reassurance info callout card
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm + 2,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.goldLight,
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                border: Border.all(
+                  color: AppColors.gold.withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
                 children: [
-                  const Icon(Icons.qr_code_2, size: 96, color: AppColors.charcoalSoft),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text('qr_placeholder_label'.tr(), style: AppTextStyles.caption, textAlign: TextAlign.center),
+                  const Icon(
+                    Icons.info_outline,
+                    size: 20,
+                    color: AppColors.goldDark,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'ngo_assist_explanation'.tr(),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
 
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.lg),
 
             Row(
               children: [
-                const Expanded(child: Divider()),
+                const Expanded(child: Divider(color: AppColors.line)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                   child: Text(
                     'or_enter_coordinator_id'.tr(),
-                    style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.inkSoft,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                const Expanded(child: Divider()),
+                const Expanded(child: Divider(color: AppColors.line)),
               ],
             ),
 
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
 
             Form(
               key: _formKey,
@@ -123,10 +206,31 @@ class _NgoAuthScreenState extends ConsumerState<NgoAuthScreen> {
                 children: [
                   TextFormField(
                     controller: _coordinatorIdController,
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
                     decoration: InputDecoration(
                       labelText: 'coordinator_id_label'.tr(),
                       hintText: 'coordinator_id_hint'.tr(),
-                      prefixIcon: const Icon(Icons.badge_outlined),
+                      labelStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
+                      hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkFaint),
+                      prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.terracotta),
+                      filled: true,
+                      fillColor: AppColors.cardSurface,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.button),
+                        borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.button),
+                        borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.button),
+                        borderSide: const BorderSide(color: AppColors.terracotta, width: 2),
+                      ),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
@@ -141,12 +245,19 @@ class _NgoAuthScreenState extends ConsumerState<NgoAuthScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.info_outline, size: 14, color: AppColors.textSecondary),
+                        const Icon(
+                          Icons.info_outline,
+                          size: 14,
+                          color: AppColors.inkSoft,
+                        ),
                         const SizedBox(width: AppSpacing.xs),
                         Expanded(
                           child: Text(
                             'ngo_assist_explained'.tr(),
-                            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.inkSoft,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ],
@@ -165,7 +276,7 @@ class _NgoAuthScreenState extends ConsumerState<NgoAuthScreen> {
               onPressed: _handleAssistedSignIn,
             ),
 
-            const SizedBox(height: AppSpacing.xxl),
+            const SizedBox(height: AppSpacing.xl),
           ],
         ),
       ),
