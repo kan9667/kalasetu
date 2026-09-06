@@ -22,6 +22,8 @@ class ProductRepository {
   /// Get all products - Hive is the instant source of truth
   Future<List<Product>> getProducts({bool forceRefresh = false, bool isOnline = true}) async {
     final box = _getProductsBox();
+    if (box.containsKey('prod_1')) await box.delete('prod_1');
+    if (box.containsKey('prod_2')) await box.delete('prod_2');
 
     // If box is empty and online, populate with remote products
     if ((box.isEmpty || forceRefresh) && isOnline) {

@@ -26,17 +26,17 @@ class ConnectivityPill extends ConsumerWidget {
     final String label;
 
     if (!isOnline) {
-      bgColor = AppColors.error.withOpacity(0.15);
+      bgColor = AppColors.error.withValues(alpha: 0.15);
       textColor = AppColors.error;
       icon = Icons.wifi_off_rounded;
       label = 'offline'.tr();
     } else if (isSyncing) {
-      bgColor = AppColors.warning.withOpacity(0.15);
+      bgColor = AppColors.warning.withValues(alpha: 0.15);
       textColor = AppColors.warning;
       icon = Icons.sync_rounded;
       label = 'syncing'.tr();
     } else {
-      bgColor = AppColors.success.withOpacity(0.15);
+      bgColor = AppColors.success.withValues(alpha: 0.15);
       textColor = AppColors.success;
       icon = Icons.wifi_rounded;
       label = 'online'.tr();

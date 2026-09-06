@@ -76,6 +76,7 @@ class AppRadii {
   static const double lg = 16.0;
   static const double xl = 20.0;
   static const double xxl = 24.0;
+  static const double full = 999.0;
 
   // Semantic radii
   static const double button = 16.0; // was 12 — spec wants 14-20px

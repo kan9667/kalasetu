@@ -54,7 +54,7 @@ class NotificationsScreen extends ConsumerWidget {
           : ListView.separated(
               padding: const EdgeInsets.all(AppSpacing.screenPadding),
               itemCount: notifications.length,
-              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
               itemBuilder: (context, index) {
                 final item = notifications[index];
                 final (icon, color) = _iconAndColorFor(item.type);

@@ -293,8 +293,8 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                                       color: Colors.white,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  const Text(
+                                  SizedBox(width: 8),
+                                  Text(
                                     'Enhancing image and creating listing...',
                                     style: TextStyle(
                                       color: Colors.white,

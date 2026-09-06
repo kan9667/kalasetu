@@ -84,7 +84,7 @@ class HomeShell extends ConsumerWidget {
               icon: Container(
                 padding: const EdgeInsets.all(AppSpacing.xs),
                 decoration: currentIndex == 0
-                    ? BoxDecoration(color: AppColors.terracottaLight.withOpacity(0.25), shape: BoxShape.circle)
+                    ? BoxDecoration(color: AppColors.terracottaLight.withValues(alpha: 0.25), shape: BoxShape.circle)
                     : null,
                 child: const Icon(Icons.add_photo_alternate, size: 24),
               ),
@@ -94,7 +94,7 @@ class HomeShell extends ConsumerWidget {
               icon: Container(
                 padding: const EdgeInsets.all(AppSpacing.xs),
                 decoration: currentIndex == 1
-                    ? BoxDecoration(color: AppColors.terracottaLight.withOpacity(0.25), shape: BoxShape.circle)
+                    ? BoxDecoration(color: AppColors.terracottaLight.withValues(alpha: 0.25), shape: BoxShape.circle)
                     : null,
                 child: const Icon(Icons.grid_view, size: 24),
               ),
@@ -104,7 +104,7 @@ class HomeShell extends ConsumerWidget {
               icon: Container(
                 padding: const EdgeInsets.all(AppSpacing.xs),
                 decoration: currentIndex == 2
-                    ? BoxDecoration(color: AppColors.terracottaLight.withOpacity(0.25), shape: BoxShape.circle)
+                    ? BoxDecoration(color: AppColors.terracottaLight.withValues(alpha: 0.25), shape: BoxShape.circle)
                     : null,
                 child: const Icon(Icons.notifications_outlined, size: 24),
               ),
@@ -114,7 +114,7 @@ class HomeShell extends ConsumerWidget {
               icon: Container(
                 padding: const EdgeInsets.all(AppSpacing.xs),
                 decoration: currentIndex == 3
-                    ? BoxDecoration(color: AppColors.terracottaLight.withOpacity(0.25), shape: BoxShape.circle)
+                    ? BoxDecoration(color: AppColors.terracottaLight.withValues(alpha: 0.25), shape: BoxShape.circle)
                     : null,
                 child: const Icon(Icons.person, size: 24),
               ),

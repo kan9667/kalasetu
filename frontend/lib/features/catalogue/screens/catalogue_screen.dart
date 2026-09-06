@@ -251,6 +251,16 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                               ref.read(homeTabIndexProvider.notifier).state = 0;
                             },
                           ),
+                          const SizedBox(height: AppSpacing.sm),
+                          AppButton(
+                            label: 'how_to_list_btn'.tr(),
+                            icon: Icons.play_circle_outline_rounded,
+                            type: AppButtonType.outlined,
+                            width: 220,
+                            onPressed: () {
+                              context.pushNamed(AppRouteConstants.listingTutorial);
+                            },
+                          ),
                         ],
                       ),
                     ),

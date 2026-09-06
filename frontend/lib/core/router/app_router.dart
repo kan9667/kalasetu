@@ -15,6 +15,7 @@ import '../../features/add_product/screens/add_product_flow_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/language_settings_screen.dart';
 import '../../features/profile/screens/my_stats_screen.dart';
+import '../../features/tutorial/screens/tutorial_carousel_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../providers/app_providers.dart';
 
@@ -34,7 +35,7 @@ class RouterNotifier extends ChangeNotifier {
     );
     _ref.listen<bool>(
       hasSelectedLanguageProvider,
-      (_, __) => notifyListeners(),
+      (_, _) => notifyListeners(),
     );
   }
 }
@@ -160,6 +161,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/my-stats',
         name: AppRouteConstants.myStats,
         builder: (context, state) => const MyStatsScreen(),
+      ),
+      GoRoute(
+        path: '/listing-tutorial',
+        name: AppRouteConstants.listingTutorial,
+        builder: (context, state) => const TutorialCarouselScreen(),
       ),
     ],
   );
