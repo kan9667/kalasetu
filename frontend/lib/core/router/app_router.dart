@@ -18,6 +18,10 @@ import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/language_settings_screen.dart';
 import '../../features/profile/screens/my_stats_screen.dart';
 import '../../features/chatbot/screens/chatbot_sheet.dart';
+import '../../features/notifications/screens/notifications_screen.dart';
+import '../../features/orders/screens/my_orders_screen.dart';
+import '../../features/orders/screens/order_detail_screen.dart';
+import '../../features/orders/models/order.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../providers/app_providers.dart';
 
@@ -184,6 +188,29 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const Scaffold(
           body: SafeArea(child: ChatbotSheet()),
         ),
+      ),
+      GoRoute(
+        path: '/notifications',
+        name: AppRouteConstants.notifications,
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/my-orders',
+        name: AppRouteConstants.myOrders,
+        builder: (context, state) => const MyOrdersScreen(),
+      ),
+      GoRoute(
+        path: '/orders/:orderId',
+        name: AppRouteConstants.orderDetail,
+        builder: (context, state) {
+          final order = state.extra;
+          if (order is! Order) {
+            return const Scaffold(
+              body: Center(child: Text('Order not found.')),
+            );
+          }
+          return OrderDetailScreen(order: order);
+        },
       ),
     ],
   );

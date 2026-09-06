@@ -23,7 +23,6 @@ class CatalogueScreen extends ConsumerStatefulWidget {
 }
 
 class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
-  bool _isGridView = true;
   String _selectedCategory = 'filter_all';
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -104,6 +103,18 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
         labelKey = 'status_sold';
         icon = Icons.sell;
         break;
+      case ProductStatus.soldOut:
+        bg = AppColors.error.withValues(alpha: 0.15);
+        fg = AppColors.error;
+        labelKey = 'status_sold_out';
+        icon = Icons.remove_shopping_cart_outlined;
+        break;
+      case ProductStatus.listingRemoved:
+        bg = AppColors.mustard.withValues(alpha: 0.25);
+        fg = AppColors.terracottaDark;
+        labelKey = 'status_listing_removed';
+        icon = Icons.visibility_off_outlined;
+        break;
     }
 
     return Container(
@@ -144,21 +155,6 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
 
     return AppScaffold(
       title: 'my_catalogue_title'.tr(),
-      actions: [
-        IconButton(
-          icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
-          tooltip: _isGridView ? 'list_view'.tr() : 'grid_view'.tr(),
-          onPressed: () {
-            setState(() => _isGridView = !_isGridView);
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.refresh),
-          onPressed: () {
-            ref.read(productListProvider.notifier).loadProducts(forceRefresh: true);
-          },
-        ),
-      ],
       body: Column(
         children: [
           Padding(
@@ -238,7 +234,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                   ),
                 ),
               ),
-                data: (products) {
+              data: (products) {
                 final filtered = _filterProducts(products);
                 final hasActiveFilter = _searchQuery.isNotEmpty || _selectedCategory != 'filter_all';
 
@@ -338,8 +334,12 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                   );
                 }
 
-                if (_isGridView) {
-                  return GridView.builder(
+                return RefreshIndicator(
+                  color: AppColors.terracotta,
+                  onRefresh: () => ref
+                      .read(productListProvider.notifier)
+                      .loadProducts(forceRefresh: true),
+                  child: GridView.builder(
                     padding: const EdgeInsets.all(AppSpacing.screenPadding),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
@@ -375,39 +375,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                                 ),
                       );
                     },
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final item = filtered[index];
-                    return _ListProductCard(
-                      product: item,
-                      statusBadge: _buildStatusBadge(item.status),
-                      onTap: () {
-                        context.pushNamed(
-                          AppRouteConstants.productDetail,
-                          pathParameters: {'id': item.id},
-                        );
-                      },
-                      onSocialTap: item.allPhotoPaths.isEmpty
-                          ? null
-                          : () => context.pushNamed(
-                                AppRouteConstants.socialMediaHelper,
-                                extra: SocialMediaArgs(
-                                  listingId: item.id,
-                                  source: 'catalogue',
-                                  allImages: item.allPhotoPaths,
-                                  title: item.title,
-                                  category: item.category,
-                                  description: item.description,
-                                  materials: item.tags,
-                                ),
-                              ),
-                    );
-                  },
+                  ),
                 );
               },
             ),
@@ -442,7 +410,15 @@ class _GridProductCard extends StatelessWidget {
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child: AppImage(imageUrl: product.displayPhotoPath, fit: BoxFit.cover),
+                      child: ColorFiltered(
+                        colorFilter: product.isNonLive
+                            ? const ColorFilter.mode(Colors.grey, BlendMode.saturation)
+                            : const ColorFilter.mode(Colors.transparent, BlendMode.multiply),
+                        child: Opacity(
+                          opacity: product.isNonLive ? 0.72 : 1.0,
+                          child: AppImage(imageUrl: product.displayPhotoPath, fit: BoxFit.cover),
+                        ),
+                      ),
                     ),
                     Positioned(top: 8, left: 8, child: statusBadge),
                   ],
@@ -488,69 +464,3 @@ class _GridProductCard extends StatelessWidget {
   }
 }
 
-class _ListProductCard extends StatelessWidget {
-  final Product product;
-  final Widget statusBadge;
-  final VoidCallback onTap;
-  final VoidCallback? onSocialTap;
-
-  const _ListProductCard({required this.product, required this.statusBadge, required this.onTap, this.onSocialTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadii.card),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadii.md),
-                child: SizedBox(
-                  width: 90,
-                  height: 90,
-                  child: AppImage(imageUrl: product.displayPhotoPath, fit: BoxFit.cover),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    statusBadge,
-                    const SizedBox(height: 4),
-                    Text(
-                      product.title,
-                      style: AppTextStyles.labelLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '₹${product.price.toStringAsFixed(0)}',
-                      style: AppTextStyles.headlineSmall.copyWith(
-                        color: AppColors.terracotta,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (onSocialTap != null)
-                      TextButton.icon(
-                        onPressed: onSocialTap,
-                        icon: const Icon(Icons.share, size: 16),
-                        label: Text('social_media_helper'.tr()),
-                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                      ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.textTertiary),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

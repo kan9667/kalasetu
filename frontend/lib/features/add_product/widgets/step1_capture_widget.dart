@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/widgets/app_image.dart';
+import '../../../core/widgets/cycling_guidance_cue.dart';
 import '../../../core/providers/app_providers.dart';
 
 class Step1CaptureWidget extends ConsumerStatefulWidget {
@@ -15,8 +16,10 @@ class Step1CaptureWidget extends ConsumerStatefulWidget {
 
 class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
   final ImagePicker _picker = ImagePicker();
+  bool _isPickingImage = false;
 
   Future<void> _pickImage(ImageSource source) async {
+    setState(() => _isPickingImage = true);
     try {
       final picked = await _picker.pickImage(
         source: source,
@@ -29,10 +32,13 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
       }
     } catch (e, st) {
       debugPrint('[Step1Capture] Image picker error: $e\n$st');
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
     }
   }
 
   Future<void> _addAdditionalImage() async {
+    setState(() => _isPickingImage = true);
     try {
       final picked = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -45,7 +51,113 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
       }
     } catch (e, st) {
       debugPrint('[Step1Capture] Additional image error: $e\n$st');
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
     }
+  }
+
+  static const List<GuidanceCue> _captureCues = [
+    GuidanceCue(
+      text: 'Show the full item in frame',
+      icon: Icons.crop_free_rounded,
+    ),
+    GuidanceCue(
+      text: 'Capture intricate details & texture up close',
+      icon: Icons.zoom_in_rounded,
+    ),
+    GuidanceCue(
+      text: 'Use clear, natural daylight for real colors',
+      icon: Icons.wb_sunny_outlined,
+    ),
+    GuidanceCue(
+      text: 'Place a coin or hand beside it for size reference',
+      icon: Icons.straighten_rounded,
+    ),
+  ];
+
+  Widget _buildGuidanceCues() {
+    return CyclingGuidanceCue(
+      headerTitle: 'PHOTO TIPS',
+      headerIcon: Icons.tips_and_updates_outlined,
+      cues: _captureCues,
+      isPaused: _isPickingImage,
+      onCueChanged: (cue) {
+        // TODO: hook TTS playback here via onCueChanged
+      },
+    );
+  }
+
+  void _showPhotoSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        decoration: const BoxDecoration(
+          color: Color(0xFFFBF8F2),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD6C7B2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text(
+                'Choose Photo Source',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF3F342B),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF3EDE2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt, color: Color(0xFFC86D51)),
+                ),
+                title: Text('take_photo'.tr(), style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Capture a new photo with camera'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF3EDE2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library, color: Color(0xFF4A3E35)),
+                ),
+                title: Text('upload_gallery'.tr(), style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Select a photo from device gallery'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -80,7 +192,11 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
               color: Color(0xFF7A6E63),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+
+          // Cycling guidance cues with fade transitions
+          _buildGuidanceCues(),
+          const SizedBox(height: 14),
 
           if (!hasImage) ...[
             Container(
@@ -237,7 +353,7 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: () => _pickImage(ImageSource.camera),
+              onPressed: _showPhotoSourceSheet,
               icon: const Icon(Icons.refresh, color: Color(0xFF4A3E35), size: 20),
               label: Text('redo_photo'.tr(), style: const TextStyle(color: Color(0xFF4A3E35), fontSize: 16, fontWeight: FontWeight.bold)),
               style: OutlinedButton.styleFrom(

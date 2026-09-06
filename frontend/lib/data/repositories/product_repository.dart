@@ -91,15 +91,21 @@ class ProductRepository {
     if (isOnline) {
       try {
         final updated = await _apiService.updateProduct(product);
-        await productsBox.put(updated.id, updated);
+        final targetStatus = product.status == ProductStatus.pendingSync
+            ? ProductStatus.live
+            : product.status;
+        final saved = updated.copyWith(status: targetStatus);
+        await productsBox.put(saved.id, saved);
         await pendingBox.delete(product.id);
-        return updated;
+        return saved;
       } catch (e) {
         debugPrint('ProductRepository: Online update failed, saving to pending queue: $e');
       }
     }
 
-    final localProduct = product;
+    final localProduct = product.copyWith(
+      status: product.status == ProductStatus.live ? ProductStatus.pendingSync : product.status,
+    );
     await productsBox.put(localProduct.id, localProduct);
     await pendingBox.put(localProduct.id, 'UPDATE');
     return localProduct;
@@ -149,8 +155,10 @@ class ProductRepository {
               await productsBox.put(id, created.copyWith(status: ProductStatus.live));
             } else {
               final updated = await _apiService.updateProduct(product);
-              final resolvedStatus = product.status == ProductStatus.pendingSync ? ProductStatus.live : product.status;
-              await productsBox.put(id, updated.copyWith(status: resolvedStatus));
+              final targetStatus = product.status == ProductStatus.pendingSync
+                  ? ProductStatus.live
+                  : product.status;
+              await productsBox.put(id, updated.copyWith(status: targetStatus));
             }
             await pendingBox.delete(id);
             syncedCount++;

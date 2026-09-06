@@ -1,18 +1,17 @@
 # Ideas
-my performance analytics <br>
-my orders page <br>
-suggestions for improvement of packaging <br>
-help chatbot <br>
-text to speech on every page <br>
-cues for what to say in voice description (description, price, raw materials) <br>
-onboarding voice first <br>
-translator for labels <br>
-social media helper <br>
-multiple images? <br>
-tutorial walkthrough <br>
-sold out/remove listing/relist option in catalog <br>
 
-
+- [ ] My performance analytics
+- [x] My orders page
+- [x] Suggestions for improvement of packaging
+- [ ] Help chatbot
+- [ ] Text to speech on every page
+- [x] Cues for what to say in voice description (description, price, raw materials)
+- [ ] Onboarding voice first
+- [x] Social media helper
+- [ ] Whatsapp broadcast message generator
+- [ ] Multiple images?
+- [ ] Tutorial walkthrough
+- [x] Sold out/remove listing/relist option in catalog
 
 
 ---
