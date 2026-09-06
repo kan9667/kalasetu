@@ -87,6 +87,7 @@ Thumbs.db
 
 # Flutter & Dart
 pubspec.lock
+**/pubspec.lock
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
