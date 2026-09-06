@@ -453,7 +453,7 @@ class ChatService:
             )
 
         # ── Direct Action 2: Product Status Update (Sold / Live / Draft) ──
-        status_match_en = re.search(r"mark\s+(?:my\s+)?(.+?)\s+as\s+(sold|live|draft)", q)
+        status_match_en = re.search(r"\bmark\s+(?:my\s+)?([^?.,!]+?)\s+as\s+(sold|live|draft)\b", q)
         is_sold_keyword = any(w in q for w in ["bik gaya", "sold mark", "mark sold", "set sold", "mark as sold"])
         if status_match_en or is_sold_keyword or ("sold" in q and any(w in q for w in ["mark", "update", "set", "kar"])):
             target = "product"
@@ -500,11 +500,15 @@ class ChatService:
             )
 
         # ── Direct Action 3: Pre-filtered Catalogue Navigation ────────────
-        filter_match = re.search(r"(?:show|filter|find|search|dikhaye|dikhao)\s+(?:me\s+)?(?:all\s+)?(?:my\s+)?(.+?)(?:\s+items|\s+products|\s+crafts|\s+in catalogue|$)", q)
+        # ReDoS-safe linear regex: avoids nested optional quantifiers on uncontrolled input
+        filter_match = re.search(r"\b(?:show|filter|find|search|dikhaye|dikhao)\s+([^?.,!]+)", q)
         if filter_match and not any(w in q for w in ["how", "kaise", "what", "kya", "add", "jodna", "mark", "sync"]):
             query_term = filter_match.group(1).strip()
+            # Clean trailing descriptors
+            query_term = re.sub(r'\s+(?:items|products|crafts|in catalogue|catalogue)$', '', query_term, flags=re.IGNORECASE).strip()
             # Clean common filler words
-            query_term = re.sub(r'\b(the|all|my|some|please|mere|meri|sab|sabhi)\b', '', query_term, flags=re.IGNORECASE).strip()
+            query_term = re.sub(r'\b(the|all|my|me|some|please|mere|meri|sab|sabhi)\b', '', query_term, flags=re.IGNORECASE).strip()
+            query_term = re.sub(r'\s+', ' ', query_term).strip()
             if query_term and query_term not in ["catalogue", "catalog", "products", "items", "saman", "crafts", "craft"]:
                 if is_hindi:
                     return ChatResponseSchema(
