@@ -9,28 +9,67 @@ build/
 .eggs/
 venv/
 .venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.log
 
-# Environment
+# Environment & Secrets
 .env
+.env.*
+.env*.local
+!.env.example
+*.pem
+*.key
 
-# Pricing pipeline runtime data
+# Machine Learning & Pipelines
 ML/pricing/data/
 ML/pricing/chroma_db/
+ML/voice_pipeline/data/
+ML/image_pipeline/output/*
+!ML/image_pipeline/output/.gitkeep
+**/chroma_db/
+
+# Databases & SQLite
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+
+# Backend runtime files & uploads
+backend/uploads/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE & AI Assistants
 .vscode/
 .idea/
 *.swp
 *.swo
+.claude/
+.cursor/
+.gemini/
 
-# Backend runtime files & uploads
-backend/uploads/
-*.db
-*.sqlite3
+# Flutter & Dart
+pubspec.lock
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+frontend/build/
+frontend/.pub-cache/
 
-# Voice pipeline runtime data
-ML/voice_pipeline/data/
+# Mobile keystores & signing
+key.properties
+**/*.keystore
+**/*.jks
