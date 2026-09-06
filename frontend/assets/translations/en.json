@@ -223,5 +223,19 @@
   "notif_new_order": "New order received! Check My Orders to process it.",
   "no_notifications_title": "All caught up!",
   "status_sold_out": "Sold Out",
-  "status_listing_removed": "Listing Removed"
+  "status_listing_removed": "Listing Removed",
+  "ngo_assist_title": "Need Help Signing Up?",
+  "ngo_assist_description": "Ask your cluster coordinator or NGO representative to scan this code or enter their ID to help you register.",
+  "ngo_assist_explanation": "They will help you fill out your details and confirm your phone number.",
+  "qr_placeholder_label": "Coordinator scans this code",
+  "or_enter_coordinator_id": "Or enter coordinator ID",
+  "coordinator_id_label": "Coordinator ID",
+  "coordinator_id_hint": "e.g. NGO-KA-4291",
+  "coordinator_id_required": "Please enter coordinator ID",
+  "start_assisted_signin_btn": "Start Assisted Sign-In",
+  "copy": "Copy",
+  "ask_for_help_cue": "Can't fill this yourself? Ask your cluster coordinator or local NGO to help you — tap here.",
+  "ask_for_help_title": "Need Help Registering?",
+  "ask_for_help_action": "Get Help",
+  "fair_wage_trust_badge": "+163% Fair Wage Premium Guaranteed for Artisans"
 }

@@ -29,6 +29,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   String _selectedCraft = 'Terracotta Pottery';
   String _selectedState = 'Delhi';
+  bool _isHelpCueDismissed = false;
 
   static const List<String> _craftCategories = [
     'Terracotta Pottery',
@@ -95,7 +96,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         pehchanId: _pehchanController.text.trim().isNotEmpty
             ? _pehchanController.text.trim()
             : null,
-        preferredLanguage: context.locale.languageCode,
+        preferredLanguage: EasyLocalization.of(context)?.locale.languageCode ?? 'en',
       );
 
       ref.read(authStateProvider.notifier).registerWithDetails(profile);
@@ -111,6 +112,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final _ = EasyLocalization.of(context)?.locale;
     final screenPadding = AppSpacing.getScreenPadding(context);
     final width = MediaQuery.of(context).size.width;
     final isCompact = width < 480;
@@ -163,7 +165,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         child: const Icon(
                           Icons.person_add_alt_1,
-                          color: Colors.white,
+                          color: AppColors.textOnPrimary,
                           size: 24,
                         ),
                       ),
@@ -192,6 +194,111 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ],
                   ),
                 ),
+
+                if (!_isHelpCueDismissed) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm + 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.goldLight,
+                      borderRadius: BorderRadius.circular(AppRadii.card),
+                      border: Border.all(
+                        color: AppColors.gold.withValues(alpha: 0.4),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(top: 2),
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: AppColors.cardSurface,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.support_agent,
+                            color: AppColors.terracottaDark,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => context.pushNamed(AppRouteConstants.ngoAuth),
+                            borderRadius: BorderRadius.circular(AppRadii.sm),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'ask_for_help_title'.tr(),
+                                    style: AppTextStyles.labelMedium.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.ink,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'ask_for_help_cue'.tr(),
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.inkSoft,
+                                      fontSize: 12,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        // TTS affordance button
+                        IconButton(
+                          icon: const Icon(
+                            Icons.volume_up_outlined,
+                            size: 20,
+                            color: AppColors.terracotta,
+                          ),
+                          tooltip: 'Tap to hear this',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          onPressed: () {
+                            // TODO: hook TTS playback here for low-literacy artisans
+                            // Audio asset / Cloud TTS key: 'register_help_cue_audio'
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('ask_for_help_cue'.tr()),
+                                duration: const Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                        ),
+                        // Dismiss button
+                        IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                            size: 18,
+                            color: AppColors.inkSoft,
+                          ),
+                          tooltip: 'Dismiss',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                          onPressed: () {
+                            setState(() => _isHelpCueDismissed = true);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: AppSpacing.lg),
 

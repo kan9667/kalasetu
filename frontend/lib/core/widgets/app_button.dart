@@ -5,6 +5,13 @@ import '../theme/app_spacing.dart';
 
 enum AppButtonType { primary, secondary, outlined, text }
 
+/// Kalasetu v3 button component.
+///
+/// Role mapping (must match design spec):
+///   primary   → terracotta  — the single dominant action per screen
+///   secondary → gold        — alternate/registration-path actions
+///   outlined  → card bg + line border — de-emphasised secondary action
+///   text      → ghost/link style — lowest hierarchy
 class AppButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -92,6 +99,7 @@ class AppButton extends StatelessWidget {
 
     switch (type) {
       case AppButtonType.primary:
+        // Terracotta — drives every primary action
         final Color bgColor = customColor ?? AppColors.terracotta;
         final Color fgColor = AppColors.textOnPrimary;
         button = ElevatedButton(
@@ -100,17 +108,23 @@ class AppButton extends StatelessWidget {
             backgroundColor: bgColor,
             foregroundColor: fgColor,
             elevation: 0,
+            shadowColor: Colors.transparent,
             padding: padding,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadii.md),
+              borderRadius: BorderRadius.circular(AppRadii.button),
             ),
+          ).copyWith(
+            // Inset bottom shadow for tactile depth (matches mockup .btn-primary)
+            overlayColor: WidgetStateProperty.all(
+              AppColors.terracottaDark.withValues(alpha: 0.18)),
           ),
           child: buildButtonChild(textColor: fgColor, iconColor: fgColor),
         );
         break;
 
       case AppButtonType.secondary:
-        final Color bgColor = customColor ?? AppColors.charcoal;
+        // Gold — drives every secondary / alternate-path action (e.g. "Register")
+        final Color bgColor = customColor ?? AppColors.gold;
         final Color fgColor = AppColors.textOnPrimary;
         button = ElevatedButton(
           onPressed: onPressed,
@@ -118,25 +132,31 @@ class AppButton extends StatelessWidget {
             backgroundColor: bgColor,
             foregroundColor: fgColor,
             elevation: 0,
+            shadowColor: Colors.transparent,
             padding: padding,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadii.md),
+              borderRadius: BorderRadius.circular(AppRadii.button),
             ),
+          ).copyWith(
+            overlayColor: WidgetStateProperty.all(
+              AppColors.goldDark.withValues(alpha: 0.18)),
           ),
           child: buildButtonChild(textColor: fgColor, iconColor: fgColor),
         );
         break;
 
       case AppButtonType.outlined:
-        final Color fgColor = customColor ?? AppColors.charcoal;
+        // Card bg + line border + ink text — de-emphasised action
+        final Color fgColor = customColor ?? AppColors.ink;
         button = OutlinedButton(
           onPressed: onPressed,
           style: OutlinedButton.styleFrom(
+            backgroundColor: AppColors.cardSurface,
             foregroundColor: fgColor,
-            side: BorderSide(color: customColor ?? AppColors.oak, width: 1.5),
+            side: BorderSide(color: AppColors.line, width: 1.5),
             padding: padding,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadii.md),
+              borderRadius: BorderRadius.circular(AppRadii.button),
             ),
           ),
           child: buildButtonChild(textColor: fgColor, iconColor: fgColor),
@@ -144,14 +164,15 @@ class AppButton extends StatelessWidget {
         break;
 
       case AppButtonType.text:
-        final Color fgColor = customColor ?? AppColors.terracotta;
+        // Ghost / link style
+        final Color fgColor = customColor ?? AppColors.inkSoft;
         button = TextButton(
           onPressed: onPressed,
           style: TextButton.styleFrom(
             foregroundColor: fgColor,
             padding: padding,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadii.md),
+              borderRadius: BorderRadius.circular(AppRadii.button),
             ),
           ),
           child: buildButtonChild(textColor: fgColor, iconColor: fgColor),

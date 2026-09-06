@@ -176,7 +176,7 @@ class _CyclingGuidanceCueState extends State<CyclingGuidanceCue> {
         ),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x0A2A2420),
+            color: AppColors.line,
             blurRadius: 6,
             offset: Offset(0, 2),
           ),

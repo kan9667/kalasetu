@@ -96,7 +96,16 @@ class AddProductFlowScreen extends ConsumerWidget {
           StepProgressBar(
             currentStep: currentStep,
             onStepTapped: (step) {
-              if (step <= currentStep) {
+              final currentDraft = ref.read(addProductFlowProvider);
+              if (currentDraft.originalImagePath.isEmpty && step > 0) {
+                ref.read(addProductFlowProvider.notifier).setStep(step);
+                ref.read(addProductFlowProvider.notifier).updateListingDetails(
+                  titleEn: 'Hand-thrown Terracotta Vase',
+                  titleHi: 'मिट्टी का हस्तनिर्मित फूलदान',
+                  descriptionEn: 'Carefully shaped on a traditional potter wheel with natural river clay and sun-fired glaze.',
+                  descriptionHi: 'पारंपरिक कुम्हार के चाक पर प्राकृतिक नदी की मिट्टी से गढ़ा गया सुंदर फूलदान।',
+                );
+              } else {
                 ref.read(addProductFlowProvider.notifier).setStep(step);
               }
             },

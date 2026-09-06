@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/motifs/dotted_border_box.dart';
 import '../../../core/providers/app_providers.dart';
 
 class Step4PricingWidget extends ConsumerStatefulWidget {
@@ -24,72 +28,81 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
 
     return SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              const Icon(Icons.monetization_on_outlined, color: Color(0xFFC86D51), size: 24),
+              const Icon(Icons.sell_outlined, color: AppColors.terracotta, size: 24),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('pricing_title'.tr(), style: AppTextStyles.headlineMedium),
+                child: Text('pricing_title'.tr(), style: AppTextStyles.headlineLarge),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
             'pricing_subtitle'.tr(),
-            style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF7A6E63)),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
           ),
           const SizedBox(height: 20),
 
-          // Simple, clean price container without gradient
+          // Price hero container with card styling
           Container(
             padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF5EFE6),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFDFD5C6), width: 1.5),
+              color: AppColors.cardSurface,
+              borderRadius: BorderRadius.circular(AppRadii.card),
+              border: Border.all(color: AppColors.line),
+              boxShadow: AppElevation.cardShadow,
             ),
             child: Column(
               children: [
                 Text(
-                  'price_slider_label'.tr(),
-                  style: const TextStyle(fontSize: 14, color: Color(0xFF7A6E63), fontWeight: FontWeight.w500),
+                  'price_slider_label'.tr().toUpperCase(),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.inkSoft,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.8,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   '₹${currentPrice.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    fontSize: 40,
+                  style: AppTextStyles.displaySmall.copyWith(
+                    color: AppColors.terracottaDark,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF3F342B),
-                    fontFamily: 'serif',
                   ),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFC86D51)),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${'suggested_price'.tr()}: ₹${draft.suggestedPrice.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFC86D51),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.goldLight,
+                    borderRadius: BorderRadius.circular(AppRadii.button),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.auto_awesome, size: 14, color: AppColors.goldDark),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${'suggested_price'.tr()}: ₹${draft.suggestedPrice.toStringAsFixed(0)}',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.goldDark,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
-          // Muted Gradient Slider: Red -> Green -> Yellow
+          // Muted Gradient Slider: Red -> Green -> Gold
           Stack(
             alignment: Alignment.center,
             children: [
@@ -100,9 +113,9 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                   borderRadius: BorderRadius.circular(4),
                   gradient: const LinearGradient(
                     colors: [
-                      Color(0xFFD47A6A), // Muted red (below fair floor)
-                      Color(0xFF6F9D7C), // Muted green (fair pricing sweet spot)
-                      Color(0xFFE2B866), // Muted yellow/gold (premium margin)
+                      AppColors.terracottaLight, // Below fair floor
+                      AppColors.success,         // Fair pricing sweet spot
+                      AppColors.gold,            // Premium margin
                     ],
                   ),
                 ),
@@ -112,10 +125,10 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                   trackHeight: 0,
                   activeTrackColor: Colors.transparent,
                   inactiveTrackColor: Colors.transparent,
-                  thumbColor: const Color(0xFF3F342B),
+                  thumbColor: AppColors.ink,
                   thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
                   overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
-                  overlayColor: const Color(0xFF3F342B).withValues(alpha: 0.12),
+                  overlayColor: AppColors.ink.withValues(alpha: 0.12),
                 ),
                 child: Slider(
                   value: currentPrice,
@@ -131,52 +144,55 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
           ),
 
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            padding: const EdgeInsets.symmetric(horizontal: 6.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   '${'calculated_floor_price'.tr()}: ₹${draft.floorPrice.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontSize: 12,
+                  style: AppTextStyles.labelSmall.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: currentPrice < draft.floorPrice ? const Color(0xFFB34A38) : const Color(0xFF7A6E63),
+                    color: currentPrice < draft.floorPrice ? AppColors.error : AppColors.inkSoft,
                   ),
                 ),
                 Text(
                   'Max: ₹${maxBound.toStringAsFixed(0)}',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF7A6E63)),
+                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.inkSoft),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 18),
 
-          // Pricing Reasoning
+          // Pricing Reasoning Card
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFFAF7F2),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE8DFD3)),
+              color: AppColors.cardSurface,
+              borderRadius: BorderRadius.circular(AppRadii.card),
+              border: Border.all(color: AppColors.line),
+              boxShadow: AppElevation.cardShadow,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.psychology_outlined, size: 18, color: Color(0xFF5A4D41)),
+                    const Icon(Icons.psychology_outlined, size: 18, color: AppColors.terracotta),
                     const SizedBox(width: 6),
                     Text(
                       'ai_reasoning'.tr(),
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF5A4D41), fontSize: 13),
+                      style: AppTextStyles.headlineSmall.copyWith(color: AppColors.ink),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
                   draft.pricingReasoning,
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF6F6358), height: 1.4),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.ink,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
@@ -186,31 +202,30 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
           // Cost Breakdown Accordion
           InkWell(
             onTap: () => setState(() => _showCostBreakdown = !_showCostBreakdown),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadii.card),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFFFAF7F2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE8DFD3)),
+                color: AppColors.cardSurface,
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                border: Border.all(color: AppColors.line),
+                boxShadow: AppElevation.cardShadow,
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.shield_outlined, size: 20, color: Color(0xFF437A57)),
+                  const Icon(Icons.shield_outlined, size: 20, color: AppColors.success),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'cost_breakdown_toggle'.tr(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF437A57),
-                        fontSize: 13,
+                      style: AppTextStyles.headlineSmall.copyWith(
+                        color: AppColors.success,
                       ),
                     ),
                   ),
                   Icon(
                     _showCostBreakdown ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    color: const Color(0xFF437A57),
+                    color: AppColors.success,
                   ),
                 ],
               ),
@@ -220,10 +235,11 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
           if (_showCostBreakdown) ...[
             const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3EDE2),
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.parchmentDeep,
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                border: Border.all(color: AppColors.line),
               ),
               child: Column(
                 children: [
@@ -231,12 +247,18 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                     label: 'raw_materials_cost'.tr(),
                     value: '₹${draft.rawMaterialCost.toStringAsFixed(0)}',
                   ),
-                  const Divider(height: 16),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: DottedBorderBox.divider(),
+                  ),
                   _CostItem(
                     label: 'labour_hours'.tr(),
                     value: '${draft.laborHours} hrs',
                   ),
-                  const Divider(height: 16),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: DottedBorderBox.divider(),
+                  ),
                   _CostItem(
                     label: 'hourly_rate'.tr(),
                     value: '₹${draft.hourlyRate.toStringAsFixed(0)}/hr',
@@ -247,16 +269,10 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
           ],
 
           const SizedBox(height: 24),
-          ElevatedButton.icon(
+          AppButton(
+            label: 'next'.tr(),
+            icon: Icons.arrow_forward,
             onPressed: () => ref.read(addProductFlowProvider.notifier).nextStep(),
-            icon: const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
-            label: Text('next'.tr(), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFC86D51),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 0,
-            ),
           ),
           const SizedBox(height: 20),
         ],
@@ -275,8 +291,8 @@ class _CostItem extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Color(0xFF6F6358), fontSize: 13)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF3F342B), fontSize: 13)),
+        Text(label, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft)),
+        Text(value, style: AppTextStyles.headlineSmall.copyWith(color: AppColors.ink)),
       ],
     );
   }
