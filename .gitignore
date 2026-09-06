@@ -2,6 +2,7 @@
 *.pyc
 __pycache__/
 *.pyo
+*.pyd
 *.egg-info/
 dist/
 build/
@@ -9,6 +10,8 @@ build/
 .eggs/
 venv/
 .venv/
+env/
+.env/
 .pytest_cache/
 .coverage
 htmlcov/
@@ -16,6 +19,7 @@ htmlcov/
 .ruff_cache/
 .ipynb_checkpoints/
 *.log
+*.pid
 
 # Environment & Secrets
 .env
@@ -33,7 +37,7 @@ ML/image_pipeline/output/*
 !ML/image_pipeline/output/.gitkeep
 **/chroma_db/
 
-# Databases & SQLite
+# Databases & Local Storage
 *.db
 *.db-wal
 *.db-shm
@@ -43,12 +47,30 @@ ML/image_pipeline/output/*
 *.sqlite-wal
 *.sqlite-shm
 *.sqlite-journal
+*.hive
 
 # Backend runtime files & uploads
 backend/uploads/
+uploads/
+**/uploads/
+!**/uploads/.gitkeep
 
-# OS
+# Audio & Voice Recordings (Whisper / KalaMitra temporary audio)
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.aac
+*.flac
+**/chat_voice_recordings/
+
+# OS & Filesystem Metadata
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # IDE & AI Assistants
@@ -59,9 +81,13 @@ Thumbs.db
 .claude/
 .cursor/
 .gemini/
+*.iml
+*.ipr
+*.iws
 
 # Flutter & Dart
 pubspec.lock
+**/pubspec.lock
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
@@ -73,3 +99,5 @@ frontend/.pub-cache/
 key.properties
 **/*.keystore
 **/*.jks
+local.properties
+**/local.properties

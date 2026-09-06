@@ -43,6 +43,7 @@ except ImportError:
     except ImportError:
         run_ml_enhancer = None
 
+from .groq_client import GroqClient
 from ..config import get_settings
 from ..models.schemas import (
     AudioTranscribeResponse,
@@ -64,6 +65,7 @@ class CatalogService:
 
     def __init__(self):
         self.settings = get_settings()
+        self.groq_client = GroqClient()
         self.client = genai.Client(api_key=self.settings.gemini_api_key) if self.settings.gemini_api_key else None
         self.voice_processor = ArtisanVoiceProcessor()
 
@@ -153,7 +155,7 @@ class CatalogService:
     async def transcribe_audio(
         self,
         audio_file_path: str,
-        language_code: str = "hi",
+        language_code: str = "auto",
         category_hint: Optional[str] = None,
         note_id: Optional[str] = None,
     ) -> AudioTranscribeResponse:
@@ -209,9 +211,27 @@ class CatalogService:
         category, and search tags from an artisan's voice transcript.
         Enriches the prompt with domain craft glossary terms.
         """
+        # Detect category dynamically from transcript to prevent false terracotta biasing
+        lower_transcript = request.transcript.lower()
+        effective_category = request.category_hint
+        if any(w in lower_transcript for w in ["cloth", "silk", "cotton", "saree", "dupatta", "fabric", "weave", "kapda", "chanderi", "handloom"]):
+            effective_category = "Textiles"
+        elif any(w in lower_transcript for w in ["wood", "wooden", "lakdi", "carved", "teak", "sheesham", "rosewood"]):
+            effective_category = "Woodwork"
+        elif any(w in lower_transcript for w in ["brass", "metal", "copper", "peetal", "bronze", "dhokra", "iron"]):
+            effective_category = "Brass"
+        elif any(w in lower_transcript for w in ["paint", "painting", "chitra", "madhubani", "warli", "canvas", "pattachitra"]):
+            effective_category = "Paintings"
+        elif any(w in lower_transcript for w in ["jewelry", "jewellery", "necklace", "earring", "bangle", "ring", "silver", "gehna"]):
+            effective_category = "Jewelry"
+        elif any(w in lower_transcript for w in ["bamboo", "cane", "basket", "tokri", "jute"]):
+            effective_category = "Bamboo Craft"
+        elif any(w in lower_transcript for w in ["clay", "matti", "mitti", "pot", "pottery", "terracotta", "kulhad", "surahi", "diya"]):
+            effective_category = "Pottery"
+
         # Inject craft glossary hints for accurate terminology
         glossary_prompt = build_prompt_hint(
-            category=request.category_hint,
+            category=effective_category,
             limit=30,
             language_code=request.language_code,
         )
@@ -226,80 +246,104 @@ Rules:
 1. Generate title_en (Engaging English e-commerce title) and title_hi (Hindi title in Devanagari script).
 2. Generate description_en (capturing craft heritage, materials, technique, and artisan value) and description_hi.
 3. Identify the accurate craft category (e.g., Pottery, Textiles, Woodwork, Jewelry, Paintings, Bamboo Craft, Brass, Leather, Stone Craft).
-4. Generate 5-8 relevant SEO tags in English (lowercase, hyphenated).
-5. Output ONLY valid JSON matching the schema."""
+4. CRITICAL ANTI-BIAS RULE: NEVER use or add "Terracotta", "Clay", or "Pottery" unless the transcript explicitly describes clay, terracotta, or pottery! Accurately identify the true materials (wood, silk, brass, etc.) mentioned in the transcript.
+5. Generate 5-8 relevant SEO tags in English (lowercase, hyphenated).
+6. Output ONLY valid JSON matching the schema."""
 
         user_prompt = f"""Raw Artisan Voice Transcript:
 "{request.transcript}"
 
-Category Hint (if provided): {request.category_hint or 'None'}
+Category Hint (if provided): {effective_category or 'Auto-detect from transcript'}
 
 Please generate the structured bilingual catalog listing."""
 
-        if not self.client:
-            # Fallback if Gemini key is not configured
-            return ListingGenerateResponse(
-                title_en="Handcrafted Terracotta Ceramic Floral Vase with Folk Etchings",
-                title_hi="लोक नक्काशीदार हस्तनिर्मित मिट्टी का सजावटी फूलदान",
-                description_en=request.transcript or "Authentic handcrafted artisanal product made with traditional techniques.",
-                description_hi="पारंपरिक तकनीक से बना हस्तनिर्मित उत्कृष्ट उत्पाद।",
-                category=request.category_hint or "Pottery",
-                tags=["handcrafted", "artisan", "traditional", "heritage", "sustainable"],
-            )
-
-        try:
-            response = await run_in_threadpool(
-                self.client.models.generate_content,
-                model=self.settings.llm_model,
-                contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=0.2,
-                    response_mime_type="application/json",
-                    response_schema={
-                        "type": "object",
-                        "properties": {
-                            "title_en": {"type": "string"},
-                            "title_hi": {"type": "string"},
-                            "description_en": {"type": "string"},
-                            "description_hi": {"type": "string"},
-                            "category": {"type": "string"},
-                            "tags": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                        },
-                        "required": [
-                            "title_en",
-                            "title_hi",
-                            "description_en",
-                            "description_hi",
-                            "category",
-                            "tags",
-                        ],
+        # ── 1. Try Groq Cloud if configured (primary or fallback) ──────────
+        if self.groq_client.is_available() and self.settings.llm_provider == "groq":
+            try:
+                groq_messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            system_prompt
+                            + "\n\nCRITICAL: Respond ONLY with a valid JSON object matching the keys: "
+                            "title_en, title_hi, description_en, description_hi, category, tags. "
+                            "No markdown fences, no extra text."
+                        ),
                     },
-                ),
-            )
+                    {"role": "user", "content": user_prompt},
+                ]
+                data = await self.groq_client.chat_json(groq_messages)
+                return ListingGenerateResponse(
+                    title_en=data.get("title_en", "Handcrafted Artisan Product"),
+                    title_hi=data.get("title_hi", "हस्तनिर्मित उत्पाद"),
+                    description_en=data.get("description_en", request.transcript),
+                    description_hi=data.get("description_hi", ""),
+                    category=data.get("category", request.category_hint or "General"),
+                    tags=data.get("tags", ["handmade", "handicraft", "artisan"]),
+                )
+            except Exception as e:
+                logger.warning("[CatalogService] Groq listing generation failed, trying fallback: %s", e)
 
-            data = json.loads(response.text)
-            return ListingGenerateResponse(
-                title_en=data.get("title_en", "Handcrafted Artisan Product"),
-                title_hi=data.get("title_hi", "हस्तनिर्मित उत्पाद"),
-                description_en=data.get("description_en", request.transcript),
-                description_hi=data.get("description_hi", ""),
-                category=data.get("category", request.category_hint or "General"),
-                tags=data.get("tags", ["handmade", "handicraft", "artisan"]),
-            )
-        except Exception as e:
-            logger.error("Listing generation failed: %s", e)
-            return ListingGenerateResponse(
-                title_en="Handcrafted Terracotta Ceramic Floral Vase with Folk Etchings",
-                title_hi="लोक नक्काशीदार हस्तनिर्मित मिट्टी का सजावटी फूलदान",
-                description_en=request.transcript or "Authentic handcrafted artisanal creation with traditional craft value.",
-                description_hi="पारंपरिक कला व कारीगरी से बना प्रामाणिक हस्तशिल्प उत्पाद।",
-                category=request.category_hint or "Pottery",
-                tags=["terracotta", "pottery", "folk-art", "handcrafted", "eco-friendly"],
-            )
+        # ── 2. Try Google Gemini if available ───────────────────────────────
+        if self.client:
+            try:
+                response = await run_in_threadpool(
+                    self.client.models.generate_content,
+                    model=self.settings.llm_model,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=0.2,
+                        response_mime_type="application/json",
+                        response_schema={
+                            "type": "object",
+                            "properties": {
+                                "title_en": {"type": "string"},
+                                "title_hi": {"type": "string"},
+                                "description_en": {"type": "string"},
+                                "description_hi": {"type": "string"},
+                                "category": {"type": "string"},
+                                "tags": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
+                            "required": [
+                                "title_en",
+                                "title_hi",
+                                "description_en",
+                                "description_hi",
+                                "category",
+                                "tags",
+                            ],
+                        },
+                    ),
+                )
+
+                data = json.loads(response.text)
+                return ListingGenerateResponse(
+                    title_en=data.get("title_en", "Handcrafted Artisan Product"),
+                    title_hi=data.get("title_hi", "हस्तनिर्मित उत्पाद"),
+                    description_en=data.get("description_en", request.transcript),
+                    description_hi=data.get("description_hi", ""),
+                    category=data.get("category", request.category_hint or "General"),
+                    tags=data.get("tags", ["handmade", "handicraft", "artisan"]),
+                )
+            except Exception as e:
+                logger.error("[CatalogService] Gemini listing generation failed: %s", e)
+
+        # ── 3. Offline / Mock Fallback ──────────────────────────────────────
+        clean_text = (request.transcript or "").strip()
+        detected_cat = effective_category or request.category_hint or "Handicrafts"
+        title_snippet = (clean_text[:50] + "...") if len(clean_text) > 50 else clean_text
+        return ListingGenerateResponse(
+            title_en=f"Handcrafted {detected_cat} Item: {title_snippet}" if title_snippet else f"Handcrafted {detected_cat} Artisan Product",
+            title_hi="प्रामाणिक हस्तशिल्प उत्पाद",
+            description_en=clean_text or "Authentic handcrafted artisanal creation with traditional craft value.",
+            description_hi="पारंपरिक कला व कारीगरी से बना प्रामाणिक हस्तशिल्प उत्पाद।",
+            category=detected_cat,
+            tags=["handcrafted", "artisan", detected_cat.lower().replace(" ", "-"), "made-in-india"],
+        )
 
     # ── Voice Cost Cue Extractor ────────────────────────────────────────────
 
@@ -368,7 +412,7 @@ Return ONLY JSON matching the schema."""
     async def process_voice_to_product(
         self,
         audio_file_path: str,
-        language_code: str = "hi",
+        language_code: str = "auto",
         category_hint: Optional[str] = None,
         image_url: Optional[str] = None,
         audio_url: Optional[str] = None,
@@ -392,9 +436,10 @@ Return ONLY JSON matching the schema."""
         transcript = transcribe_res.transcript
 
         # Step 2: Generate Bilingual Listing (Description, Tags, Title, Category)
+        detected_lang = transcribe_res.language_code or language_code
         listing_req = ListingGenerateRequest(
             transcript=transcript,
-            language_code=language_code,
+            language_code=detected_lang,
             category_hint=category_hint,
             image_url=image_url,
         )

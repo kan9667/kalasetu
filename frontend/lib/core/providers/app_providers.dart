@@ -305,7 +305,7 @@ class AddProductDraft {
     this.titleHi = '',
     this.descriptionEn = '',
     this.descriptionHi = '',
-    this.category = 'Pottery',
+    this.category = 'Handicrafts',
     this.tags = const ['handcrafted', 'artisan', 'made-in-india'],
     this.rawMaterialCost = 150.0,
     this.laborHours = 3.0,
@@ -316,9 +316,9 @@ class AddProductDraft {
     this.maxPrice = 1100.0,
     this.finalPrice = 750.0,
     this.pricingReasoning =
-        'Evaluated based on pure river clay sourcing, wheel sculpting time, and fair wage floor.',
+        'Evaluated based on authentic raw material sourcing, artisan labor hours, and fair craft wage floor.',
     this.pricingReasoningHi =
-        'प्राकृतिक नदी की मिट्टी, चाक पर गढ़ने का समय और उचित पारिश्रमिक के आधार पर विश्लेषित।',
+        'प्रामाणिक कच्ची सामग्री, कारीगरी के समय और उचित पारिश्रमिक के आधार पर विश्लेषित।',
     this.isAiProcessing = false,
     this.isPricingProcessing = false,
     this.isRegenerating = false,
@@ -1133,7 +1133,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           .generateListingFromTranscript(
             transcript: state.manualDescription,
             languageCode: languageCode,
-            categoryHint: state.category,
+            categoryHint: (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null,
           )
           .timeout(
             const Duration(seconds: 25),
@@ -1264,7 +1264,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     return '';
   }
 
-  Future<void> transcribeVoiceDirectly(File audioFile, {String languageCode = 'hi'}) async {
+  Future<void> transcribeVoiceDirectly(File audioFile, {String languageCode = 'auto'}) async {
     if (kMockAiBackend) {
       await Future.delayed(const Duration(milliseconds: 700));
       const fakeTranscript = 'Mock transcription (backend bypassed for testing)';
@@ -1323,7 +1323,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           .generateListingFromTranscript(
             transcript: transcript,
             languageCode: languageCode,
-            categoryHint: state.category,
+            categoryHint: (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null,
           )
           .timeout(
             const Duration(seconds: 25),
@@ -1456,7 +1456,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       }
 
       if (transcript.isEmpty) {
-        transcript = state.category.isNotEmpty
+        transcript = (state.category.isNotEmpty && state.category != 'Handicrafts')
             ? 'Handcrafted ${state.category} artisan product made with traditional techniques'
             : 'Handcrafted traditional artisan product';
       }
@@ -1466,7 +1466,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           .generateListingFromTranscript(
             transcript: transcript,
             languageCode: languageCode,
-            categoryHint: state.category.isNotEmpty ? state.category : null,
+            categoryHint: (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null,
           )
           .timeout(
             const Duration(seconds: 25),

@@ -282,3 +282,47 @@ class SocialDraftResponse(BaseModel):
     draft_id: str = Field(description="UUID of the persisted social_drafts row")
     caption: str
     hashtags: List[str]
+
+
+# ── KalaMitra Chatbot & Navigation Agent Schemas ─────────────────────────────
+
+
+class ChatMessageSchema(BaseModel):
+    """Single message in a conversational thread."""
+    role: str = Field(..., description="'user' or 'assistant'")
+    content: str = Field(..., description="Message text")
+
+
+class ChatActionSchema(BaseModel):
+    """Structured in-app action emitted by the navigation & action agent."""
+    type: str = Field(default="navigate", description="Action type: 'navigate' | 'update_product_status' | 'filter_catalogue' | 'sync_pending'")
+    destination: str = Field(default="catalogue", description="Target screen identifier (e.g. 'add_product', 'catalogue', 'my_stats', 'sync')")
+    route: Optional[str] = Field(default=None, description="GoRouter route path (e.g. '/add-product', '/my-stats')")
+    tab_index: Optional[int] = Field(default=None, description="BottomNavigationBar tab index in HomeShell (0=add, 1=catalogue, 2=notifications, 3=profile)")
+    label: str = Field(..., description="Action button title (e.g. 'Go to Add Product' / 'उत्पाद जोड़ें पर जाएं')")
+    params: Optional[dict] = Field(default=None, description="Optional route, filter, or target product parameters")
+
+
+class ChatRequestSchema(BaseModel):
+    """User prompt to the KalaMitra assistant."""
+    message: str = Field(..., max_length=500, description="User query / utterance (capped at 500 chars to prevent prompt stuffing)")
+    history: List[ChatMessageSchema] = Field(default_factory=list, description="Recent conversation turns")
+    language_code: Optional[str] = Field(default="en", description="Preferred response language ('en', 'hi', etc.)")
+    current_screen: Optional[str] = Field(default=None, description="Identifier of the screen the user is currently on")
+    artisan_craft: Optional[str] = Field(default=None, description="Registered craft type from artisan profile (e.g. 'Terracotta Pottery', 'Chanderi Handloom')")
+
+
+class ChatResponseSchema(BaseModel):
+    """KalaMitra assistant response with optional navigation action."""
+    reply: str = Field(..., description="Empathetic, clear answer to the user's query")
+    action: Optional[ChatActionSchema] = Field(default=None, description="Navigation action if navigation intent was detected")
+    suggested_queries: List[str] = Field(default_factory=list, description="Follow-up quick question chips")
+
+
+class VoiceChatResponseSchema(BaseModel):
+    """KalaMitra voice chat response containing Whisper transcription and assistant reply."""
+    user_transcript: str = Field(..., description="Artisan spoken utterance transcribed by Whisper STT")
+    reply: str = Field(..., description="Empathetic, clear answer to the user's query")
+    action: Optional[ChatActionSchema] = Field(default=None, description="Navigation action if navigation intent was detected")
+    suggested_queries: List[str] = Field(default_factory=list, description="Follow-up quick question chips")
+

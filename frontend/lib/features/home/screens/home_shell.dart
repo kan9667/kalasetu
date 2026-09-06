@@ -8,6 +8,7 @@ import '../../catalogue/screens/catalogue_screen.dart';
 import '../../add_product/screens/add_product_flow_screen.dart';
 import '../../orders/screens/my_orders_screen.dart';
 import '../../profile/screens/profile_screen.dart';
+import '../../chatbot/widgets/kalamitra_fab.dart';
 
 final homeTabIndexProvider = StateProvider<int>((ref) => 1); // Default: Catalogue
 
@@ -72,6 +73,7 @@ class HomeShell extends ConsumerWidget {
           children: screens,
         ),
       ),
+      floatingActionButton: const KalaMitraFab(),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: AppColors.cardSurface,

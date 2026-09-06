@@ -201,40 +201,69 @@ class _NgoAuthScreenState extends ConsumerState<NgoAuthScreen> {
 
             Form(
               key: _formKey,
-              child: TextFormField(
-                controller: _coordinatorIdController,
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
-                decoration: InputDecoration(
-                  labelText: 'coordinator_id_label'.tr(),
-                  hintText: 'coordinator_id_hint'.tr(),
-                  labelStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
-                  hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkFaint),
-                  prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.terracotta),
-                  filled: true,
-                  fillColor: AppColors.cardSurface,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextFormField(
+                    controller: _coordinatorIdController,
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
+                    decoration: InputDecoration(
+                      labelText: 'coordinator_id_label'.tr(),
+                      hintText: 'coordinator_id_hint'.tr(),
+                      labelStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
+                      hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkFaint),
+                      prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.terracotta),
+                      filled: true,
+                      fillColor: AppColors.cardSurface,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.button),
+                        borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.button),
+                        borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.button),
+                        borderSide: const BorderSide(color: AppColors.terracotta, width: 2),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'coordinator_id_required'.tr();
+                      }
+                      return null;
+                    },
                   ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadii.button),
-                    borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+                  const SizedBox(height: AppSpacing.xs),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.info_outline,
+                          size: 14,
+                          color: AppColors.inkSoft,
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            'ngo_assist_explained'.tr(),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.inkSoft,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadii.button),
-                    borderSide: const BorderSide(color: AppColors.line, width: 1.5),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadii.button),
-                    borderSide: const BorderSide(color: AppColors.terracotta, width: 2),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'coordinator_id_required'.tr();
-                  }
-                  return null;
-                },
+                ],
               ),
             ),
 

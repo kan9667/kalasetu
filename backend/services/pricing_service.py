@@ -115,24 +115,25 @@ class PricingService:
         ]
 
         if not comparables:
+            craft_cat = request.category or "Handicrafts"
             comparables = [
                 ComparableProductSchema(
                     id="seed_comp_1",
-                    title="Handcrafted Terracotta Earthen Flower Vase (10 inch)",
+                    title=f"Handcrafted Traditional {craft_cat} Product",
                     selling_price=799.0,
-                    category="Pottery",
+                    category=craft_cat,
                     source_platform="CraftsVilla / ONDC",
                     similarity_score=0.88,
-                    product_url="https://ondc.org/handicrafts/terracotta-vase",
+                    product_url="https://ondc.org/handicrafts/artisan-craft",
                 ),
                 ComparableProductSchema(
                     id="seed_comp_2",
-                    title="Traditional Red Clay Hand-molded Vase",
+                    title=f"Authentic Handmade {craft_cat} Decorative Item",
                     selling_price=650.0,
-                    category="Pottery",
+                    category=craft_cat,
                     source_platform="Amazon Karigar",
                     similarity_score=0.82,
-                    product_url="https://amazon.in/karigar/clay-vase",
+                    product_url="https://amazon.in/karigar/handmade-craft",
                 ),
             ]
 

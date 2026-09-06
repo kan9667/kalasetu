@@ -1,17 +1,20 @@
 # Ideas
 
-- [ ] My performance analytics
+- [x] My performance analytics
 - [x] My orders page
 - [x] Suggestions for improvement of packaging
-- [ ] Help chatbot
+- [x] Help chatbot
 - [ ] Text to speech on every page
 - [x] Cues for what to say in voice description (description, price, raw materials)
-- [ ] Onboarding voice first
+- [x] Onboarding assist
 - [x] Social media helper
 - [ ] Whatsapp broadcast message generator
 - [ ] Multiple images?
 - [ ] Tutorial walkthrough
 - [x] Sold out/remove listing/relist option in catalog
+- [ ] improve social media helper
+- [ ] fix error- last transcription is shown
+
 
 
 ---

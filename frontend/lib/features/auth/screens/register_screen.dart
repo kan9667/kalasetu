@@ -159,7 +159,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(AppSpacing.sm),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: AppColors.terracotta,
                           shape: BoxShape.circle,
                         ),
@@ -236,17 +236,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'ask_for_help_title'.tr(),
-                                    style: AppTextStyles.labelMedium.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.ink,
-                                      fontSize: 13,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'registration_help_cue_title'.tr(),
+                                          style: AppTextStyles.labelMedium.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.ink,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.arrow_forward_ios,
+                                        size: 12,
+                                        color: AppColors.inkSoft,
+                                      ),
+                                    ],
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'ask_for_help_cue'.tr(),
+                                    'registration_help_cue_body'.tr(),
                                     style: AppTextStyles.bodySmall.copyWith(
                                       color: AppColors.inkSoft,
                                       fontSize: 12,
@@ -270,11 +281,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                           onPressed: () {
-                            // TODO: hook TTS playback here for low-literacy artisans
-                            // Audio asset / Cloud TTS key: 'register_help_cue_audio'
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('ask_for_help_cue'.tr()),
+                                content: Text('registration_help_cue_body'.tr()),
                                 duration: const Duration(seconds: 2),
                                 behavior: SnackBarBehavior.floating,
                               ),
