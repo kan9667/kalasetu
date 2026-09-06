@@ -1,12 +1,12 @@
 # Ideas
 
-- [ ] My performance analytics
+- [x] My performance analytics
 - [x] My orders page
 - [x] Suggestions for improvement of packaging
 - [ ] Help chatbot
 - [ ] Text to speech on every page
 - [x] Cues for what to say in voice description (description, price, raw materials)
-- [ ] Onboarding voice first
+- [x] Onboarding assist
 - [x] Social media helper
 - [ ] Whatsapp broadcast message generator
 - [ ] Multiple images?
