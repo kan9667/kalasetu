@@ -118,19 +118,41 @@ class _NgoAuthScreenState extends ConsumerState<NgoAuthScreen> {
 
             Form(
               key: _formKey,
-              child: TextFormField(
-                controller: _coordinatorIdController,
-                decoration: InputDecoration(
-                  labelText: 'coordinator_id_label'.tr(),
-                  hintText: 'coordinator_id_hint'.tr(),
-                  prefixIcon: const Icon(Icons.badge_outlined),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'coordinator_id_required'.tr();
-                  }
-                  return null;
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextFormField(
+                    controller: _coordinatorIdController,
+                    decoration: InputDecoration(
+                      labelText: 'coordinator_id_label'.tr(),
+                      hintText: 'coordinator_id_hint'.tr(),
+                      prefixIcon: const Icon(Icons.badge_outlined),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'coordinator_id_required'.tr();
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline, size: 14, color: AppColors.textSecondary),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            'ngo_assist_explained'.tr(),
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
 

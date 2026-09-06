@@ -193,6 +193,84 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                 ),
 
+                const SizedBox(height: AppSpacing.md),
+
+                // Ask for Help / NGO Assist Cue Card
+                // Non-blocking, accessible guidance for artisans needing help with registration
+                Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadii.card),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(AppRadii.card),
+                    onTap: () {
+                      // TODO: hook TTS playback here
+                      context.pushNamed(AppRouteConstants.ngoAuth);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.terracotta.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(AppRadii.card),
+                        border: Border.all(
+                          color: AppColors.terracotta.withValues(alpha: 0.25),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(AppSpacing.sm),
+                            decoration: BoxDecoration(
+                              color: AppColors.terracotta.withValues(alpha: 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.support_agent,
+                              color: AppColors.terracotta,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        'registration_help_cue_title'.tr(),
+                                        style: AppTextStyles.labelLarge.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.terracotta,
+                                        ),
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.arrow_forward_ios,
+                                      size: 13,
+                                      color: AppColors.terracotta,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'registration_help_cue_body'.tr(),
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.textSecondary,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
                 const SizedBox(height: AppSpacing.lg),
 
                 // 1. Full Name
