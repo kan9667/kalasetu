@@ -46,19 +46,35 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> init({String languageCode = 'en'}) async {
-    final welcomeMsg = languageCode == 'hi'
-        ? 'नमस्ते! मैं कला-मित्र (KalaMitra) हूँ, कलासेतु में आपका डिजिटल सहायक।\n\nमैं आपको उत्पाद जोड़ने, उचित मूल्य निर्धारण समझने, कैटलॉग प्रबंधित करने या किसी भी स्क्रीन पर ले जाने में मदद कर सकता हूँ। आप क्या करना चाहते हैं?'
-        : 'Namaste! I am KalaMitra, your guide for KalaSetu.\n\nI can help you add products, understand fair pricing, update product status, sync offline items, or navigate you to any screen. How can I help you today?';
+    final artisanCraft = _ref.read(userProfileProvider).craftType;
+    final isHi = languageCode == 'hi';
+    final welcomeMsg = isHi
+        ? 'नमस्ते! मैं कला-मित्र हूँ, कलासेतु में आपका शिल्प व बाज़ार सहायक।\n\nमैं आपको शिल्प सुधारने, सरकारी योजनाओं (पीएम विश्वकर्मा/मुद्रा), बाज़ार के रुझान, उचित मूल्य निर्धारण समझने, या किसी भी स्क्रीन पर ले जाने में मदद कर सकता हूँ। आज मैं आपकी क्या मदद कर सकता हूँ?'
+        : 'Namaste! I am KalaMitra, your artisan assistant and market guide for KalaSetu.\n\nI can help you improve your craft quality, explore government schemes (PM Vishwakarma / Mudra), understand fair pricing, or navigate to any screen. How can I help you today?';
 
     final topics = await _service.getQuickTopics(languageCode: languageCode);
+
+    List<String> defaultSuggestions;
+    final craftLower = artisanCraft.toLowerCase();
+    if (craftLower.contains('pottery') || craftLower.contains('terracotta') || craftLower.contains('clay')) {
+      defaultSuggestions = isHi
+          ? ['पीएम विश्वकर्मा योजना क्या है?', 'टेराकोटा में दरारें कैसे रोकें?', 'माय कैटलॉग खोलें', 'मेरी कमाई दिखाएं']
+          : ['What is PM Vishwakarma scheme?', 'How to avoid cracks in terracotta pottery?', 'Take me to my catalogue', 'Open my stats'];
+    } else if (craftLower.contains('textile') || craftLower.contains('handloom') || craftLower.contains('weav')) {
+      defaultSuggestions = isHi
+          ? ['पीएम विश्वकर्मा योजना क्या है?', 'हथकरघा में धागे टूटने से कैसे बचाएं?', 'माय कैटलॉग खोलें', 'मेरी कमाई दिखाएं']
+          : ['What is PM Vishwakarma scheme?', 'How to prevent thread breaks in weaving?', 'Take me to my catalogue', 'Open my stats'];
+    } else {
+      defaultSuggestions = isHi
+          ? ['पीएम विश्वकर्मा योजना क्या है?', 'शिल्प सुधार के सुझाव', 'माय कैटलॉग खोलें', 'मेरी कमाई दिखाएं']
+          : ['What is PM Vishwakarma scheme?', 'How to improve craft quality?', 'Take me to my catalogue', 'Open my stats'];
+    }
 
     state = state.copyWith(
       messages: [
         ChatMessageModel.assistant(
           text: welcomeMsg,
-          suggestedQueries: languageCode == 'hi'
-              ? ['नया उत्पाद कैसे जोड़ें?', 'मूल्य कैसे तय होता है?', 'माय कैटलॉग खोलें', 'मेरी कमाई दिखाएं']
-              : ['How to add a product?', 'How does fair pricing work?', 'Take me to my catalogue', 'Open my stats'],
+          suggestedQueries: defaultSuggestions,
         ),
       ],
       quickTopics: topics,
@@ -73,6 +89,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final clean = text.trim();
     if (clean.isEmpty || state.isLoading) return;
 
+    final artisanCraft = _ref.read(userProfileProvider).craftType;
     final userMsg = ChatMessageModel.user(clean);
     state = state.copyWith(
       messages: [...state.messages, userMsg],
@@ -85,14 +102,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
         history: state.messages,
         languageCode: languageCode,
         currentScreen: currentScreen,
+        artisanCraft: artisanCraft,
       );
 
       await _handleIncomingAssistantReply(reply, languageCode);
     } catch (e) {
       final errorMsg = ChatMessageModel.assistant(
-        text: languageCode == 'hi'
+        text: (languageCode == 'hi'
             ? 'माफ़ कीजिए, उत्तर प्राप्त करने में समस्या हुई। कृपया पुनः प्रयास करें।'
-            : 'Sorry, I encountered an issue retrieving an answer. Please try again.',
+            : 'Sorry, I encountered an issue retrieving an answer. Please try again.').replaceAll('*', ''),
       );
       state = state.copyWith(
         messages: [...state.messages, errorMsg],
@@ -108,6 +126,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }) async {
     if (state.isLoading) return;
 
+    final artisanCraft = _ref.read(userProfileProvider).craftType;
     final isHi = languageCode == 'hi';
     final placeholder = ChatMessageModel.user(
       isHi ? '🎙️ आवाज़ सुन रहे हैं...' : '🎙️ Processing voice note...',
@@ -123,6 +142,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         audioPath: audioPath,
         languageCode: languageCode,
         currentScreen: currentScreen,
+        artisanCraft: artisanCraft,
       );
 
       final updatedList = List<ChatMessageModel>.from(state.messages);
@@ -144,9 +164,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (e) {
       debugPrint('[ChatNotifier] Voice message error: $e');
       final errorMsg = ChatMessageModel.assistant(
-        text: isHi
+        text: (isHi
             ? 'माफ़ कीजिए, आवाज़ समझने में समस्या हुई। कृपया पुनः प्रयास करें।'
-            : 'Sorry, I encountered an issue transcribing your voice note. Please try again.',
+            : 'Sorry, I encountered an issue transcribing your voice note. Please try again.').replaceAll('*', ''),
       );
       state = state.copyWith(
         messages: [...state.messages, errorMsg],
@@ -160,11 +180,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
     ChatMessageModel reply,
     String languageCode,
   ) async {
-    final action = reply.action;
+    final cleanText = reply.text.replaceAll('*', '');
+    final cleanReply = reply.copyWith(text: cleanText);
+    final action = cleanReply.action;
 
     // 1. Direct Status Update Execution (e.g., "Mark my Chanderi Saree as sold")
     if (action != null && action.isStatusUpdate) {
-      final processedMsg = await _executeDirectStatusUpdate(reply, languageCode);
+      final processedMsg = await _executeDirectStatusUpdate(cleanReply, languageCode);
       state = state.copyWith(
         messages: [...state.messages, processedMsg],
         isLoading: false,
@@ -174,13 +196,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     // 2. Instant Sync Trigger Execution (e.g., "Sync my pending offline products now")
     if (action != null && action.isSyncPending) {
-      await _executeDirectSync(reply, languageCode);
+      await _executeDirectSync(cleanReply, languageCode);
       return;
     }
 
     // 3. Normal reply or Navigation / Catalogue Filter action
     state = state.copyWith(
-      messages: [...state.messages, reply],
+      messages: [...state.messages, cleanReply],
       isLoading: false,
     );
   }

@@ -269,31 +269,31 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                   children: [
                     // Avatar
                     Container(
-                      width: 42,
-                      height: 42,
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppColors.terracotta, AppColors.mustard],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        color: Colors.white,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.terracotta.withValues(alpha: 0.3),
-                            blurRadius: 6,
+                            color: AppColors.terracotta.withValues(alpha: 0.25),
+                            blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
                         ],
+                        border: Border.all(
+                          color: AppColors.terracotta.withValues(alpha: 0.2),
+                          width: 1.5,
+                        ),
                       ),
                       child: ClipOval(
                         child: Image.asset(
                           'assets/images/kalamitra_logo.png',
-                          width: 42,
-                          height: 42,
-                          fit: BoxFit.cover,
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.contain,
                           errorBuilder: (_, _, _) => const Center(
-                            child: Icon(Icons.smart_toy_outlined, color: AppColors.cream, size: 22),
+                            child: Icon(Icons.smart_toy_outlined, color: AppColors.terracotta, size: 22),
                           ),
                         ),
                       ),
@@ -346,7 +346,7 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                             ],
                           ),
                           Text(
-                            isHi ? 'मार्गदर्शक व नेविगेटर' : 'App Guide & Navigator',
+                            isHi ? 'शिल्प व बाज़ार सहायक • नेविगेटर' : 'Artisan Assistant • Craft & Market Guide',
                             style: AppTextStyles.bodySmall.copyWith(
                               color: AppColors.textSecondary,
                               fontSize: 12,
@@ -377,11 +377,11 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
           // ── Quick Topics Horizontal Bar ───────────────────────────────────
           if (chatState.quickTopics.isNotEmpty)
             Container(
-              height: 44,
+              height: 48,
               color: AppColors.surfaceVariant.withValues(alpha: 0.5),
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
                 itemCount: chatState.quickTopics.length,
                 itemBuilder: (context, index) {
                   final topic = chatState.quickTopics[index];
@@ -395,6 +395,8 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                       side: const BorderSide(color: AppColors.oak, width: 0.6),
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       labelPadding: EdgeInsets.zero,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
                       label: Text(
                         label,
                         style: const TextStyle(
@@ -667,18 +669,30 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 30,
-            height: 30,
+            width: 32,
+            height: 32,
             margin: const EdgeInsets.only(top: 2, right: 8),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
+              color: Colors.white,
               shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.terracotta.withValues(alpha: 0.2),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
             child: ClipOval(
               child: Image.asset(
                 'assets/images/kalamitra_logo.png',
-                width: 30,
-                height: 30,
-                fit: BoxFit.cover,
+                width: 32,
+                height: 32,
+                fit: BoxFit.contain,
                 errorBuilder: (_, _, _) => Container(
                   color: AppColors.terracotta,
                   child: const Center(
@@ -708,9 +722,10 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        msg.text,
+                        msg.text.replaceAll('*', ''),
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: AppColors.textPrimary,
+                          fontWeight: FontWeight.normal,
                           height: 1.4,
                         ),
                       ),
@@ -727,13 +742,16 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 6,
-                    runSpacing: 4,
+                    runSpacing: 6,
                     children: msg.suggestedQueries.map((q) {
                       return InkWell(
                         onTap: () => _handleSuggestedTap(q),
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.72,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
                             color: AppColors.surfaceVariant,
                             borderRadius: BorderRadius.circular(14),
@@ -744,12 +762,16 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                             children: [
                               const Icon(Icons.chat_bubble_outline, size: 12, color: AppColors.terracotta),
                               const SizedBox(width: 4),
-                              Text(
-                                q,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.charcoal,
+                              Flexible(
+                                child: Text(
+                                  q.replaceAll('*', ''),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.charcoal,
+                                  ),
                                 ),
                               ),
                             ],
@@ -835,10 +857,10 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        action.label,
+                        action.label.replaceAll('*', ''),
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                           color: isSuccessGreen ? AppColors.forestGreenDark : AppColors.terracottaDark,
                         ),
                       ),
@@ -904,18 +926,30 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
       child: Row(
         children: [
           Container(
-            width: 30,
-            height: 30,
+            width: 32,
+            height: 32,
             margin: const EdgeInsets.only(right: 8),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
+              color: Colors.white,
               shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.terracotta.withValues(alpha: 0.2),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
             child: ClipOval(
               child: Image.asset(
                 'assets/images/kalamitra_logo.png',
-                width: 30,
-                height: 30,
-                fit: BoxFit.cover,
+                width: 32,
+                height: 32,
+                fit: BoxFit.contain,
                 errorBuilder: (_, _, _) => Container(
                   color: AppColors.terracotta,
                   child: const Center(

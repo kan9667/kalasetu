@@ -24,6 +24,7 @@ class FakeChatService implements ChatService {
     List<ChatMessageModel> history = const [],
     String languageCode = 'en',
     String? currentScreen,
+    String? artisanCraft,
   }) async {
     if (nextReply != null) return nextReply!;
     return ChatMessageModel.assistant(text: 'Fallback echo');
@@ -35,6 +36,7 @@ class FakeChatService implements ChatService {
     List<ChatMessageModel> history = const [],
     String languageCode = 'en',
     String? currentScreen,
+    String? artisanCraft,
   }) async {
     return VoiceChatResult(
       userTranscript: 'voice note',
@@ -232,5 +234,40 @@ void main() {
     expect(lastMsg.action?.isSyncPending, isTrue);
     expect(lastMsg.action?.isExecuted, isTrue);
     expect(lastMsg.text, contains('synced'));
+  });
+
+  test('KalaMitra assistant persona and asterisk elimination', () async {
+    final container = ProviderContainer(
+      overrides: [
+        chatServiceProvider.overrideWithValue(fakeService),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final chatNotifier = container.read(chatNotifierProvider.notifier);
+
+    // 1. Check Hindi persona initialization
+    await chatNotifier.init(languageCode: 'hi');
+    var state = container.read(chatNotifierProvider);
+    expect(state.messages.first.text, contains('शिल्प व बाज़ार सहायक'));
+    expect(state.messages.first.text, isNot(contains('*')));
+    expect(state.messages.first.suggestedQueries, contains('पीएम विश्वकर्मा योजना क्या है?'));
+
+    // 2. Check English persona initialization
+    await chatNotifier.init(languageCode: 'en');
+    state = container.read(chatNotifierProvider);
+    expect(state.messages.first.text, contains('artisan assistant'));
+    expect(state.messages.first.text, isNot(contains('*')));
+    expect(state.messages.first.suggestedQueries, contains('What is PM Vishwakarma scheme?'));
+
+    // 3. Check incoming message with asterisks is completely sanitized
+    fakeService.nextReply = ChatMessageModel.assistant(
+      text: '**KalaSetu** offers *fair pricing* with **zero** commission!',
+    );
+    await chatNotifier.sendMessage('Tell me about KalaSetu');
+    state = container.read(chatNotifierProvider);
+    final lastMsg = state.messages.last;
+    expect(lastMsg.text, equals('KalaSetu offers fair pricing with zero commission!'));
+    expect(lastMsg.text, isNot(contains('*')));
   });
 }
