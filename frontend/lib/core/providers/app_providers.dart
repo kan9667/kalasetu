@@ -77,7 +77,10 @@ final speechServiceProvider = Provider<SpeechService>((ref) {
 });
 
 final pricingServiceProvider = Provider<PricingService>((ref) {
-  return MockPricingService();
+  if (kMockAiBackend) {
+    return MockPricingService();
+  }
+  return HttpPricingService();
 });
 
 // --- Repository Providers ---
@@ -279,6 +282,9 @@ class AddProductDraft {
   final double finalPrice;
   final String pricingReasoning;
   final String pricingReasoningHi;
+  final double confidenceScore;
+  final String marketPosition;
+  final List<ComparableProduct> comparableProducts;
   final bool isAiProcessing;
   final bool isPricingProcessing;
   final bool isRegenerating; // true only during an in-place Regenerate on Step 3
@@ -319,6 +325,9 @@ class AddProductDraft {
         'Evaluated based on authentic raw material sourcing, artisan labor hours, and fair craft wage floor.',
     this.pricingReasoningHi =
         'प्रामाणिक कच्ची सामग्री, कारीगरी के समय और उचित पारिश्रमिक के आधार पर विश्लेषित।',
+    this.confidenceScore = 0.85,
+    this.marketPosition = 'mid-range',
+    this.comparableProducts = const [],
     this.isAiProcessing = false,
     this.isPricingProcessing = false,
     this.isRegenerating = false,
@@ -358,6 +367,9 @@ class AddProductDraft {
     double? finalPrice,
     String? pricingReasoning,
     String? pricingReasoningHi,
+    double? confidenceScore,
+    String? marketPosition,
+    List<ComparableProduct>? comparableProducts,
     bool? isAiProcessing,
     bool? isPricingProcessing,
     bool? isRegenerating,
@@ -397,6 +409,9 @@ class AddProductDraft {
       finalPrice: finalPrice ?? this.finalPrice,
       pricingReasoning: pricingReasoning ?? this.pricingReasoning,
       pricingReasoningHi: pricingReasoningHi ?? this.pricingReasoningHi,
+      confidenceScore: confidenceScore ?? this.confidenceScore,
+      marketPosition: marketPosition ?? this.marketPosition,
+      comparableProducts: comparableProducts ?? this.comparableProducts,
       isAiProcessing: isAiProcessing ?? this.isAiProcessing,
       isPricingProcessing: isPricingProcessing ?? this.isPricingProcessing,
       isRegenerating: isRegenerating ?? this.isRegenerating,
@@ -568,6 +583,9 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     double? finalPrice,
     String? pricingReasoning,
     String? pricingReasoningHi,
+    double? confidenceScore,
+    String? marketPosition,
+    List<ComparableProduct>? comparableProducts,
     String? imageQueueItemId,
     String? voiceQueueItemId,
     QueueStatus? imageQueueStatus,
@@ -623,6 +641,9 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       finalPrice: finalPrice ?? state.finalPrice,
       pricingReasoning: pricingReasoning ?? state.pricingReasoning,
       pricingReasoningHi: pricingReasoningHi ?? state.pricingReasoningHi,
+      confidenceScore: confidenceScore ?? state.confidenceScore,
+      marketPosition: marketPosition ?? state.marketPosition,
+      comparableProducts: comparableProducts ?? state.comparableProducts,
       currentStep: resolvedStep,
       additionalImagePaths: additionalImagePaths,
       imageQueueItemId: imageQueueItemId,
@@ -672,6 +693,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         finalPrice: (pending['draft_final_price'] as num?)?.toDouble(),
         pricingReasoning: pending['draft_pricing_reasoning'] as String?,
         pricingReasoningHi: pending['draft_pricing_reasoning_hi'] as String?,
+        confidenceScore: (pending['draft_confidence_score'] as num?)?.toDouble(),
+        marketPosition: pending['draft_market_position'] as String?,
         imageQueueItemId: pending['draft_image_queue_id'] as String?,
         voiceQueueItemId: pending['draft_voice_queue_id'] as String?,
         imageQueueStatus: _queueStatus(pending['draft_image_queue_status']),
@@ -727,6 +750,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       box.put('draft_final_price', state.finalPrice);
       box.put('draft_pricing_reasoning', state.pricingReasoning);
       box.put('draft_pricing_reasoning_hi', state.pricingReasoningHi);
+      box.put('draft_confidence_score', state.confidenceScore);
+      box.put('draft_market_position', state.marketPosition);
       box.put('draft_additional_images', state.additionalImagePaths);
       box.put('draft_image_queue_id', state.imageQueueItemId);
       box.put('draft_voice_queue_id', state.voiceQueueItemId);
@@ -1562,9 +1587,24 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 
   Future<void> calculatePriceSuggestion() async {
     final pricingService = _ref.read(pricingServiceProvider);
+
+    final desc = state.descriptionEn.isNotEmpty
+        ? state.descriptionEn
+        : (state.titleEn.isNotEmpty
+            ? state.titleEn
+            : (state.manualDescription.isNotEmpty
+                ? state.manualDescription
+                : state.voiceTranscript));
+
+    final imagePath = state.enhancedImagePath.isNotEmpty
+        ? state.enhancedImagePath
+        : state.originalImagePath;
+
     final suggestion = await pricingService.suggestPrice(
+      description: desc.isNotEmpty ? desc : '${state.category} handcrafted product',
       category: state.category,
       tags: state.tags,
+      imageUrl: imagePath,
       rawMaterialCost: state.rawMaterialCost,
       laborHours: state.laborHours,
       hourlyWage: state.hourlyRate,
@@ -1576,6 +1616,9 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       minPrice: suggestion.minPrice,
       maxPrice: suggestion.maxPrice,
       finalPrice: suggestion.suggestedPrice,
+      confidenceScore: suggestion.confidenceScore,
+      marketPosition: suggestion.marketPosition,
+      comparableProducts: suggestion.comparableProducts,
       pricingReasoning: suggestion.reasoning,
       pricingReasoningHi: suggestion.reasoningHi,
     );

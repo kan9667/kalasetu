@@ -13,6 +13,7 @@ class Step4PricingWidget extends ConsumerStatefulWidget {
 
 class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
   bool _showCostBreakdown = false;
+  bool _showMarketBenchmarks = false;
 
   @override
   Widget build(BuildContext context) {
@@ -69,17 +70,70 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                const SizedBox(height: 8),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 6,
                   children: [
-                    const Icon(Icons.auto_awesome, size: 16, color: Color(0xFFC86D51)),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${'suggested_price'.tr()}: ₹${draft.suggestedPrice.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFC86D51),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFC86D51).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.auto_awesome, size: 14, color: Color(0xFFC86D51)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${'suggested_price'.tr()}: ₹${draft.suggestedPrice.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFC86D51),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF437A57).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.verified_outlined, size: 14, color: Color(0xFF437A57)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${(draft.confidenceScore * 100).toStringAsFixed(0)}% Match',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF437A57),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF8B5E3C).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        draft.marketPosition.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                          color: Color(0xFF8B5E3C),
+                        ),
                       ),
                     ),
                   ],
@@ -244,6 +298,128 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                 ],
               ),
             ),
+          ],
+
+          const SizedBox(height: 14),
+
+          // Market Benchmarks Accordion
+          InkWell(
+            onTap: () => setState(() => _showMarketBenchmarks = !_showMarketBenchmarks),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAF7F2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE8DFD3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.storefront_outlined, size: 20, color: Color(0xFF8B5E3C)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      draft.comparableProducts.isNotEmpty
+                          ? 'Market Benchmarks (${draft.comparableProducts.length} similar crafts)'
+                          : 'Market Benchmarks (AI RAG)',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF8B5E3C),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _showMarketBenchmarks ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    color: const Color(0xFF8B5E3C),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (_showMarketBenchmarks) ...[
+            const SizedBox(height: 10),
+            if (draft.comparableProducts.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3EDE2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Cost-floor safety active. Connect to online backend to retrieve live e-commerce benchmarks across Amazon Karigar, FabIndia, and Okhai.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF7A6E63)),
+                ),
+              )
+            else
+              ...draft.comparableProducts.map(
+                (comp) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFBF9F5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE8DFD3)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              comp.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF3F342B),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEDE4D8),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    comp.sourcePlatform,
+                                    style: const TextStyle(fontSize: 10, color: Color(0xFF5A4D41)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${(comp.similarityScore * 100).toStringAsFixed(0)}% match',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF437A57),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '₹${comp.sellingPrice.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFC86D51),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
 
           const SizedBox(height: 24),
