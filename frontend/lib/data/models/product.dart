@@ -12,6 +12,10 @@ enum ProductStatus {
   draft,
   @HiveField(3)
   sold,
+  @HiveField(4)
+  soldOut,
+  @HiveField(5)
+  listingRemoved,
 }
 
 @HiveType(typeId: 0)
@@ -63,6 +67,18 @@ class Product extends HiveObject {
   @HiveField(12)
   final String aiEnhancedPhotoPath;
 
+  /// Timestamp of the last status update (e.g. marked sold out, removed listing, relisted)
+  @HiveField(13)
+  final DateTime? statusUpdatedAt;
+
+  /// Optional restock quantity entered when an item was marked sold out
+  @HiveField(14)
+  final int? restockQuantity;
+
+  /// Context or note for the current status change
+  @HiveField(15)
+  final String? statusReason;
+
   Product({
     required this.id,
     required this.title,
@@ -77,6 +93,9 @@ class Product extends HiveObject {
     DateTime? createdAt,
     this.additionalPhotoPaths = const [],
     this.aiEnhancedPhotoPath = '',
+    this.statusUpdatedAt,
+    this.restockQuantity,
+    this.statusReason,
   }) : createdAt = createdAt ?? DateTime.now();
 
   /// All captured photos in order (primary first), for the review screen's
@@ -88,6 +107,11 @@ class Product extends HiveObject {
   /// otherwise the original capture.
   String get displayPhotoPath =>
       aiEnhancedPhotoPath.isNotEmpty ? aiEnhancedPhotoPath : photoPath;
+
+  bool get isNonLive =>
+      status == ProductStatus.soldOut ||
+      status == ProductStatus.listingRemoved ||
+      status == ProductStatus.sold;
 
   Product copyWith({
     String? id,
@@ -103,6 +127,9 @@ class Product extends HiveObject {
     DateTime? createdAt,
     List<String>? additionalPhotoPaths,
     String? aiEnhancedPhotoPath,
+    DateTime? statusUpdatedAt,
+    int? restockQuantity,
+    String? statusReason,
   }) {
     return Product(
       id: id ?? this.id,
@@ -118,6 +145,9 @@ class Product extends HiveObject {
       createdAt: createdAt ?? this.createdAt,
       additionalPhotoPaths: additionalPhotoPaths ?? this.additionalPhotoPaths,
       aiEnhancedPhotoPath: aiEnhancedPhotoPath ?? this.aiEnhancedPhotoPath,
+      statusUpdatedAt: statusUpdatedAt ?? this.statusUpdatedAt,
+      restockQuantity: restockQuantity ?? this.restockQuantity,
+      statusReason: statusReason ?? this.statusReason,
     );
   }
 
@@ -136,6 +166,9 @@ class Product extends HiveObject {
       'createdAt': createdAt.toIso8601String(),
       'additionalPhotoPaths': additionalPhotoPaths,
       'aiEnhancedPhotoPath': aiEnhancedPhotoPath,
+      'statusUpdatedAt': statusUpdatedAt?.toIso8601String(),
+      'restockQuantity': restockQuantity,
+      'statusReason': statusReason,
     };
   }
 
@@ -162,6 +195,11 @@ class Product extends HiveObject {
               .toList() ??
           [],
       aiEnhancedPhotoPath: json['aiEnhancedPhotoPath'] as String? ?? '',
+      statusUpdatedAt: json['statusUpdatedAt'] != null
+          ? DateTime.tryParse(json['statusUpdatedAt'] as String)
+          : null,
+      restockQuantity: json['restockQuantity'] as int?,
+      statusReason: json['statusReason'] as String?,
     );
   }
 }

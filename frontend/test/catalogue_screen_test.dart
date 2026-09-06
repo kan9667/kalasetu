@@ -39,8 +39,8 @@ void main() {
 
     await tester.pump(const Duration(seconds: 4));
 
-    // Verify search bar and view toggle icon exist
+    // Verify search bar and search icon exist
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.byIcon(Icons.view_list), findsOneWidget);
+    expect(find.byIcon(Icons.search), findsOneWidget);
   });
 }

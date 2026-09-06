@@ -8,8 +8,11 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/router/app_route_constants.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_confirmation_dialog.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../orders/providers/orders_provider.dart';
+import '../../orders/models/order.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -120,15 +123,27 @@ class ProfileScreen extends ConsumerWidget {
               onTap: () {
                 showDialog(
                   context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text('about_kalasetu'.tr(), style: AppTextStyles.headlineMedium),
-                    content: Text('about_desc'.tr(), style: AppTextStyles.bodyMedium),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text('close'.tr()),
+                  builder: (ctx) => Dialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.dialog)),
+                    backgroundColor: AppColors.surface,
+                    insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding, vertical: AppSpacing.lg),
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text('about_kalasetu'.tr(), style: AppTextStyles.headlineMedium.copyWith(fontSize: 19), textAlign: TextAlign.center),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text('about_desc'.tr(), style: AppTextStyles.bodyMedium, textAlign: TextAlign.center),
+                          const SizedBox(height: AppSpacing.lg),
+                          AppButton(
+                            label: 'close'.tr(),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -142,29 +157,22 @@ class ProfileScreen extends ConsumerWidget {
               customColor: AppColors.error,
               icon: Icons.logout,
               onPressed: () async {
-                showDialog(
+                showAppConfirmationDialog(
                   context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text('sign_out_confirm_title'.tr(), style: AppTextStyles.headlineMedium),
-                    content: Text('sign_out_confirm_msg'.tr(), style: AppTextStyles.bodyMedium),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text('cancel'.tr()),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-                        onPressed: () async {
-                          Navigator.pop(ctx);
-                          await ref.read(authStateProvider.notifier).signOut();
-                          if (context.mounted) {
-                            context.goNamed(AppRouteConstants.signIn);
-                          }
-                        },
-                        child: Text('sign_out'.tr(), style: const TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                  ),
+                  title: 'sign_out_confirm_title'.tr(),
+                  message: 'sign_out_confirm_msg'.tr(),
+                  icon: Icons.logout_rounded,
+                  confirmLabel: 'sign_out'.tr(),
+                  confirmColor: AppColors.error,
+                  isDestructive: true,
+                  onConfirm: () async {
+                    Navigator.of(context, rootNavigator: true).pop();
+                    ref.read(selectedOrderFilterProvider.notifier).state = OrderStatus.newOrder;
+                    await ref.read(authStateProvider.notifier).signOut();
+                    if (context.mounted) {
+                      context.goNamed(AppRouteConstants.signIn);
+                    }
+                  },
                 );
               },
             ),

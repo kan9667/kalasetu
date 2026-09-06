@@ -1,16 +1,20 @@
 # Ideas
 my performance analytics <br>
-my orders page <br>
-suggestions for improvement of packaging <br>
+my orders page (done) <br>
+suggestions for improvement of packaging (done) <br>
 help chatbot <br>
 text to speech on every page <br>
+<<<<<<< HEAD
 cues for what to say in voice description (description, price, raw materials) <br>
+=======
+cues for what to say in voice description (description, price, raw materials) (done) <br>
+>>>>>>> 07d86d7 (added my orders page & cue chips to add products screen)
 onboarding voice first <br>
 translator for labels <br>
-social media helper <br>
+social media helper (done) <br>
 multiple images? <br>
 tutorial walkthrough <br>
-sold out/remove listing/relist option in catalog <br>
+sold out/remove listing/relist option in catalog (done) <br>
 
 
 
