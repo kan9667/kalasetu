@@ -500,45 +500,58 @@ class ChatService:
             )
 
         # ── Direct Action 3: Pre-filtered Catalogue Navigation ────────────
-        # ReDoS-safe linear regex: avoids nested optional quantifiers on uncontrolled input
-        filter_match = re.search(r"\b(?:show|filter|find|search|dikhaye|dikhao)\s+([^?.,!]+)", q)
-        if filter_match and not any(w in q for w in ["how", "kaise", "what", "kya", "add", "jodna", "mark", "sync"]):
-            query_term = filter_match.group(1).strip()
-            # Clean trailing descriptors
-            query_term = re.sub(r'\s+(?:items|products|crafts|in catalogue|catalogue)$', '', query_term, flags=re.IGNORECASE).strip()
-            # Clean common filler words
-            query_term = re.sub(r'\b(the|all|my|me|some|please|mere|meri|sab|sabhi)\b', '', query_term, flags=re.IGNORECASE).strip()
-            query_term = re.sub(r'\s+', ' ', query_term).strip()
-            if query_term and query_term not in ["catalogue", "catalog", "products", "items", "saman", "crafts", "craft"]:
-                if is_hindi:
+        # Deterministic token-based parsing (100% regex-free to eliminate any ReDoS/CodeQL alerts)
+        triggers = {"show", "filter", "find", "search", "dikhaye", "dikhao"}
+        negatives = {"how", "kaise", "what", "kya", "add", "jodna", "mark", "sync"}
+        filler_words = {"the", "all", "my", "me", "some", "please", "mere", "meri", "sab", "sabhi", "apna", "apni", "apne"}
+
+        words = [w.strip("?.,!;:") for w in q.split()]
+        if not any(w in negatives for w in words):
+            trigger_idx = -1
+            for idx, word in enumerate(words):
+                if word in triggers:
+                    trigger_idx = idx
+                    break
+
+            if trigger_idx != -1 and trigger_idx + 1 < len(words):
+                tokens = words[trigger_idx + 1:]
+                while len(tokens) > 1 and tokens[-1] in ["items", "products", "crafts", "catalogue", "catalog", "saman"]:
+                    tokens.pop()
+                if len(tokens) > 1 and tokens[-1] == "in":
+                    tokens.pop()
+                tokens = [tok for tok in tokens if tok not in filler_words]
+                query_term = " ".join(tokens).strip()
+
+                if query_term and query_term not in ["catalogue", "catalog", "products", "items", "saman", "crafts", "craft"]:
+                    if is_hindi:
+                        return ChatResponseSchema(
+                            reply=f"कैटलॉग में '{query_term}' से संबंधित आपके आइटम फ़िल्टर करके दिखाए जा रहे हैं।",
+                            action=ChatActionSchema(
+                                type="filter_catalogue",
+                                destination="catalogue",
+                                tab_index=1,
+                                label=f"कैटलॉग में '{query_term}' देखें",
+                                params={
+                                    "query": query_term,
+                                    "category": None,
+                                },
+                            ),
+                            suggested_queries=["नया सामान जोड़ें", "मेरी कमाई दिखाएं", "लंबित सिंक करें"],
+                        )
                     return ChatResponseSchema(
-                        reply=f"कैटलॉग में '{query_term}' से संबंधित आपके आइटम फ़िल्टर करके दिखाए जा रहे हैं।",
+                        reply=f"Navigating to your catalogue pre-filtered for '{query_term}'.",
                         action=ChatActionSchema(
                             type="filter_catalogue",
                             destination="catalogue",
                             tab_index=1,
-                            label=f"कैटलॉग में '{query_term}' देखें",
+                            label=f"Show '{query_term}' in Catalogue",
                             params={
                                 "query": query_term,
                                 "category": None,
                             },
                         ),
-                        suggested_queries=["नया सामान जोड़ें", "मेरी कमाई दिखाएं", "लंबित सिंक करें"],
+                        suggested_queries=["Add new product", "Show my stats", "Sync pending items"],
                     )
-                return ChatResponseSchema(
-                    reply=f"Navigating to your catalogue pre-filtered for '{query_term}'.",
-                    action=ChatActionSchema(
-                        type="filter_catalogue",
-                        destination="catalogue",
-                        tab_index=1,
-                        label=f"Show '{query_term}' in Catalogue",
-                        params={
-                            "query": query_term,
-                            "category": None,
-                        },
-                    ),
-                    suggested_queries=["Add new product", "Show my stats", "Sync pending items"],
-                )
 
         # Intent: Add Product
         if any(w in q for w in ["add product", "naya saman", "upload", "bechna", "list", "jodna", "create product", "photo"]):
