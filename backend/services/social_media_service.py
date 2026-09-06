@@ -26,6 +26,7 @@ from fastapi import HTTPException
 from google import genai
 from google.genai import types
 
+from .groq_client import GroqClient
 from ..config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -93,10 +94,11 @@ def _check_rate_limit(rate_key: str) -> None:
 
 
 class SocialMediaService:
-    """Calls Gemini vision to produce caption + hashtags for artisan listings."""
+    """Generates social media captions + hashtags for artisan listings via Groq or Gemini."""
 
     def __init__(self) -> None:
         self.settings = get_settings()
+        self.groq_client = GroqClient()
         self.client = (
             genai.Client(api_key=self.settings.gemini_api_key)
             if self.settings.gemini_api_key
@@ -127,12 +129,12 @@ class SocialMediaService:
         Raises:
             HTTPException(429) on rate limit.
             HTTPException(502) on LLM/parse failure after one retry.
-            HTTPException(503) if the Gemini client is not configured.
+            HTTPException(503) if neither Groq nor Gemini is configured.
         """
-        if not self.client:
+        if not self.groq_client.is_available() and not self.client:
             raise HTTPException(
                 status_code=503,
-                detail="AI service not configured. Please set GEMINI_API_KEY.",
+                detail="AI service not configured. Please set GROQ_API_KEY in .env.",
             )
 
         # Rate limit check (skip if no key provided — e.g. first-time load)
@@ -148,7 +150,42 @@ class SocialMediaService:
             locale=locale,
         )
 
-        return await self._call_with_retry(prompt=prompt, image_url=image_url)
+        # ── 1. Try Groq Cloud ───────────────────────────────────────────────
+        if self.groq_client.is_available() and self.settings.llm_provider == "groq":
+            try:
+                messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are writing a social media caption and hashtags for a handmade artisan product. "
+                            "Respond with ONLY valid JSON: {\"caption\": \"...\", \"hashtags\": [\"#tag1\", \"#tag2\"]}"
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ]
+                data = await self.groq_client.chat_json(messages)
+                return {
+                    "caption": data.get("caption", f"Handcrafted {title} made with traditional artisan skill."),
+                    "hashtags": data.get("hashtags", ["#handmade", "#artisan", "#handcrafted", "#supportartisans"]),
+                }
+            except Exception as e:
+                logger.warning("[SocialMediaService] Groq generation failed: %s. Trying Gemini fallback.", e)
+
+        # ── 2. Fallback to Gemini ───────────────────────────────────────────
+        if self.client:
+            return await self._call_with_retry(prompt=prompt, image_url=image_url)
+
+        # ── 3. Offline / Rule-based Fallback ────────────────────────────────
+        tags = ["#handmade", "#handcrafted", "#artisan", "#vocalforlocal", "#indiancrafts"]
+        if category:
+            tags.insert(0, f"#{category.lower().replace(' ', '')}")
+        return {
+            "caption": (
+                f"Admire the timeless beauty of this handcrafted {title or 'creation'}. "
+                f"Made by master artisans with passion and heritage techniques. Support local art! ✨"
+            ),
+            "hashtags": tags,
+        }
 
     # ── Internal Helpers ─────────────────────────────────────────────────────
 

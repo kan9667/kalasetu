@@ -23,6 +23,13 @@ class ProductRepository {
   Future<List<Product>> getProducts({bool forceRefresh = false, bool isOnline = true}) async {
     final box = _getProductsBox();
 
+    // Ensure legacy preexisting seed products are purged from local cache
+    if (box.containsKey('prod_1')) await box.delete('prod_1');
+    if (box.containsKey('prod_2')) await box.delete('prod_2');
+    final pendingBox = _getPendingBox();
+    if (pendingBox.containsKey('prod_1')) await pendingBox.delete('prod_1');
+    if (pendingBox.containsKey('prod_2')) await pendingBox.delete('prod_2');
+
     // If box is empty and online, populate with remote products
     if ((box.isEmpty || forceRefresh) && isOnline) {
       try {
@@ -84,7 +91,7 @@ class ProductRepository {
     if (isOnline) {
       try {
         final updated = await _apiService.updateProduct(product);
-        await productsBox.put(updated.id, updated.copyWith(status: ProductStatus.live));
+        await productsBox.put(updated.id, updated);
         await pendingBox.delete(product.id);
         return updated;
       } catch (e) {
@@ -92,7 +99,7 @@ class ProductRepository {
       }
     }
 
-    final localProduct = product.copyWith(status: ProductStatus.pendingSync);
+    final localProduct = product;
     await productsBox.put(localProduct.id, localProduct);
     await pendingBox.put(localProduct.id, 'UPDATE');
     return localProduct;
@@ -142,7 +149,8 @@ class ProductRepository {
               await productsBox.put(id, created.copyWith(status: ProductStatus.live));
             } else {
               final updated = await _apiService.updateProduct(product);
-              await productsBox.put(id, updated.copyWith(status: ProductStatus.live));
+              final resolvedStatus = product.status == ProductStatus.pendingSync ? ProductStatus.live : product.status;
+              await productsBox.put(id, updated.copyWith(status: resolvedStatus));
             }
             await pendingBox.delete(id);
             syncedCount++;
@@ -152,7 +160,6 @@ class ProductRepository {
         debugPrint('ProductRepository: Failed to sync pending item $id: $e');
       }
     }
-
     return syncedCount;
   }
 

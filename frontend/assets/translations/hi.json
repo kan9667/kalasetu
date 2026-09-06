@@ -190,5 +190,10 @@
   "retake_description": "दोबारा बोलें",
   "add_custom_tag_hint": "नया टैग लिखें...",
   "add": "जोड़ें",
-  "regenerate_btn": "फिर बनाएं"
+  "regenerate_btn": "फिर बनाएं",
+  "kalamitra_title": "कला-मित्र",
+  "kalamitra_subtitle": "डिजिटल मार्गदर्शक व नेविगेटर",
+  "kalamitra_hint": "कलासेतु के बारे में कुछ भी पूछें...",
+  "kalamitra_reset": "चैट रीसेट करें",
+  "kalamitra_action_tap": "इस स्क्रीन पर सीधे जाने के लिए टैप करें"
 }

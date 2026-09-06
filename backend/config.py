@@ -60,6 +60,28 @@ class Settings(BaseSettings):
         description="Language codes accepted by the voice pipeline.",
     )
 
+    # Groq Cloud LLM Settings
+    groq_api_key: str = Field(
+        default="",
+        description="API key for Groq Cloud chat completions.",
+    )
+    groq_base_url: str = Field(
+        default="https://api.groq.com/openai/v1",
+        description="Base URL for Groq Cloud API.",
+    )
+    groq_chat_model: str = Field(
+        default="openai/gpt-oss-120b",
+        description="Groq model identifier for chat, cataloging, and assistance.",
+    )
+    llm_provider: str = Field(
+        default="groq",
+        description="Primary LLM provider: groq or gemini.",
+    )
+
+    def get_active_groq_key(self) -> str:
+        """Resolve active Groq API key from groq_api_key or whisper_api_key."""
+        return self.groq_api_key.strip() or self.whisper_api_key.strip()
+
     # Models
     llm_model: str = "gemini-3.6-flash"
     embedding_model: str = "gemini-embedding-001"

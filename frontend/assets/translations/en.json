@@ -201,5 +201,10 @@
   "caption_label": "Caption draft",
   "caption_hint": "Review and edit the caption before posting",
   "hashtags_label_social": "Hashtags",
-  "add_hashtag_hint": "Add a hashtag"
+  "add_hashtag_hint": "Add a hashtag",
+  "kalamitra_title": "KalaMitra",
+  "kalamitra_subtitle": "Artisan AI Guide & Navigator",
+  "kalamitra_hint": "Ask anything about KalaSetu...",
+  "kalamitra_reset": "Reset Chat",
+  "kalamitra_action_tap": "Tap to jump directly to this screen"
 }
