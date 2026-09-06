@@ -453,19 +453,42 @@ class ChatService:
             )
 
         # ── Direct Action 2: Product Status Update (Sold / Live / Draft) ──
-        status_match_en = re.search(r"\bmark\s+(?:my\s+)?([^?.,!]+?)\s+as\s+(sold|live|draft)\b", q)
-        is_sold_keyword = any(w in q for w in ["bik gaya", "sold mark", "mark sold", "set sold", "mark as sold"])
-        if status_match_en or is_sold_keyword or ("sold" in q and any(w in q for w in ["mark", "update", "set", "kar"])):
+        # Pure Python parsing (100% regex-free to eliminate any ReDoS/CodeQL alerts)
+        has_status_action = False
+        target = "product"
+        target_status = "sold"
+
+        if " as " in q and ("mark " in q or q.startswith("mark")):
+            parts = q.split(" as ")
+            if len(parts) >= 2:
+                left = parts[0].strip()
+                right_words = parts[1].strip().split()
+                right = right_words[0].strip("?.,!;:") if right_words else ""
+                if right in ["sold", "live", "draft"]:
+                    left_words = left.split()
+                    if left_words and left_words[0] == "mark":
+                        left_words = left_words[1:]
+                    if left_words and left_words[0] in ["my", "the", "this", "mera", "meri", "ye", "apna", "apni"]:
+                        left_words = left_words[1:]
+                    target = " ".join(left_words).strip() or "product"
+                    target_status = right
+                    has_status_action = True
+        elif "bik gaya" in q or "बिक गया" in q:
+            target = q.replace("bik gaya", "").replace("बिक गया", "").replace("mera", "").replace("meri", "").replace("ye", "").strip() or "product"
+            target_status = "sold"
+            has_status_action = True
+        elif any(w in q for w in ["sold mark", "mark sold", "set sold", "mark as sold"]) or ("sold" in q and any(w in q for w in ["mark", "update", "set", "kar"])):
             target = "product"
             target_status = "sold"
-            if status_match_en:
-                target = status_match_en.group(1).strip()
-                target_status = status_match_en.group(2).strip().lower()
-            elif "bik gaya" in q:
-                target = q.replace("bik gaya", "").replace("mera", "").replace("meri", "").replace("ye", "").strip()
-                target_status = "sold"
+            has_status_action = True
 
-            clean_target = re.sub(r'^(my|the|this|mera|meri|ye|apna|apni)\s+', '', target, flags=re.IGNORECASE).strip()
+        if has_status_action:
+            clean_target = target
+            for prefix in ["my ", "the ", "this ", "mera ", "meri ", "ye ", "apna ", "apni "]:
+                if clean_target.lower().startswith(prefix):
+                    clean_target = clean_target[len(prefix):].strip()
+                    break
+
             label_en = f"Mark as {target_status.capitalize()}"
             label_hi = "बिका हुआ चिह्नित करें" if target_status == "sold" else f"{target_status.capitalize()} करें"
 
