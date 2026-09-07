@@ -143,6 +143,7 @@ class LabelMakerService {
     required BuildContext context,
     required Order order,
     required String artisanName,
+    String? artisanId,
     String? artisanCluster,
     String? craftType,
     String? customStoryEn,
@@ -166,7 +167,10 @@ class LabelMakerService {
         final pdf = await _buildSinglePdf(
           order: order,
           artisanName: artisanName,
-          artisanCluster: artisanCluster ?? 'Kumhar Gram, Delhi NCR',
+          artisanId: artisanId,
+          artisanCluster: (artisanCluster != null && artisanCluster.isNotEmpty)
+              ? artisanCluster
+              : 'Kumhar Gram, Delhi NCR',
           craftType: craftType ?? order.productCategory,
           storyEn: customStoryEn,
           storyHi: customStoryHi,
@@ -192,6 +196,7 @@ class LabelMakerService {
     required BuildContext context,
     required List<Order> orders,
     required String artisanName,
+    String? artisanId,
     String? artisanCluster,
     String? craftType,
   }) async {
@@ -214,7 +219,10 @@ class LabelMakerService {
             build: (ctx) => _buildLabelContent(
               order: order,
               artisanName: artisanName,
-              artisanCluster: artisanCluster ?? 'Kumhar Gram, Delhi NCR',
+              artisanId: artisanId,
+              artisanCluster: (artisanCluster != null && artisanCluster.isNotEmpty)
+                  ? artisanCluster
+                  : 'Kumhar Gram, Delhi NCR',
               craftType: craftType ?? order.productCategory,
               storyEn: defaultStoryEn,
               storyHi: defaultStoryHi,
@@ -228,7 +236,7 @@ class LabelMakerService {
 
       await Printing.sharePdf(
         bytes: await doc.save(),
-        filename: 'batch_packaging_labels_${orders.length}_orders.pdf',
+        filename: 'packaging_labels_batch_${DateTime.now().millisecondsSinceEpoch}.pdf',
       );
       return true;
     } catch (e, st) {
@@ -271,6 +279,7 @@ class LabelMakerService {
   static Future<pw.Document> _buildSinglePdf({
     required Order order,
     required String artisanName,
+    String? artisanId,
     required String artisanCluster,
     required String craftType,
     String? storyEn,
@@ -289,6 +298,7 @@ class LabelMakerService {
         build: (ctx) => _buildLabelContent(
           order: order,
           artisanName: artisanName,
+          artisanId: artisanId,
           artisanCluster: artisanCluster,
           craftType: craftType,
           storyEn: storyEn ?? defaultStoryEn,
@@ -306,6 +316,7 @@ class LabelMakerService {
   static pw.Widget _buildLabelContent({
     required Order order,
     required String artisanName,
+    String? artisanId,
     required String artisanCluster,
     required String craftType,
     required String storyEn,
@@ -319,8 +330,9 @@ class LabelMakerService {
     final parchment = PdfColor.fromHex('#FAF7F2');
     final borderCol = PdfColor.fromHex('#E6DDD0');
 
-    // Stub URL for ONDC artisan profile
-    final ondcUrl = '$_ondcProfileBaseUrl/artisan_01';
+    // Dynamic URL for ONDC artisan profile
+    final effectiveId = (artisanId != null && artisanId.isNotEmpty) ? artisanId : 'artisan_01';
+    final ondcUrl = '$_ondcProfileBaseUrl/$effectiveId';
 
     return pw.Container(
       decoration: pw.BoxDecoration(

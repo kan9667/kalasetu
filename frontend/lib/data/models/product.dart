@@ -172,24 +172,43 @@ class Product extends HiveObject {
     };
   }
 
+  Map<String, dynamic> toBackendJson({String? artisanId}) {
+    return {
+      if (id.isNotEmpty) 'id': id,
+      if (artisanId != null && artisanId.isNotEmpty) 'artisan_id': artisanId,
+      'title': title,
+      'title_hi': titleHi,
+      'description': description,
+      'description_hi': descriptionHi,
+      'price': price,
+      'image_url': displayPhotoPath,
+      'category': category,
+      'tags': tags,
+      'status': status.name,
+    };
+  }
+
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: json['id'] as String? ?? '',
       title: json['title'] as String? ?? '',
-      titleHi: json['titleHi'] as String? ?? '',
+      titleHi: json['titleHi'] as String? ?? (json['title_hi'] as String? ?? ''),
       description: json['description'] as String? ?? '',
-      descriptionHi: json['descriptionHi'] as String? ?? '',
+      descriptionHi: json['descriptionHi'] as String? ?? (json['description_hi'] as String? ?? ''),
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
-      photoPath: json['photoPath'] as String? ?? (json['imageUrl'] as String? ?? ''),
+      photoPath: json['photoPath'] as String? ??
+          (json['image_url'] as String? ?? (json['imageUrl'] as String? ?? '')),
       category: json['category'] as String? ?? 'General',
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       status: ProductStatus.values.firstWhere(
         (e) => e.name == json['status'],
         orElse: () => ProductStatus.draft,
       ),
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'] as String)
-          : DateTime.now(),
+      createdAt: json['created_at'] != null
+          ? (DateTime.tryParse(json['created_at'] as String) ?? DateTime.now())
+          : (json['createdAt'] != null
+              ? (DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now())
+              : DateTime.now()),
       additionalPhotoPaths: (json['additionalPhotoPaths'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
@@ -197,7 +216,9 @@ class Product extends HiveObject {
       aiEnhancedPhotoPath: json['aiEnhancedPhotoPath'] as String? ?? '',
       statusUpdatedAt: json['statusUpdatedAt'] != null
           ? DateTime.tryParse(json['statusUpdatedAt'] as String)
-          : null,
+          : (json['updated_at'] != null
+              ? DateTime.tryParse(json['updated_at'] as String)
+              : null),
       restockQuantity: json['restockQuantity'] as int?,
       statusReason: json['statusReason'] as String?,
     );

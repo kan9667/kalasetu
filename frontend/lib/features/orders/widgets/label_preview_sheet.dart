@@ -61,6 +61,7 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
       context: context,
       order: widget.order,
       artisanName: profile.name,
+      artisanId: profile.id,
       artisanCluster: profile.locationCluster,
       craftType: profile.craftType,
       customStoryEn: _hasCustomizedStory ? _storyEnCtrl.text.trim() : null,
@@ -94,7 +95,8 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
     final profile = ref.watch(userProfileProvider);
     final (washEn, washHi) = LabelMakerService.defaultWashCareFor(widget.order.productCategory);
 
-    final ondcProfileStub = 'https://kalasetu.ondc.org/artisan/artisan_01';
+    final effectiveId = profile.id.isNotEmpty ? profile.id : 'artisan_01';
+    final ondcProfileStub = 'https://kalasetu.ondc.org/artisan/$effectiveId';
 
     return DraggableScrollableSheet(
       initialChildSize: 0.88,

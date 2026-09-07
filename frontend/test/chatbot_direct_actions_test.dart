@@ -6,6 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:kalasetu/core/providers/app_providers.dart';
 import 'package:kalasetu/data/models/chat_message.dart';
 import 'package:kalasetu/data/models/product.dart';
+import 'package:kalasetu/data/services/api_service.dart';
 import 'package:kalasetu/data/services/chat_service.dart';
 import 'package:kalasetu/features/catalogue/providers/catalogue_filter_provider.dart';
 import 'package:kalasetu/features/chatbot/providers/chat_provider.dart';
@@ -155,6 +156,7 @@ void main() {
   test('Direct status update marks product as sold and supports undo', () async {
     final container = ProviderContainer(
       overrides: [
+        apiServiceProvider.overrideWithValue(MockApiService()),
         chatServiceProvider.overrideWithValue(fakeService),
         connectivityProvider.overrideWith((ref) => Stream.value(true)),
       ],
@@ -211,6 +213,7 @@ void main() {
   test('Instant sync trigger executes sync and reports progress in chat', () async {
     final container = ProviderContainer(
       overrides: [
+        apiServiceProvider.overrideWithValue(MockApiService()),
         chatServiceProvider.overrideWithValue(fakeService),
         connectivityProvider.overrideWith((ref) => Stream.value(true)),
       ],

@@ -65,7 +65,10 @@ final hasSelectedLanguageProvider =
 
 // --- Services Providers ---
 final apiServiceProvider = Provider<ApiService>((ref) {
-  return MockApiService();
+  if (kMockAiBackend) {
+    return MockApiService();
+  }
+  return HttpApiService();
 });
 
 final imageEnhancerServiceProvider = Provider<ImageEnhancerService>((ref) {
@@ -159,7 +162,12 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
 
   Future<Product> addProduct(Product product) async {
     final isOnline = _ref.read(connectivityProvider).value ?? true;
-    final created = await _repository.addProduct(product, isOnline: isOnline);
+    final artisanId = _ref.read(userProfileProvider).id;
+    final created = await _repository.addProduct(
+      product,
+      isOnline: isOnline,
+      artisanId: artisanId.isNotEmpty ? artisanId : null,
+    );
     await loadProducts();
     return created;
   }

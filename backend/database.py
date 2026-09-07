@@ -33,8 +33,35 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    """Create all tables (ArtisanDB + ProductDB)."""
+    """Create all tables (ArtisanDB + ProductDB) and ensure demo artisan exists."""
     # Import models so SQLAlchemy registers them with Base.metadata
     from .models.db_models import ArtisanDB, ProductDB, SocialDraftDB  # noqa: F401
+    from datetime import datetime
 
     Base.metadata.create_all(bind=engine)
+
+    # Ensure demo artisan exists so demo login and FK constraints always succeed
+    db = SessionLocal()
+    try:
+        demo_phone = "9876543210"
+        existing = db.query(ArtisanDB).filter(ArtisanDB.phone == demo_phone).first()
+        if not existing:
+            demo_artisan = ArtisanDB(
+                id="artisan_01",
+                name="Rameshwar Lal Kumhar",
+                phone=demo_phone,
+                craft_type="Terracotta Pottery",
+                location_cluster="Kumhar Gram, Delhi NCR",
+                state="Delhi",
+                experience_years="25",
+                pehchan_id="PEHCHAN-DL-0042",
+                preferred_language="en",
+                created_at=datetime.now(),
+            )
+            db.add(demo_artisan)
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Warning: Could not seed demo artisan: {e}")
+    finally:
+        db.close()

@@ -61,8 +61,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       isLoading: true,
       pendingRegistration: () => null,
     );
-    await Future.delayed(const Duration(milliseconds: 500));
     await _authRepository.savePhoneNumber(phoneNumber);
+    // Request OTP from backend (if server is reachable)
+    await _authRepository.requestOtp(phoneNumber);
     state = state.copyWith(
       phoneNumber: phoneNumber,
       isLoading: false,
@@ -75,35 +76,66 @@ class AuthNotifier extends StateNotifier<AuthState> {
       pendingRegistration: () => profile,
       phoneNumber: profile.phone,
     );
-    await Future.delayed(const Duration(milliseconds: 500));
     await _authRepository.savePhoneNumber(profile.phone);
+    // Attempt registration on backend
+    final backendProfile = await _authRepository.registerArtisan(profile);
+    if (backendProfile != null) {
+      state = state.copyWith(pendingRegistration: () => backendProfile);
+    }
     state = state.copyWith(isLoading: false);
   }
 
   Future<bool> verifyOtp(String phoneNumber, String otp, {UserProfile? profileOverride}) async {
     state = state.copyWith(isLoading: true);
-    // Mock: accept any OTP in demo mode
-    await Future.delayed(const Duration(milliseconds: 500));
 
     final effectivePhone = phoneNumber.isEmpty ? '9876543210' : phoneNumber;
-    final userId = 'artisan_${DateTime.now().millisecondsSinceEpoch}';
-    await _authRepository.saveAuthData(userId, effectivePhone);
-
     final registrationProfile = profileOverride ?? state.pendingRegistration;
-    if (registrationProfile != null) {
-      final finalProfile = registrationProfile.copyWith(
-        id: userId,
-        phone: effectivePhone,
-      );
-      if (Hive.isBoxOpen('user_profile_box')) {
-        final box = Hive.box<UserProfile>('user_profile_box');
-        await box.put('current_profile', finalProfile);
+
+    // 1. If registering and not yet assigned a backend ID, attempt registration
+    if (registrationProfile != null && registrationProfile.id.isEmpty) {
+      final regResult = await _authRepository.registerArtisan(registrationProfile);
+      if (regResult != null) {
+        state = state.copyWith(pendingRegistration: () => regResult);
       }
+    }
+
+    // 2. Call backend /api/v1/auth/verify-otp
+    final (backendProfile, token) = await _authRepository.verifyOtpWithBackend(effectivePhone, otp);
+
+    // 3. Resolve profile: backend response > pending registration > local fallback
+    final resolvedProfile = backendProfile ??
+        (registrationProfile != null
+            ? registrationProfile.copyWith(
+                id: registrationProfile.id.isNotEmpty
+                    ? registrationProfile.id
+                    : 'artisan_${DateTime.now().millisecondsSinceEpoch}',
+                phone: effectivePhone,
+              )
+            : UserProfile(
+                id: 'artisan_${DateTime.now().millisecondsSinceEpoch}',
+                name: 'Artisan',
+                phone: effectivePhone,
+                craftType: 'Handicraft',
+                locationCluster: 'Rural Cluster',
+                preferredLanguage: 'en',
+              ));
+
+    // 4. Save to auth repository
+    await _authRepository.saveAuthData(
+      resolvedProfile.id,
+      effectivePhone,
+      token: token,
+    );
+
+    // 5. Persist to Hive user_profile_box as active profile
+    if (Hive.isBoxOpen('user_profile_box')) {
+      final box = Hive.box<UserProfile>('user_profile_box');
+      await box.put('current_profile', resolvedProfile);
     }
 
     state = state.copyWith(
       isAuthenticated: true,
-      userId: userId,
+      userId: resolvedProfile.id,
       phoneNumber: effectivePhone,
       isLoading: false,
       pendingRegistration: () => null,
