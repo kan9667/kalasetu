@@ -88,18 +88,33 @@ class UserProfile extends HiveObject {
     };
   }
 
+  Map<String, dynamic> toBackendJson() {
+    return {
+      'name': name,
+      'phone': phone.replaceAll(RegExp(r'[^\d]'), ''),
+      'craft_type': craftType,
+      'location_cluster': locationCluster,
+      'state': state,
+      if (experienceYears != null && experienceYears!.isNotEmpty)
+        'experience_years': experienceYears,
+      if (pehchanId != null && pehchanId!.isNotEmpty)
+        'pehchan_id': pehchanId,
+      'preferred_language': preferredLanguage,
+    };
+  }
+
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       phone: json['phone'] as String? ?? '',
-      avatarUrl: json['avatarUrl'] as String?,
-      craftType: json['craftType'] as String? ?? 'Handicraft',
-      locationCluster: json['locationCluster'] as String? ?? 'Rural Cluster',
-      preferredLanguage: json['preferredLanguage'] as String? ?? 'en',
+      avatarUrl: json['avatarUrl'] as String? ?? json['avatar_url'] as String?,
+      craftType: json['craftType'] as String? ?? (json['craft_type'] as String? ?? 'Handicraft'),
+      locationCluster: json['locationCluster'] as String? ?? (json['location_cluster'] as String? ?? 'Rural Cluster'),
+      preferredLanguage: json['preferredLanguage'] as String? ?? (json['preferred_language'] as String? ?? 'en'),
       state: json['state'] as String? ?? '',
-      experienceYears: json['experienceYears'] as String?,
-      pehchanId: json['pehchanId'] as String?,
+      experienceYears: json['experienceYears'] as String? ?? json['experience_years'] as String?,
+      pehchanId: json['pehchanId'] as String? ?? json['pehchan_id'] as String?,
     );
   }
 }

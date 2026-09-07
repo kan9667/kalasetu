@@ -22,22 +22,17 @@ class ProductRepository {
   /// Get all products - Hive is the instant source of truth
   Future<List<Product>> getProducts({bool forceRefresh = false, bool isOnline = true}) async {
     final box = _getProductsBox();
-    if (box.containsKey('prod_1')) await box.delete('prod_1');
-    if (box.containsKey('prod_2')) await box.delete('prod_2');
-
-    // Ensure legacy preexisting seed products are purged from local cache
-    if (box.containsKey('prod_1')) await box.delete('prod_1');
-    if (box.containsKey('prod_2')) await box.delete('prod_2');
     final pendingBox = _getPendingBox();
-    if (pendingBox.containsKey('prod_1')) await pendingBox.delete('prod_1');
-    if (pendingBox.containsKey('prod_2')) await pendingBox.delete('prod_2');
 
     // If box is empty and online, populate with remote products
     if ((box.isEmpty || forceRefresh) && isOnline) {
       try {
         final remote = await _apiService.getProducts();
         for (var p in remote) {
-          await box.put(p.id, p);
+          // Safeguard: Never overwrite items that have pending local offline changes
+          if (!pendingBox.containsKey(p.id)) {
+            await box.put(p.id, p);
+          }
         }
       } catch (e) {
         debugPrint('ProductRepository: Remote fetch failed, using local cache: $e');
@@ -55,7 +50,7 @@ class ProductRepository {
   }
 
   /// Add product - Writes to Hive first, queues for sync if offline or sync fails
-  Future<Product> addProduct(Product product, {bool isOnline = true}) async {
+  Future<Product> addProduct(Product product, {bool isOnline = true, String? artisanId}) async {
     final productsBox = _getProductsBox();
     final pendingBox = _getPendingBox();
 
@@ -66,7 +61,7 @@ class ProductRepository {
     if (isOnline) {
       try {
         final onlineProduct = product.copyWith(id: id, status: ProductStatus.live);
-        final created = await _apiService.createProduct(onlineProduct);
+        final created = await _apiService.createProduct(onlineProduct, artisanId: artisanId);
         await productsBox.put(created.id, created);
         await pendingBox.delete(created.id);
         return created;
