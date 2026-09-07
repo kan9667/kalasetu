@@ -30,13 +30,25 @@ logger = logging.getLogger(__name__)
 PRICING_SYSTEM_PROMPT = """You are an expert pricing analyst specializing in Indian handicrafts and artisan products. Your role is to suggest a fair market price for handmade products created by marginalized artisans.
 
 ## Your Principles:
-1. **NEVER** suggest a price below the artisan's cost floor. The artisan must always cover their costs.
+1. **Cost Floor Integrity:**
+   - If the artisan provided a cost breakdown, **NEVER** suggest a price below their cost floor.
+   - If NO cost inputs were provided (cost floor is ₹0), **DO NOT FABRICATE OR INVENT** cost figures (such as "materials ₹150 + labor ₹360"). Price based strictly on fair market value, art/craft complexity, and category standards.
 2. Factor in the uniqueness of handmade products — they deserve a premium over mass-produced goods.
 3. Consider the skill level, time invested, and cultural significance of the craft.
-4. Use the comparable market products to anchor your pricing in reality.
+4. Use the comparable market products to anchor your pricing in reality — BUT only when they are genuinely similar.
 5. Account for the platform (online vs. fair), target buyer, and seasonal demand.
 6. Provide a price RANGE (low–high) along with your primary suggestion.
 7. Be transparent about your reasoning so the artisan understands the value of their work.
+
+## Critical Rule — Comparable Relevance:
+Each comparable product is tagged with a similarity score (0–100%) and a quality label:
+- **Excellent (≥80%)** — strong match; weight heavily.
+- **Good (60–79%)** — reasonable match; use with moderate confidence.
+- **Fair (< 60%)** — weak match; treat as loose context only, do NOT let it dominate the price.
+
+If all comparables are Fair or the match quality summary shows low average similarity, rely primarily
+on the cost floor, product description, and general handicraft market knowledge instead.
+NEVER anchor the price on a comparable from a completely different product category.
 
 ## Output Format:
 Return a JSON object with these exact fields:
@@ -53,12 +65,20 @@ PRICING_USER_PROMPT_TEMPLATE = """## Artisan's Product
 {category_line}
 {cost_floor_section}
 
-## Market Comparables (Top {num_comparables} most similar products currently selling)
+## Market Comparables — Match Quality Summary
+- Comparables retrieved: {num_comparables}
+- Average similarity: {avg_similarity:.0%}
+- Minimum similarity: {min_similarity:.0%}
+{quality_warning}
+
+## Market Comparables (sorted by relevance)
 {comparables_text}
 
 ## Task
 Based on the artisan's product and the market comparables above, calculate a fair suggested price.
-Remember: the suggested price MUST be at or above the cost floor of ₹{cost_floor:.0f}.
+{cost_floor_instruction}
+Weight each comparable according to its similarity score — low-similarity comparables should have
+little influence on the final price.
 
 Return your response as a valid JSON object with the fields: suggested_price, price_range_low, price_range_high, confidence_score, reasoning, market_position."""
 
@@ -100,17 +120,47 @@ class LLMPricer:
         # Build the comparables text block
         comparables_text = self._format_comparables(comparables)
 
+        # Compute match quality summary stats for the prompt
+        if comparables:
+            similarities = [c.similarity_score for c in comparables]
+            avg_similarity = sum(similarities) / len(similarities)
+            min_similarity = min(similarities)
+        else:
+            avg_similarity = 0.0
+            min_similarity = 0.0
+
+        if avg_similarity < 0.60:
+            if cost_floor > 0:
+                quality_warning = (
+                    "⚠️  **Low match quality** — comparables are not closely related to this "
+                    "product. Rely primarily on cost floor and category knowledge."
+                )
+            else:
+                quality_warning = (
+                    "⚠️  **Low match quality** — comparables are not closely related to this "
+                    "product. Rely on product description, craft complexity, and category market knowledge."
+                )
+        elif avg_similarity < 0.75:
+            quality_warning = (
+                "ℹ️  Moderate match quality — use comparables as loose guidance only."
+            )
+        else:
+            quality_warning = "✅ Good match quality — comparables are reliable price anchors."
+
         # Build the cost section
-        cost_floor_section = ""
         if cost_inputs and cost_floor > 0:
             cost_floor_section = (
-                f"\n**Cost Breakdown:**\n"
+                f"\n**Cost Breakdown (provided by artisan):**\n"
                 f"- Raw materials: ₹{cost_inputs.materials:,.0f}\n"
                 f"- Labor: {cost_inputs.labor_hours} hours × ₹{cost_inputs.hourly_rate or 50}/hr = ₹{cost_inputs.labor_hours * (cost_inputs.hourly_rate or 50):,.0f}\n"
                 f"- Transport: ₹{cost_inputs.transport:,.0f}\n"
                 f"- Overhead: ₹{cost_inputs.overhead:,.0f}\n"
                 f"- **Total Cost Floor: ₹{cost_floor:,.0f}** (DO NOT price below this)\n"
             )
+            cost_floor_instruction = f"Remember: the suggested price MUST be at or above the artisan's cost floor of ₹{cost_floor:.0f}."
+        else:
+            cost_floor_section = "\n**Cost Breakdown:** None provided. Do NOT invent or assume raw material or labor costs."
+            cost_floor_instruction = "No cost floor was specified. Do NOT invent fabricated material or labor figures in your reasoning. Estimate fair market value based on product type, art complexity, and market comparables."
 
         category_line = f"**Category:** {category}" if category else ""
 
@@ -121,7 +171,10 @@ class LLMPricer:
             cost_floor_section=cost_floor_section,
             num_comparables=len(comparables),
             comparables_text=comparables_text,
-            cost_floor=cost_floor,
+            cost_floor_instruction=cost_floor_instruction,
+            avg_similarity=avg_similarity,
+            min_similarity=min_similarity,
+            quality_warning=quality_warning,
         )
 
         # Build content parts (multimodal if image is available)
@@ -224,6 +277,16 @@ class LLMPricer:
             # Fallback: simple comparable-based pricing
             return self._fallback_pricing(comparables, cost_floor, description)
 
+    @staticmethod
+    def _similarity_label(score: float) -> str:
+        """Return a human-readable quality label for a similarity score."""
+        if score >= 0.80:
+            return "Excellent"
+        elif score >= 0.60:
+            return "Good"
+        else:
+            return "Fair"
+
     def _format_comparables(self, comparables: list[SimilarProduct]) -> str:
         """Format comparable products as a readable text block for the prompt."""
         if not comparables:
@@ -231,12 +294,13 @@ class LLMPricer:
 
         lines = []
         for i, comp in enumerate(comparables, 1):
+            label = self._similarity_label(comp.similarity_score)
             lines.append(
                 f"{i}. **{comp.title}**\n"
                 f"   - Price: ₹{comp.selling_price:,.0f}\n"
                 f"   - Category: {comp.category}\n"
                 f"   - Platform: {comp.source_platform}\n"
-                f"   - Similarity: {comp.similarity_score:.2%}\n"
+                f"   - Similarity: {comp.similarity_score:.2%} [{label} match]\n"
                 f"   - Description: {comp.description[:200] if comp.description else 'N/A'}"
             )
         return "\n\n".join(lines)

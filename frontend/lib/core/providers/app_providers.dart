@@ -288,6 +288,7 @@ class AddProductDraft {
     this.titleHi = '',
     this.descriptionEn = '',
     this.descriptionHi = '',
+<<<<<<< Updated upstream
     this.category = 'Pottery',
     this.tags = const ['terracotta', 'handcrafted', 'sustainable'],
     this.rawMaterialCost = 150.0,
@@ -302,6 +303,23 @@ class AddProductDraft {
         'Evaluated based on pure river clay sourcing, wheel sculpting time, and fair wage floor.',
     this.pricingReasoningHi =
         'प्राकृतिक नदी की मिट्टी, चाक पर गढ़ने का समय और उचित पारिश्रमिक के आधार पर विश्लेषित।',
+=======
+    this.category = 'Handicrafts',
+    this.tags = const ['handcrafted', 'artisan', 'made-in-india'],
+    this.rawMaterialCost = 0.0,
+    this.laborHours = 0.0,
+    this.hourlyRate = 0.0,
+    this.floorPrice = 0.0,
+    this.suggestedPrice = 0.0,
+    this.minPrice = 0.0,
+    this.maxPrice = 0.0,
+    this.finalPrice = 0.0,
+    this.pricingReasoning = '',
+    this.pricingReasoningHi = '',
+    this.confidenceScore = 0.0,
+    this.marketPosition = 'mid-range',
+    this.comparableProducts = const [],
+>>>>>>> Stashed changes
     this.isAiProcessing = false,
     this.additionalImagePaths = const [],
     this.isRetakeFlow = false,
@@ -1012,9 +1030,16 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     final suggestion = await pricingService.suggestPrice(
       category: state.category,
       tags: state.tags,
+<<<<<<< Updated upstream
       rawMaterialCost: state.rawMaterialCost,
       laborHours: state.laborHours,
       hourlyWage: state.hourlyRate,
+=======
+      imageUrl: imagePath,
+      rawMaterialCost: state.rawMaterialCost > 0 ? state.rawMaterialCost : null,
+      laborHours: state.laborHours > 0 ? state.laborHours : null,
+      hourlyWage: (state.laborHours > 0 && state.hourlyRate > 0) ? state.hourlyRate : null,
+>>>>>>> Stashed changes
     );
 
     state = state.copyWith(

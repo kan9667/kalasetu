@@ -75,19 +75,38 @@ class ArtisanProductProcessor:
         logger.info("Query vector generated (dim=%d)", len(query_vector))
 
         # ── Step 2: Retrieve market comparables (RAG) ────────────────────
-        logger.info("Step 2: Retrieving top-%d comparables...", self.settings.pricing_top_k)
+        threshold = getattr(self.settings, "pricing_similarity_threshold", 0.55)
+        logger.info(
+            "Step 2: Retrieving top-%d comparables (similarity threshold: %.2f)...",
+            self.settings.pricing_top_k,
+            threshold,
+        )
         comparables = self.vector_store.query_similar(
             query_vector=query_vector,
             top_k=self.settings.pricing_top_k,
             category_filter=category,
+            similarity_threshold=threshold,
         )
 
-        if not comparables:
-            logger.warning("No comparables found. Trying without category filter...")
+        if not comparables and category:
+            logger.warning(
+                "No comparables above threshold %.2f in category '%s'. "
+                "Retrying without category filter...",
+                threshold,
+                category,
+            )
             comparables = self.vector_store.query_similar(
                 query_vector=query_vector,
                 top_k=self.settings.pricing_top_k,
                 category_filter=None,
+                similarity_threshold=threshold,
+            )
+
+        if not comparables:
+            logger.warning(
+                "No comparables found above similarity threshold %.2f. "
+                "LLM will price based on cost floor and product description alone.",
+                threshold,
             )
 
         logger.info(

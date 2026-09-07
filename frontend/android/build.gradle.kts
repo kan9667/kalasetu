@@ -16,6 +16,11 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {
+    plugins.withId("com.android.library") {
+        project.dependencies.add("compileOnly", "androidx.concurrent:concurrent-futures:1.2.0")
+    }
+}
+subprojects {
     project.evaluationDependsOn(":app")
 }
 
