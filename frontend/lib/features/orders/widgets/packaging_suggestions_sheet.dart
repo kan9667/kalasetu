@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../../core/services/app_tts_service.dart';
+import '../../../core/services/tts_page_guides.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/motifs/mehrab_clipper.dart';
+import '../../../core/widgets/speaker_affordance.dart';
 
 class _PackagingStep {
   final IconData icon;
@@ -166,7 +169,7 @@ void showPackagingSuggestionsSheet(
   );
 }
 
-class PackagingSuggestionsSheet extends StatelessWidget {
+class PackagingSuggestionsSheet extends StatefulWidget {
   final String category;
   final VoidCallback? onMarkPacked;
 
@@ -177,8 +180,72 @@ class PackagingSuggestionsSheet extends StatelessWidget {
   });
 
   @override
+  State<PackagingSuggestionsSheet> createState() =>
+      _PackagingSuggestionsSheetState();
+}
+
+class _PackagingSuggestionsSheetState extends State<PackagingSuggestionsSheet> {
+  final AppTtsService _tts = AppTtsService();
+  bool _voiceUnavailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tts.onStateChanged = () {
+      if (mounted) setState(() {});
+    };
+  }
+
+  @override
+  void dispose() {
+    _tts.dispose();
+    super.dispose();
+  }
+
+  Future<void> _speakAllSteps(List<_PackagingStep> steps) async {
+    if (_tts.isSpeaking) {
+      await _tts.stop();
+      return;
+    }
+
+    final sentence = steps
+        .asMap()
+        .entries
+        .map((e) => 'Step ${e.key + 1}: ${e.value.title}. ${e.value.detail}')
+        .join(' ');
+
+    // The steps themselves are hardcoded English — they are not run through
+    // easy_localization — so this has to be spoken with the English voice
+    // regardless of the app language. Handing English text to the Hindi voice
+    // produces phonetic gibberish, and the guide has to match the content it
+    // introduces, so it is read in English too.
+    const languageCode = 'en';
+    final guide = TtsPageGuides.packaging.forLanguage(languageCode);
+
+    final result = await _tts.speak(
+      guide + sentence,
+      languageCode: languageCode,
+    );
+
+    if (mounted) {
+      setState(() => _voiceUnavailable = result == TtsResult.voiceUnavailable);
+    }
+  }
+
+  Future<void> _handleVoiceDownload() async {
+    final opened = await _tts.openVoiceDownloadScreen();
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please download the voice from phone settings'),
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final steps = _guideForCategory(category).values.first;
+    final steps = _guideForCategory(widget.category).values.first;
 
     return Padding(
       padding: const EdgeInsets.only(
@@ -225,7 +292,7 @@ class PackagingSuggestionsSheet extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      category,
+                      widget.category,
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.inkSoft,
                         fontSize: 12.5,
@@ -234,6 +301,11 @@ class PackagingSuggestionsSheet extends StatelessWidget {
                   ],
                 ),
               ),
+              SpeakerAffordance(
+                isSpeaking: _tts.isSpeaking,
+                onTap: () => _speakAllSteps(steps),
+              ),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: () => Navigator.of(context).pop(),
                 child: Container(
@@ -254,6 +326,9 @@ class PackagingSuggestionsSheet extends StatelessWidget {
               ),
             ],
           ),
+
+          if (_voiceUnavailable)
+            VoiceUnavailableNotice(onDownload: _handleVoiceDownload),
 
           const SizedBox(height: 18),
 
@@ -325,12 +400,12 @@ class PackagingSuggestionsSheet extends StatelessWidget {
 
           // Primary action button
           AppButton(
-            label: onMarkPacked != null
+            label: widget.onMarkPacked != null
                 ? 'Update status: packed'
                 : 'Got it, ready to pack',
             onPressed: () {
               Navigator.of(context).pop();
-              onMarkPacked?.call();
+              widget.onMarkPacked?.call();
             },
           ),
         ],

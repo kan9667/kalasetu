@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../../core/services/app_tts_service.dart';
+import '../../../core/services/tts_page_guides.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/motifs/dotted_border_box.dart';
+import '../../../core/widgets/speaker_affordance.dart';
 import '../../../core/providers/app_providers.dart';
 
 class Step4PricingWidget extends ConsumerStatefulWidget {
@@ -18,6 +21,54 @@ class Step4PricingWidget extends ConsumerStatefulWidget {
 class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
   bool _showCostBreakdown = false;
   bool _showMarketBenchmarks = false;
+  final AppTtsService _tts = AppTtsService();
+
+  @override
+  void initState() {
+    super.initState();
+    _tts.onStateChanged = () {
+      if (mounted) setState(() {});
+    };
+  }
+
+  @override
+  void dispose() {
+    _tts.dispose();
+    super.dispose();
+  }
+
+  // The suggested price comes with an AI-written justification — the
+  // artisan should be able to verify why this price was suggested without
+  // needing to read it. The price itself is stated first and explicitly,
+  // since the reasoning text does not reliably repeat the number in a
+  // form that reads naturally aloud, and the ₹ figure on screen is not
+  // something a non-reading artisan can otherwise access.
+  Future<void> _speakReasoning(double price, String reasoningEn, String reasoningHi) async {
+    if (_tts.isSpeaking) {
+      await _tts.stop();
+      return;
+    }
+    final isHindi = context.locale.languageCode == 'hi';
+    final reasoning = isHindi && reasoningHi.isNotEmpty ? reasoningHi : reasoningEn;
+    final guide = TtsPageGuides.pricing.forLanguage(context.locale.languageCode);
+    final priceStatement = isHindi
+        ? 'सुझाया गया मूल्य ${price.toStringAsFixed(0)} रुपये है। '
+        : 'The suggested price is ${price.toStringAsFixed(0)} rupees. ';
+    final result = await _tts.speak(
+      guide + priceStatement + reasoning,
+      languageCode: context.locale.languageCode,
+    );
+    if (result == TtsResult.voiceUnavailable && mounted) {
+      final opened = await _tts.openVoiceDownloadScreen();
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please download the voice from phone settings'),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -224,15 +275,27 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                   children: [
                     const Icon(Icons.psychology_outlined, size: 18, color: AppColors.terracotta),
                     const SizedBox(width: 6),
-                    Text(
-                      'ai_reasoning'.tr(),
-                      style: AppTextStyles.headlineSmall.copyWith(color: AppColors.ink),
+                    Expanded(
+                      child: Text(
+                        'ai_reasoning'.tr(),
+                        style: AppTextStyles.headlineSmall.copyWith(color: AppColors.ink),
+                      ),
+                    ),
+                    SpeakerAffordance(
+                      isSpeaking: _tts.isSpeaking,
+                      onTap: () => _speakReasoning(
+                        currentPrice,
+                        draft.pricingReasoning,
+                        draft.pricingReasoningHi,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  draft.pricingReasoning,
+                  context.locale.languageCode == 'hi' && draft.pricingReasoningHi.isNotEmpty
+                      ? draft.pricingReasoningHi
+                      : draft.pricingReasoning,
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: AppColors.ink,
                     height: 1.4,
