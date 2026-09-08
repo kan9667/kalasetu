@@ -139,15 +139,27 @@ class PriceSuggestRequest(BaseModel):
 
     def to_cost_inputs(self) -> CostInputsSchema:
         """Normalize cost inputs from various field aliases."""
-        mat = self.materials if self.materials is not None else (self.raw_material_cost or 0.0)
-        hours = self.labor_hours or 0.0
-        rate = self.hourly_rate if self.hourly_rate is not None else (self.hourly_wage or 50.0)
+        raw_mat = self.materials if self.materials is not None else self.raw_material_cost
+        mat = float(raw_mat) if (raw_mat is not None and raw_mat > 0) else 0.0
+
+        raw_hours = self.labor_hours
+        hours = float(raw_hours) if (raw_hours is not None and raw_hours > 0) else 0.0
+
+        raw_rate = self.hourly_rate if self.hourly_rate is not None else self.hourly_wage
+        rate = float(raw_rate) if (raw_rate is not None and raw_rate > 0) else (50.0 if hours > 0 else 0.0)
+
+        raw_transport = self.transport
+        transport = float(raw_transport) if (raw_transport is not None and raw_transport > 0) else 0.0
+
+        raw_overhead = self.overhead
+        overhead = float(raw_overhead) if (raw_overhead is not None and raw_overhead > 0) else 0.0
+
         return CostInputsSchema(
             materials=mat,
             labor_hours=hours,
             hourly_rate=rate,
-            transport=self.transport or 0.0,
-            overhead=self.overhead or 0.0,
+            transport=transport,
+            overhead=overhead,
         )
 
 
