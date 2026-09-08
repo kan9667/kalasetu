@@ -11,6 +11,7 @@ class OrdersNotifier extends StateNotifier<List<Order>> {
       Order(
         id: 'ORD-1001',
         productTitle: 'Terracotta Water Pot (Matka)',
+        productTitleHi: 'टेराकोटा पानी का मटका',
         productCategory: 'Pottery',
         productImagePath: '',
         buyerName: 'Priya Sharma',
@@ -23,6 +24,7 @@ class OrdersNotifier extends StateNotifier<List<Order>> {
       Order(
         id: 'ORD-1002',
         productTitle: 'Block-Print Kota Saree',
+        productTitleHi: 'ब्लॉक-प्रिंट कोटा साड़ी',
         productCategory: 'Textiles',
         productImagePath: '',
         buyerName: 'Ananya Iyer',
@@ -35,6 +37,7 @@ class OrdersNotifier extends StateNotifier<List<Order>> {
       Order(
         id: 'ORD-1003',
         productTitle: 'Dhokra Brass Elephant',
+        productTitleHi: 'ढोकरा पीतल का हाथी',
         productCategory: 'Metalwork',
         productImagePath: '',
         buyerName: 'Ravi Kumar',
@@ -49,6 +52,7 @@ class OrdersNotifier extends StateNotifier<List<Order>> {
       Order(
         id: 'ORD-1004',
         productTitle: 'Warli Tribal Painting',
+        productTitleHi: 'वारली आदिवासी पेंटिंग',
         productCategory: 'Paintings',
         productImagePath: '',
         buyerName: 'Meera Desai',
@@ -63,6 +67,7 @@ class OrdersNotifier extends StateNotifier<List<Order>> {
       Order(
         id: 'ORD-1005',
         productTitle: 'Channapatna Wooden Toy Set',
+        productTitleHi: 'चन्नापटना लकड़ी के खिलौने',
         productCategory: 'Woodwork',
         productImagePath: '',
         buyerName: 'Suresh Nair',
@@ -75,6 +80,7 @@ class OrdersNotifier extends StateNotifier<List<Order>> {
       Order(
         id: 'ORD-1006',
         productTitle: 'Meenakari Silver Earrings',
+        productTitleHi: 'मीनाकारी चांदी के झुमके',
         productCategory: 'Jewelry',
         productImagePath: '',
         buyerName: 'Fatima Ansari',
@@ -87,6 +93,7 @@ class OrdersNotifier extends StateNotifier<List<Order>> {
       Order(
         id: 'ORD-1007',
         productTitle: 'Blue Pottery Vase',
+        productTitleHi: 'ब्लू पॉटरी फूलदान',
         productCategory: 'Pottery',
         productImagePath: '',
         buyerName: 'Arjun Mehta',

@@ -287,7 +287,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             size: 20,
                             color: AppColors.terracotta,
                           ),
-                          tooltip: _tts.isSpeaking ? 'Stop' : 'Tap to hear this',
+                          tooltip: _tts.isSpeaking ? 'stop_audio'.tr() : 'tap_to_hear'.tr(),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                           onPressed: () async {

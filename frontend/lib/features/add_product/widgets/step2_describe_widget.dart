@@ -67,11 +67,6 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
 
   Future<void> _toggleRecording() async {
     if (_isRecording) {
-      String localeCode = 'hi';
-      try {
-        localeCode = context.locale.languageCode;
-      } catch (_) {}
-
       setState(() {
         _isRecording = false;
         _showCheckmark = true;
@@ -154,25 +149,25 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
     }
   }
 
-  static const List<GuidanceCue> _describeCues = [
+  List<GuidanceCue> get _describeCues => [
     GuidanceCue(
-      text: 'Tap the microphone to record your voice, or type your description directly',
+      text: 'describe_cue_1'.tr(),
       icon: Icons.mic_none_outlined,
     ),
     GuidanceCue(
-      text: 'Mention the material (e.g. Pure Clay, Silk, Brass)',
+      text: 'describe_cue_2'.tr(),
       icon: Icons.texture_rounded,
     ),
     GuidanceCue(
-      text: 'Say how it was crafted (e.g. Hand-spun, Hand-carved)',
+      text: 'describe_cue_3'.tr(),
       icon: Icons.handyman_outlined,
     ),
     GuidanceCue(
-      text: 'Include size or weight (e.g. 10 inches, 500 grams)',
+      text: 'describe_cue_4'.tr(),
       icon: Icons.scale_outlined,
     ),
     GuidanceCue(
-      text: 'Share the inspiration & heritage story behind it',
+      text: 'describe_cue_5'.tr(),
       icon: Icons.auto_stories_outlined,
     ),
   ];
@@ -294,12 +289,12 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
                     circleColor = AppColors.success;
                     shadowColor = AppColors.successLight;
                     iconData = Icons.check_circle_rounded;
-                    labelText = 'Recorded!';
+                    labelText = 'recorded_success'.tr();
                   } else if (hasAudio) {
                     circleColor = AppColors.ink;
                     shadowColor = AppColors.inkFaint;
                     iconData = _isPlayingAudio ? Icons.pause_rounded : Icons.play_arrow_rounded;
-                    labelText = _isPlayingAudio ? 'Playing...' : 'Tap to replay';
+                    labelText = _isPlayingAudio ? 'audio_playing'.tr() : 'tap_to_replay'.tr();
                   } else {
                     circleColor = AppColors.terracotta;
                     shadowColor = AppColors.terracottaLight;
@@ -370,7 +365,7 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
             const SizedBox(height: 16),
             Center(
               child: AppButton(
-                label: 'Re-record voice description',
+                label: 'rerecord_voice_desc'.tr(),
                 icon: Icons.refresh_rounded,
                 type: AppButtonType.outlined,
                 onPressed: _rerecord,
@@ -402,20 +397,9 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
 
           // Guidance prompt cycling cues
           CyclingGuidanceCue(
-            headerTitle: 'WHAT TO MENTION',
+            headerTitle: 'what_to_mention'.tr().toUpperCase(),
             headerIcon: Icons.lightbulb_outline,
-            spokenIntro:
-                'This is the second step. Here you describe your craft in your '
-                'own words, and the app writes the listing for you. Tap the big '
-                'round microphone button once to start recording, and speak '
-                'normally in your own language. The button turns red while it '
-                'is listening — tap it a second time to stop. After that the '
-                'same button plays your recording back, so you can check it, '
-                'and the button below it, Re-record voice description, lets you '
-                'start over. If you would rather write than speak, use the '
-                'Voice Transcript box below instead. When you are finished, '
-                'tap the Looks and Sounds Right button at the bottom. Mention '
-                'these things while you speak.',
+            spokenIntro: 'step2_tts_intro'.tr(),
             cues: _describeCues,
             isPaused: _isRecording || _isPlayingAudio || _textFocusNode.hasFocus,
             onCueChanged: (cue) {},

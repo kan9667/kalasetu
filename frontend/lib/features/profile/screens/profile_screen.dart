@@ -32,37 +32,83 @@ class ProfileScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         child: Column(
           children: [
-            // Avatar
-            CircleAvatar(
-              radius: 46,
-              backgroundColor: AppColors.terracotta,
-              child: const Icon(
-                Icons.person,
-                size: 52,
-                color: AppColors.textOnPrimary,
+            // Compact Profile Header Card
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.cardPadding),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: AppColors.terracotta,
+                    child: const Icon(
+                      Icons.person,
+                      size: 32,
+                      color: AppColors.textOnPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile.name,
+                          style: AppTextStyles.headlineMedium.copyWith(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          profile.phone.isNotEmpty
+                              ? profile.phone
+                              : (authState.phoneNumber ?? 'No phone'),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (profile.craftType.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.terracottaLight.withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(AppRadii.chip),
+                              border: Border.all(
+                                color: AppColors.terracotta.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Text(
+                              profile.craftType,
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.terracottaDark,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
+
             const SizedBox(height: AppSpacing.md),
-            Text(
-              profile.name,
-              style: AppTextStyles.headlineMedium,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              profile.phone.isNotEmpty ? profile.phone : (authState.phoneNumber ?? 'No phone'),
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Chip(
-              label: Text(profile.craftType),
-              backgroundColor: AppColors.terracottaLight.withValues(alpha: 0.3),
-            ),
 
-            const SizedBox(height: AppSpacing.lg),
-
-            // Stats cards row
+            // All three stats cards in a single row
             Row(
               children: [
                 Expanded(
@@ -72,7 +118,7 @@ class ProfileScreen extends ConsumerWidget {
                     icon: Icons.inventory_2,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: _StatCard(
                     title: 'pending_sync_count'.tr(),
@@ -81,14 +127,16 @@ class ProfileScreen extends ConsumerWidget {
                     color: AppColors.turmericDark,
                   ),
                 ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _StatCard(
+                    title: 'estimated_earnings'.tr(),
+                    value: '₹${(totalCount * 1850).toStringAsFixed(0)}',
+                    icon: Icons.currency_rupee,
+                    color: AppColors.forestGreen,
+                  ),
+                ),
               ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _StatCard(
-              title: 'estimated_earnings'.tr(),
-              value: '₹${(totalCount * 1850).toStringAsFixed(0)}',
-              icon: Icons.currency_rupee,
-              color: AppColors.forestGreen,
             ),
 
             const SizedBox(height: AppSpacing.xl),
@@ -97,7 +145,7 @@ class ProfileScreen extends ConsumerWidget {
             _MenuTile(
               icon: Icons.language,
               title: 'language_settings_title'.tr(),
-              subtitle: 'lang_${context.locale.languageCode}'.tr(),
+              subtitle: 'lang_${EasyLocalization.of(context)?.locale.languageCode ?? 'en'}'.tr(),
               onTap: () => context.pushNamed(AppRouteConstants.languageSettings),
             ),
             _MenuTile(
@@ -209,24 +257,42 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final activeColor = color ?? AppColors.terracotta;
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 6,
+        vertical: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadii.card),
         border: Border.all(color: AppColors.divider),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 28, color: activeColor),
-          const SizedBox(height: AppSpacing.xs),
-          Text(value, style: AppTextStyles.headlineLarge.copyWith(color: activeColor)),
-          const SizedBox(height: AppSpacing.xs),
+          Icon(icon, size: 22, color: activeColor),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: AppTextStyles.headlineSmall.copyWith(
+                color: activeColor,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
           Text(
             title,
-            style: AppTextStyles.labelSmall.copyWith(
+            style: AppTextStyles.caption.copyWith(
               color: AppColors.textSecondary,
+              fontSize: 11,
+              height: 1.15,
             ),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

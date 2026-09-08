@@ -141,9 +141,9 @@ class HttpPricingService implements PricingService {
         'description': desc,
         'category': category,
         if (imageUrl != null && imageUrl.trim().isNotEmpty) 'image_url': imageUrl.trim(),
-        if (rawMaterialCost != null) 'raw_material_cost': rawMaterialCost,
-        if (laborHours != null) 'labor_hours': laborHours,
-        if (hourlyWage != null) 'hourly_wage': hourlyWage,
+        'raw_material_cost': ?rawMaterialCost,
+        'labor_hours': ?laborHours,
+        'hourly_wage': ?hourlyWage,
         'tags': tags,
       };
 

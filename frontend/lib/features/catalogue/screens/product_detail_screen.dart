@@ -550,23 +550,42 @@ class ProductDetailScreen extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.sm),
 
                     // Title
-                    Text(
-                      product.title,
-                      style: AppTextStyles.headlineMedium.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w600,
-                        height: 1.25,
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+                                EasyLocalization.of(context)?.locale.languageCode) ==
+                            'hi';
+                        final primaryTitle = (isHindi && product.titleHi.trim().isNotEmpty)
+                            ? product.titleHi
+                            : product.title;
+                        final secondaryTitle = (isHindi && product.titleHi.trim().isNotEmpty)
+                            ? product.title
+                            : (product.titleHi.trim().isNotEmpty ? product.titleHi : null);
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              primaryTitle,
+                              style: AppTextStyles.headlineMedium.copyWith(
+                                color: AppColors.ink,
+                                fontWeight: FontWeight.w600,
+                                height: 1.25,
+                              ),
+                            ),
+                            if (secondaryTitle != null && secondaryTitle.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                secondaryTitle,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.inkSoft,
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
                     ),
-                    if (product.titleHi.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        product.titleHi,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.inkSoft,
-                        ),
-                      ),
-                    ],
 
                     const SizedBox(height: AppSpacing.sm),
 

@@ -103,6 +103,8 @@ class AppTtsService {
   static const Map<String, String> _locales = {
     'en': 'en-IN',
     'hi': 'hi-IN',
+    'ta': 'ta-IN',
+    'bn': 'bn-IN',
   };
 
   /// Locale FlutterTts will be asked to use for [languageCode].

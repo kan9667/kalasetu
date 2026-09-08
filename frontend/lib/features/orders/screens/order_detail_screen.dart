@@ -12,6 +12,38 @@ import '../widgets/packaging_suggestions_sheet.dart';
 import '../widgets/label_preview_sheet.dart';
 import '../services/label_maker_service.dart';
 
+String _tr(BuildContext context, String key, {Map<String, String>? namedArgs, String? fallback}) {
+  final easy = EasyLocalization.of(context);
+  final isHi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+          easy?.locale.languageCode) ==
+      'hi';
+  String res;
+  try {
+    if (easy != null) {
+      res = key.tr(context: context, namedArgs: namedArgs);
+    } else {
+      res = key.tr(namedArgs: namedArgs);
+    }
+  } catch (_) {
+    res = key;
+  }
+  if (isHi && fallback != null && (res == key || res.isEmpty)) {
+    return fallback;
+  }
+  return res;
+}
+
+String _trStatus(BuildContext context, OrderStatus status) {
+  final fallback = switch (status) {
+    OrderStatus.newOrder => 'नया',
+    OrderStatus.packed => 'पैक किया',
+    OrderStatus.shipped => 'भेजा गया',
+    OrderStatus.delivered => 'वितरित',
+    OrderStatus.cancelled => 'रद्द किया',
+  };
+  return _tr(context, status.labelKey, fallback: fallback);
+}
+
 class OrderDetailScreen extends ConsumerWidget {
   final Order order;
   const OrderDetailScreen({super.key, required this.order});
@@ -24,8 +56,12 @@ class OrderDetailScreen extends ConsumerWidget {
           orElse: () => order,
         );
 
+    final isHi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+
     return AppScaffold(
-      title: 'order_detail_title'.tr(),
+      title: _tr(context, 'order_detail_title', fallback: 'ऑर्डर विवरण'),
       showNotificationBell: false,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -59,7 +95,14 @@ class OrderDetailScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Placed ${_formatFull(liveOrder.placedAt)}',
+                              _tr(
+                                context,
+                                'order_placed_on',
+                                namedArgs: {
+                                  'date': _formatFull(context, liveOrder.placedAt),
+                                },
+                                fallback: 'दिनांक ${_formatFull(context, liveOrder.placedAt)} को दिया गया',
+                              ),
                               style: AppTextStyles.caption.copyWith(
                                 color: AppColors.inkFaint,
                               ),
@@ -81,7 +124,7 @@ class OrderDetailScreen extends ConsumerWidget {
                         ),
                         const SizedBox(width: AppSpacing.xs),
                         Text(
-                          'tracking_id'.tr(),
+                          _tr(context, 'tracking_id', fallback: 'ट्रैकिंग आईडी'),
                           style: AppTextStyles.bodySmall.copyWith(
                             color: AppColors.inkSoft,
                           ),
@@ -104,15 +147,27 @@ class OrderDetailScreen extends ConsumerWidget {
 
             // Product info
             _SectionCard(
-              label: 'Product',
+              label: _tr(context, 'product_label', fallback: 'उत्पाद'),
               children: [
-                _DetailRow(label: liveOrder.productTitle, value: liveOrder.productCategory),
                 _DetailRow(
-                  label: 'Quantity',
-                  value: '${liveOrder.quantity} unit${liveOrder.quantity > 1 ? 's' : ''}',
+                  label: (isHi && liveOrder.productTitleHi != null)
+                      ? liveOrder.productTitleHi!
+                      : liveOrder.productTitle,
+                  value: _localizedCategory(context, liveOrder.productCategory),
                 ),
                 _DetailRow(
-                  label: 'Amount',
+                  label: _tr(context, 'quantity_label', fallback: 'मात्रा'),
+                  value: liveOrder.quantity == 1
+                      ? _tr(context, 'quantity_unit_singular', fallback: '1 नग')
+                      : _tr(
+                          context,
+                          'quantity_unit_plural',
+                          namedArgs: {'count': '${liveOrder.quantity}'},
+                          fallback: '${liveOrder.quantity} नग',
+                        ),
+                ),
+                _DetailRow(
+                  label: _tr(context, 'amount_label', fallback: 'राशि'),
                   value: '₹${liveOrder.amount.toStringAsFixed(0)}',
                   valueStyle: AppTextStyles.headlineSmall.copyWith(
                     color: AppColors.terracottaDark,
@@ -126,7 +181,7 @@ class OrderDetailScreen extends ConsumerWidget {
 
             // Buyer info
             _SectionCard(
-              label: 'buyer_name'.tr(),
+              label: _tr(context, 'buyer_name', fallback: 'खरीदार'),
               children: [
                 _DetailRow(label: liveOrder.buyerName, value: liveOrder.buyerLocation),
               ],
@@ -142,15 +197,21 @@ class OrderDetailScreen extends ConsumerWidget {
             // Action buttons
             if (liveOrder.status.next != null) ...[
               AppButton(
-                label: '${'update_status'.tr()}: ${liveOrder.status.next!.labelKey.tr()}',
+                label: '${_tr(context, 'update_status', fallback: 'स्थिति बदलें')}: ${_trStatus(context, liveOrder.status.next!)}',
                 icon: Icons.arrow_forward,
                 onPressed: () {
                   final next = liveOrder.status.next!;
                   ref.read(ordersProvider.notifier).updateStatus(liveOrder.id, next);
                   LabelMakerService.invalidateCache(liveOrder.id);
+                  final nextStatusLabel = _trStatus(context, next);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Status updated to ${next.labelKey.tr()}'),
+                      content: Text(_tr(
+                        context,
+                        'status_updated_to',
+                        namedArgs: {'status': nextStatusLabel},
+                        fallback: 'स्थिति बदलकर $nextStatusLabel की गई',
+                      )),
                       backgroundColor: AppColors.terracotta,
                     ),
                   );
@@ -160,7 +221,7 @@ class OrderDetailScreen extends ConsumerWidget {
             ],
 
             AppButton(
-              label: 'packaging_suggestions_title'.tr(),
+              label: _tr(context, 'packaging_suggestions_title', fallback: 'पैकेजिंग सुझाव'),
               icon: Icons.inventory_2_outlined,
               type: AppButtonType.secondary,
               onPressed: () => showPackagingSuggestionsSheet(
@@ -172,7 +233,7 @@ class OrderDetailScreen extends ConsumerWidget {
             const SizedBox(height: AppSpacing.sm),
 
             AppButton(
-              label: 'label_maker_title'.tr(),
+              label: _tr(context, 'label_maker_title', fallback: 'पार्सल लेबल बनाएं'),
               icon: Icons.print_outlined,
               type: AppButtonType.outlined,
               onPressed: () => showLabelPreviewSheet(context, order: liveOrder),
@@ -185,12 +246,40 @@ class OrderDetailScreen extends ConsumerWidget {
     );
   }
 
-  String _formatFull(DateTime dt) {
-    final months = [
+  String _formatFull(BuildContext context, DateTime dt) {
+    final isHi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    final enMonths = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+    final hiMonths = [
+      'जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून',
+      'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर',
+    ];
+    final m = isHi ? hiMonths[dt.month - 1] : enMonths[dt.month - 1];
+    return '${dt.day} $m ${dt.year}';
+  }
+
+  String _localizedCategory(BuildContext context, String cat) {
+    final isHi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    if (!isHi) return cat;
+    final lower = cat.toLowerCase();
+    if (lower.contains('pottery') || lower.contains('clay') || lower.contains('ceramic')) {
+      return _tr(context, 'filter_pottery', fallback: 'मिट्टी के बर्तन');
+    } else if (lower.contains('textile') || lower.contains('saree') || lower.contains('silk') || lower.contains('fabric') || lower.contains('handloom')) {
+      return _tr(context, 'filter_textiles', fallback: 'कपड़े व वस्त्र');
+    } else if (lower.contains('jewel') || lower.contains('silver') || lower.contains('gold') || lower.contains('brass')) {
+      return _tr(context, 'filter_jewelry', fallback: 'आभूषण');
+    } else if (lower.contains('wood') || lower.contains('toy') || lower.contains('bamboo') || lower.contains('cane')) {
+      return _tr(context, 'filter_woodwork', fallback: 'काष्ठकला');
+    } else if (lower.contains('paint') || lower.contains('art')) {
+      return _tr(context, 'filter_paintings', fallback: 'चित्रकला');
+    }
+    return cat;
   }
 }
 
@@ -317,7 +406,7 @@ class _StatusBadge extends StatelessWidget {
           Icon(icon, size: 11, color: fg),
           const SizedBox(width: 4),
           Text(
-            status.labelKey.tr(),
+            _trStatus(context, status),
             style: AppTextStyles.labelSmall.copyWith(
               color: fg,
               fontSize: 11,
@@ -358,7 +447,7 @@ class _StatusTimeline extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'ORDER TIMELINE',
+            _tr(context, 'order_timeline_title', fallback: 'ऑर्डर स्थिति'),
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.inkFaint,
               letterSpacing: 1,
@@ -373,7 +462,7 @@ class _StatusTimeline extends StatelessWidget {
                 const Icon(Icons.cancel_outlined, color: AppColors.error, size: 20),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
-                  'Order Cancelled',
+                  _tr(context, 'order_cancelled_title', fallback: 'ऑर्डर रद्द'),
                   style: AppTextStyles.labelMedium.copyWith(color: AppColors.error),
                 ),
               ],
@@ -440,16 +529,21 @@ class _StatusTimeline extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        allStatuses[stepIdx].labelKey.tr(),
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: isCurrent
-                              ? AppColors.terracottaDark
-                              : (isDone ? AppColors.success : AppColors.inkFaint),
-                          fontSize: 11,
-                          fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
+                      SizedBox(
+                        width: 65,
+                        child: Text(
+                          _trStatus(context, allStatuses[stepIdx]),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: isCurrent
+                                ? AppColors.terracottaDark
+                                : (isDone ? AppColors.success : AppColors.inkFaint),
+                            fontSize: 11,
+                            fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ],
                   );

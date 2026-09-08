@@ -62,6 +62,7 @@ class HomeShell extends ConsumerWidget {
     ];
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       // AnimatedSwitcher gives a gentle fade when switching tabs
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 200),
@@ -83,34 +84,42 @@ class HomeShell extends ConsumerWidget {
         ),
         child: SafeArea(
           top: false,
+          minimum: const EdgeInsets.only(bottom: 6),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _NavItem(
-                  icon: Icons.add_photo_alternate_outlined,
-                  label: 'tab_add_product'.tr(),
-                  isActive: currentIndex == 0,
-                  onTap: () => _handleTabTap(0, context, ref),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.add_photo_alternate_outlined,
+                    label: 'tab_add_product'.tr(),
+                    isActive: currentIndex == 0,
+                    onTap: () => _handleTabTap(0, context, ref),
+                  ),
                 ),
-                _NavItem(
-                  icon: Icons.grid_view_outlined,
-                  label: 'tab_catalogue'.tr(),
-                  isActive: currentIndex == 1,
-                  onTap: () => _handleTabTap(1, context, ref),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.grid_view_outlined,
+                    label: 'tab_catalogue'.tr(),
+                    isActive: currentIndex == 1,
+                    onTap: () => _handleTabTap(1, context, ref),
+                  ),
                 ),
-                _NavItem(
-                  icon: Icons.receipt_long_outlined,
-                  label: 'tab_my_orders'.tr(),
-                  isActive: currentIndex == 2,
-                  onTap: () => _handleTabTap(2, context, ref),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.receipt_long_outlined,
+                    label: 'tab_my_orders'.tr(),
+                    isActive: currentIndex == 2,
+                    onTap: () => _handleTabTap(2, context, ref),
+                  ),
                 ),
-                _NavItem(
-                  icon: Icons.person_outline,
-                  label: 'tab_profile'.tr(),
-                  isActive: currentIndex == 3,
-                  onTap: () => _handleTabTap(3, context, ref),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.person_outline,
+                    label: 'tab_profile'.tr(),
+                    isActive: currentIndex == 3,
+                    onTap: () => _handleTabTap(3, context, ref),
+                  ),
                 ),
               ],
             ),
@@ -146,22 +155,24 @@ class _NavItem extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          width: 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 22, color: color),
               const SizedBox(height: 3),
-              Text(
-                label,
-                style: AppTextStyles.labelSmall.copyWith(
-                  fontSize: 10.5,
-                  color: color,
-                  fontWeight: FontWeight.w700,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    fontSize: 10.5,
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 3),
               // Tanka-stitch dashed underline — active tab only

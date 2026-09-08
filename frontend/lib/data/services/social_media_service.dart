@@ -194,8 +194,8 @@ class HttpSocialMediaService implements SocialMediaService {
         '$_base/api/v1/social-drafts/lookup',
         queryParameters: {
           'image_url': imageUrl,
-          if (listingId != null) 'listing_id': listingId,
-          if (draftKey != null) 'draft_key': draftKey,
+          'listing_id': ?listingId,
+          'draft_key': ?draftKey,
         },
       );
       return SocialDraft.fromJson(response.data as Map<String, dynamic>);

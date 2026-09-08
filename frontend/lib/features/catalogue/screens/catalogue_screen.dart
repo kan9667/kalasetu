@@ -344,6 +344,8 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
             ),
           ),
 
+          const SizedBox(height: 10),
+
           // Craft Category Badges with Petal Ring
           SizedBox(
             height: 44,
@@ -360,49 +362,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
             ),
           ),
 
-          // Fair Wage Trust Badge Pill
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.screenPadding,
-              vertical: 4.0,
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.goldLight,
-                borderRadius: BorderRadius.circular(AppRadii.chip),
-                border: Border.all(
-                  color: AppColors.gold.withValues(alpha: 0.35),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.workspace_premium_outlined,
-                    size: 15,
-                    color: AppColors.goldDark,
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      'fair_wage_trust_badge'.tr(),
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 11.5,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.sm),
 
           // Product Grid or Empty State
           Expanded(
@@ -540,6 +500,13 @@ class _GridProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    final displayTitle = (isHindi && product.titleHi.trim().isNotEmpty)
+        ? product.titleHi
+        : product.title;
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.cardSurface,
@@ -589,7 +556,7 @@ class _GridProductCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      product.title,
+                      displayTitle,
                       style: AppTextStyles.headlineSmall.copyWith(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,

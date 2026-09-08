@@ -48,22 +48,25 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
       await _tts.stop();
       return;
     }
-    final isHindi = context.locale.languageCode == 'hi';
+    final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    final langCode = isHindi ? 'hi' : 'en';
     final reasoning = isHindi && reasoningHi.isNotEmpty ? reasoningHi : reasoningEn;
-    final guide = TtsPageGuides.pricing.forLanguage(context.locale.languageCode);
+    final guide = TtsPageGuides.pricing.forLanguage(langCode);
     final priceStatement = isHindi
         ? 'सुझाया गया मूल्य ${price.toStringAsFixed(0)} रुपये है। '
         : 'The suggested price is ${price.toStringAsFixed(0)} rupees. ';
     final result = await _tts.speak(
       guide + priceStatement + reasoning,
-      languageCode: context.locale.languageCode,
+      languageCode: langCode,
     );
     if (result == TtsResult.voiceUnavailable && mounted) {
       final opened = await _tts.openVoiceDownloadScreen();
       if (!opened && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please download the voice from phone settings'),
+          SnackBar(
+            content: Text('voice_download_settings_hint'.tr()),
           ),
         );
       }
@@ -166,7 +169,9 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                           const Icon(Icons.verified_outlined, size: 14, color: AppColors.success),
                           const SizedBox(width: 4),
                           Text(
-                            '${(draft.confidenceScore * 100).toStringAsFixed(0)}% Match',
+                            'score_match'.tr(namedArgs: {
+                              'score': (draft.confidenceScore * 100).toStringAsFixed(0),
+                            }),
                             style: AppTextStyles.labelSmall.copyWith(
                               fontWeight: FontWeight.bold,
                               color: AppColors.success,
@@ -292,14 +297,21 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  context.locale.languageCode == 'hi' && draft.pricingReasoningHi.isNotEmpty
-                      ? draft.pricingReasoningHi
-                      : draft.pricingReasoning,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.ink,
-                    height: 1.4,
-                  ),
+                Builder(
+                  builder: (context) {
+                    final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+                            EasyLocalization.of(context)?.locale.languageCode) ==
+                        'hi';
+                    return Text(
+                      isHindi && draft.pricingReasoningHi.isNotEmpty
+                          ? draft.pricingReasoningHi
+                          : draft.pricingReasoning,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.ink,
+                        height: 1.4,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -320,19 +332,21 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.shield_outlined, size: 20, color: AppColors.success),
+                  const Icon(Icons.shield_outlined, size: 18, color: AppColors.terracotta),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'cost_breakdown_toggle'.tr(),
-                      style: AppTextStyles.headlineSmall.copyWith(
-                        color: AppColors.success,
+                      'cost_breakdown_floor_title'.tr(),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                   Icon(
                     _showCostBreakdown ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    color: AppColors.success,
+                    color: AppColors.inkSoft,
+                    size: 22,
                   ),
                 ],
               ),
@@ -391,21 +405,25 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.storefront_outlined, size: 20, color: AppColors.terracotta),
+                  const Icon(Icons.storefront_outlined, size: 18, color: AppColors.terracotta),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       draft.comparableProducts.isNotEmpty
-                          ? 'Market Benchmarks (${draft.comparableProducts.length} similar crafts)'
-                          : 'Market Benchmarks (AI RAG)',
-                      style: AppTextStyles.headlineSmall.copyWith(
-                        color: AppColors.terracotta,
+                          ? 'market_benchmarks_with_count'.tr(namedArgs: {
+                              'count': '${draft.comparableProducts.length}',
+                            })
+                          : 'market_benchmarks_title'.tr(),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                   Icon(
                     _showMarketBenchmarks ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    color: AppColors.terracotta,
+                    color: AppColors.inkSoft,
+                    size: 22,
                   ),
                 ],
               ),
@@ -423,7 +441,7 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                   border: Border.all(color: AppColors.line),
                 ),
                 child: Text(
-                  'Cost-floor safety active. Connect to online backend to retrieve live e-commerce benchmarks across Amazon Karigar, FabIndia, and Okhai.',
+                  'offline_benchmarks_notice'.tr(),
                   style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
                 ),
               )
@@ -469,7 +487,9 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  '${(comp.similarityScore * 100).toStringAsFixed(0)}% match',
+                                  'score_match'.tr(namedArgs: {
+                                    'score': (comp.similarityScore * 100).toStringAsFixed(0),
+                                  }),
                                   style: AppTextStyles.labelSmall.copyWith(
                                     color: AppColors.success,
                                     fontWeight: FontWeight.w600,

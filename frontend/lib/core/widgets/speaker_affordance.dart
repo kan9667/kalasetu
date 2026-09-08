@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -18,27 +19,30 @@ class SpeakerAffordance extends StatelessWidget {
   final bool isSpeaking;
   final VoidCallback onTap;
   final bool compact;
-  final String label;
-  final String stopLabel;
+  final String? label;
+  final String? stopLabel;
 
   const SpeakerAffordance({
     super.key,
     required this.isSpeaking,
     required this.onTap,
-    this.label = 'Tap to hear',
-    this.stopLabel = 'Stop',
+    this.label,
+    this.stopLabel,
   }) : compact = false;
 
   const SpeakerAffordance.compact({
     super.key,
     required this.isSpeaking,
     required this.onTap,
-    this.label = 'Tap to hear',
-    this.stopLabel = 'Stop',
+    this.label,
+    this.stopLabel,
   }) : compact = true;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveLabel = label ?? 'tap_to_hear'.tr();
+    final effectiveStopLabel = stopLabel ?? 'stop_audio'.tr();
+
     final icon = isSpeaking
         ? Icons.stop_circle_outlined
         : Icons.volume_up_rounded;
@@ -46,7 +50,7 @@ class SpeakerAffordance extends StatelessWidget {
     if (compact) {
       return Semantics(
         button: true,
-        label: isSpeaking ? stopLabel : label,
+        label: isSpeaking ? effectiveStopLabel : effectiveLabel,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(20),
@@ -77,7 +81,7 @@ class SpeakerAffordance extends StatelessWidget {
             Icon(icon, size: 13, color: AppColors.terracottaDark),
             const SizedBox(width: 4),
             Text(
-              isSpeaking ? stopLabel : label,
+              isSpeaking ? effectiveStopLabel : effectiveLabel,
               style: AppTextStyles.labelSmall.copyWith(
                 color: AppColors.terracottaDark,
                 fontWeight: FontWeight.w600,

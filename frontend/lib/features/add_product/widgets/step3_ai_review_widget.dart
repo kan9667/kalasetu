@@ -29,6 +29,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
   int _selectedLanguageIndex = 0; // 0 for EN, 1 for HI
   String? _processingDraftId;
   final AppTtsService _tts = AppTtsService();
+  bool _initializedLanguageFromLocale = false;
 
   @override
   void initState() {
@@ -44,6 +45,23 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
     _tts.onStateChanged = () {
       if (mounted) setState(() {});
     };
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initializedLanguageFromLocale) {
+      _initializedLanguageFromLocale = true;
+      final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+              EasyLocalization.of(context)?.locale.languageCode) ==
+          'hi';
+      if (isHindi) {
+        _selectedLanguageIndex = 1;
+        final draft = ref.read(addProductFlowProvider);
+        _titleController.text = draft.titleHi;
+        _descController.text = draft.descriptionHi;
+      }
+    }
   }
 
   // Reads back the title and description in whichever language is currently
@@ -91,10 +109,10 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
     if (_processingDraftId == draft.draftId) return;
     _processingDraftId = draft.draftId;
     final isOnline = ref.read(connectivityProvider).value ?? true;
-    String localeCode = 'hi';
-    try {
-      localeCode = context.locale.languageCode;
-    } catch (_) {}
+    final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    final localeCode = isHindi ? 'hi' : 'en';
     ref
         .read(addProductFlowProvider.notifier)
         .submitForAiProcessing(isOnline, languageCode: localeCode);
@@ -119,7 +137,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Retake Photo', style: AppTextStyles.headlineMedium),
+              Text('retake_photo_title'.tr(), style: AppTextStyles.headlineMedium),
               const SizedBox(height: 16),
               ListTile(
                 leading: Container(
@@ -131,7 +149,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                   child: const Icon(Icons.camera_alt, color: AppColors.terracotta),
                 ),
                 title: Text('take_photo'.tr(), style: AppTextStyles.headlineSmall),
-                subtitle: Text('Capture a new photo with camera', style: AppTextStyles.bodySmall),
+                subtitle: Text('capture_new_photo_sub'.tr(), style: AppTextStyles.bodySmall),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final img = await picker.pickImage(source: ImageSource.camera);
@@ -151,7 +169,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                   child: const Icon(Icons.photo_library, color: AppColors.ink),
                 ),
                 title: Text('upload_gallery'.tr(), style: AppTextStyles.headlineSmall),
-                subtitle: Text('Choose a photo from gallery', style: AppTextStyles.bodySmall),
+                subtitle: Text('choose_gallery_sub'.tr(), style: AppTextStyles.bodySmall),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final img = await picker.pickImage(source: ImageSource.gallery);
@@ -187,10 +205,10 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
       final nowOnline = next.value == true;
       if (!wasOffline || !nowOnline) return;
 
-      String localeCode = 'en';
-      try {
-        localeCode = context.locale.languageCode;
-      } catch (_) {}
+      final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+              EasyLocalization.of(context)?.locale.languageCode) ==
+          'hi';
+      final localeCode = isHindi ? 'hi' : 'en';
       ref
           .read(addProductFlowProvider.notifier)
           .submitForAiProcessing(true, languageCode: localeCode);
@@ -271,10 +289,10 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                                         color: Colors.black.withValues(alpha: 0.7),
                                         borderRadius: BorderRadius.circular(20),
                                       ),
-                                      child: const Row(
+                                      child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          SizedBox(
+                                          const SizedBox(
                                             width: 14,
                                             height: 14,
                                             child: CircularProgressIndicator(
@@ -282,10 +300,10 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                                               color: Colors.white,
                                             ),
                                           ),
-                                          SizedBox(width: 8),
+                                          const SizedBox(width: 8),
                                           Text(
-                                            'Enhancing image and creating listing...',
-                                            style: TextStyle(
+                                            'enhancing_image'.tr(),
+                                            style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 12,
                                               fontWeight: FontWeight.w500,
@@ -310,7 +328,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                       color: AppColors.terracottaDark,
                     ),
                     label: Text(
-                      'Retake Photo',
+                      'retake_photo_title'.tr(),
                       style: AppTextStyles.labelMedium.copyWith(
                         color: AppColors.terracottaDark,
                         fontWeight: FontWeight.w600,
@@ -617,9 +635,9 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                 onPressed: () {
                   if (!isOnline) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text(
-                          "You're offline — reconnect to regenerate the listing.",
+                          'offline_regenerate_warning'.tr(),
                         ),
                       ),
                     );
@@ -666,13 +684,13 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                     ),
                     const SizedBox(height: 22),
                     Text(
-                      'Enhancing image and creating listing',
+                      'ai_regenerating_title'.tr(),
                       style: AppTextStyles.headlineMedium.copyWith(fontSize: 18),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'AI is enhancing your product photo and regenerating your catalog listing.',
+                      'ai_regenerating_subtitle'.tr(),
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.inkSoft,
                       ),
@@ -805,7 +823,7 @@ class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
                       left: 10,
                       child: IgnorePointer(
                         child: _SliderLabel(
-                          text: 'Before',
+                          text: 'slider_before'.tr(),
                           dimmed: _sliderPosition < 0.15,
                         ),
                       ),
@@ -815,7 +833,7 @@ class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
                       right: 10,
                       child: IgnorePointer(
                         child: _SliderLabel(
-                          text: 'After',
+                          text: 'slider_after'.tr(),
                           dimmed: _sliderPosition > 0.85,
                         ),
                       ),
@@ -826,7 +844,7 @@ class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
                       right: 0,
                       child: IgnorePointer(
                         child: Text(
-                          '← Drag to compare →',
+                          'slider_drag_compare'.tr(),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 11,
