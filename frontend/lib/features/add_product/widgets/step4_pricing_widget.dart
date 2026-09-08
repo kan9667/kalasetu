@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/services/app_tts_service.dart';
@@ -21,11 +22,26 @@ class Step4PricingWidget extends ConsumerStatefulWidget {
 class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
   bool _showCostBreakdown = false;
   bool _showMarketBenchmarks = false;
+  final TextEditingController _customPriceController = TextEditingController();
+  final FocusNode _customPriceFocusNode = FocusNode();
   final AppTtsService _tts = AppTtsService();
 
   @override
   void initState() {
     super.initState();
+    _customPriceFocusNode.addListener(() {
+      if (!_customPriceFocusNode.hasFocus) {
+        final val = double.tryParse(_customPriceController.text);
+        if (val != null) {
+          final draft = ref.read(addProductFlowProvider);
+          final minBound = (draft.floorPrice * 0.5).clamp(100.0, 5000.0);
+          final maxBound = (draft.suggestedPrice * 1.8).clamp(minBound + 200.0, 15000.0);
+          final clamped = val.clamp(minBound, maxBound);
+          ref.read(addProductFlowProvider.notifier).setFinalPrice(clamped);
+          _customPriceController.text = clamped.toStringAsFixed(0);
+        }
+      }
+    });
     _tts.onStateChanged = () {
       if (mounted) setState(() {});
     };
@@ -33,6 +49,8 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
 
   @override
   void dispose() {
+    _customPriceController.dispose();
+    _customPriceFocusNode.dispose();
     _tts.dispose();
     super.dispose();
   }
@@ -80,6 +98,13 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
     final minBound = (draft.floorPrice * 0.5).clamp(100.0, 5000.0);
     final maxBound = (draft.suggestedPrice * 1.8).clamp(minBound + 200.0, 15000.0);
     final currentPrice = draft.finalPrice.clamp(minBound, maxBound);
+
+    if (!_customPriceFocusNode.hasFocus) {
+      final formatted = currentPrice.toStringAsFixed(0);
+      if (_customPriceController.text != formatted) {
+        _customPriceController.text = formatted;
+      }
+    }
 
     return SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
@@ -513,6 +538,112 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
                 ),
               ),
           ],
+
+          const SizedBox(height: 16),
+
+          // Custom price manual entry field
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.cardSurface,
+              borderRadius: BorderRadius.circular(AppRadii.card),
+              border: Border.all(color: AppColors.line),
+              boxShadow: AppElevation.cardShadow,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.edit_note_outlined, size: 18, color: AppColors.terracotta),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'custom_price_label'.tr(),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.ink,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _customPriceController,
+                        focusNode: _customPriceFocusNode,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        style: AppTextStyles.headlineSmall.copyWith(
+                          color: AppColors.ink,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: InputDecoration(
+                          prefixIcon: const Padding(
+                            padding: EdgeInsets.only(left: 14, right: 8),
+                            child: Center(
+                              widthFactor: 0.0,
+                              child: Text(
+                                '₹',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.inkSoft,
+                                ),
+                              ),
+                            ),
+                          ),
+                          prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
+                          hintText: 'custom_price_hint'.tr(),
+                          hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkFaint),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadii.button),
+                            borderSide: const BorderSide(color: AppColors.line),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadii.button),
+                            borderSide: const BorderSide(color: AppColors.line),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadii.button),
+                            borderSide: const BorderSide(color: AppColors.terracotta, width: 1.5),
+                          ),
+                          isDense: true,
+                        ),
+                        onChanged: (text) {
+                          final val = double.tryParse(text);
+                          if (val != null) {
+                            final clamped = val.clamp(minBound, maxBound);
+                            ref.read(addProductFlowProvider.notifier).setFinalPrice(clamped);
+                          }
+                        },
+                        onSubmitted: (text) {
+                          final val = double.tryParse(text);
+                          if (val != null) {
+                            final clamped = val.clamp(minBound, maxBound);
+                            ref.read(addProductFlowProvider.notifier).setFinalPrice(clamped);
+                            _customPriceController.text = clamped.toStringAsFixed(0);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'custom_price_range_note'.tr(namedArgs: {
+                    'min': minBound.toStringAsFixed(0),
+                    'max': maxBound.toStringAsFixed(0),
+                  }),
+                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.inkSoft),
+                ),
+              ],
+            ),
+          ),
 
           const SizedBox(height: 24),
           AppButton(

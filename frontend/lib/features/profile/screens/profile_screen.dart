@@ -21,10 +21,6 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
     final profile = ref.watch(userProfileProvider);
-    final productsAsync = ref.watch(productListProvider);
-
-    final totalCount = productsAsync.value?.length ?? 0;
-    final pendingCount = ref.read(productRepositoryProvider).getPendingCount();
 
     return AppScaffold(
       title: 'profile_title'.tr(),
@@ -107,39 +103,6 @@ class ProfileScreen extends ConsumerWidget {
             ),
 
             const SizedBox(height: AppSpacing.md),
-
-            // All three stats cards in a single row
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    title: 'total_listings'.tr(),
-                    value: '$totalCount',
-                    icon: Icons.inventory_2,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _StatCard(
-                    title: 'pending_sync_count'.tr(),
-                    value: '$pendingCount',
-                    icon: Icons.sync,
-                    color: AppColors.turmericDark,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _StatCard(
-                    title: 'estimated_earnings'.tr(),
-                    value: '₹${(totalCount * 1850).toStringAsFixed(0)}',
-                    icon: Icons.currency_rupee,
-                    color: AppColors.forestGreen,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: AppSpacing.xl),
 
             // Menu items
             _MenuTile(
@@ -235,66 +198,6 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: AppSpacing.xl),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color? color;
-
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final activeColor = color ?? AppColors.terracotta;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 6,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadii.card),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 22, color: activeColor),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: AppTextStyles.headlineSmall.copyWith(
-                color: activeColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-              ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-              height: 1.15,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
       ),
     );
   }

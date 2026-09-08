@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/providers/app_providers.dart';
 import '../screens/chatbot_sheet.dart';
 
-class KalaMitraFab extends StatelessWidget {
+class KalaMitraFab extends ConsumerWidget {
   const KalaMitraFab({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final _ = Localizations.maybeLocaleOf(context);
+    final _ = ref.watch(userProfileProvider).preferredLanguage;
     return Container(
       constraints: const BoxConstraints(minHeight: 44, maxHeight: 46),
       decoration: BoxDecoration(

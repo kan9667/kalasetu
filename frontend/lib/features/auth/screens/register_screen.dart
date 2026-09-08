@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/motifs/dotted_border_box.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/router/app_route_constants.dart';
@@ -28,6 +31,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _clusterController = TextEditingController();
   final _experienceController = TextEditingController();
   final _pehchanController = TextEditingController();
+
+  // Bank Details Controllers
+  final _bankAccountHolderController = TextEditingController();
+  final _bankAccountNumberController = TextEditingController();
+  final _bankIfscController = TextEditingController();
+  final _bankNameController = TextEditingController();
+
+  // Pehchan Card Photo Upload
+  final ImagePicker _imagePicker = ImagePicker();
+  File? _pehchanImageFile;
+  bool _isPickingPehchanPhoto = false;
 
   String _selectedCraft = 'Terracotta Pottery';
   String _selectedState = 'Delhi';
@@ -81,8 +95,40 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _clusterController.dispose();
     _experienceController.dispose();
     _pehchanController.dispose();
+    _bankAccountHolderController.dispose();
+    _bankAccountNumberController.dispose();
+    _bankIfscController.dispose();
+    _bankNameController.dispose();
     _tts.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPehchanPhoto(ImageSource source) async {
+    setState(() => _isPickingPehchanPhoto = true);
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1200,
+      );
+      if (picked != null) {
+        setState(() {
+          _pehchanImageFile = File(picked.path);
+        });
+      }
+    } catch (e) {
+      debugPrint('[RegisterScreen] Error picking Pehchan photo: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isPickingPehchanPhoto = false);
+      }
+    }
+  }
+
+  void _removePehchanPhoto() {
+    setState(() {
+      _pehchanImageFile = null;
+    });
   }
 
   void _handleRegister() {
@@ -467,16 +513,396 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
                 const SizedBox(height: AppSpacing.md),
 
-                // 7. Pehchan ID / Artisan Card (Optional)
-                TextFormField(
-                  controller: _pehchanController,
-                  textCapitalization: TextCapitalization.characters,
-                  decoration: InputDecoration(
-                    labelText: 'pehchan_id_label'.tr(),
-                    hintText: 'pehchan_id_hint'.tr(),
-                    prefixIcon: const Icon(Icons.verified_user_outlined),
-                    helperText: 'pehchan_id_desc'.tr(),
-                    helperMaxLines: 2,
+                // 7. Pehchan ID / Artisan Card Section (Optional)
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardSurface,
+                    borderRadius: BorderRadius.circular(AppRadii.card),
+                    border: Border.all(color: AppColors.line),
+                    boxShadow: AppElevation.cardShadow,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Section Header
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(AppSpacing.sm),
+                            decoration: BoxDecoration(
+                              color: AppColors.terracotta.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.verified_user_outlined,
+                              color: AppColors.terracotta,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              'pehchan_id_label'.tr(),
+                              style: AppTextStyles.headlineSmall.copyWith(
+                                color: AppColors.terracotta,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: AppSpacing.sm),
+
+                      // Helper-note banner (pink/terracotta banner)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm + 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.terracotta.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(AppRadii.card),
+                          border: Border.all(
+                            color: AppColors.terracotta.withValues(alpha: 0.2),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              padding: const EdgeInsets.all(5),
+                              decoration: const BoxDecoration(
+                                color: AppColors.cardSurface,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.card_membership_outlined,
+                                color: AppColors.terracottaDark,
+                                size: 16,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                '${'pehchan_id_desc'.tr()} ${'pehchan_photo_desc'.tr()}',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.inkSoft,
+                                  fontSize: 12,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: AppSpacing.md),
+
+                      // Text input for Pehchan ID
+                      TextFormField(
+                        controller: _pehchanController,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: InputDecoration(
+                          labelText: 'pehchan_id_label'.tr(),
+                          hintText: 'pehchan_id_hint'.tr(),
+                          prefixIcon: const Icon(Icons.badge_outlined),
+                        ),
+                      ),
+
+                      const SizedBox(height: AppSpacing.md),
+
+                      // Photo capture/upload section
+                      if (_pehchanImageFile == null)
+                        DottedBorderBox(
+                          width: double.infinity,
+                          backgroundColor: AppColors.parchmentDeep.withValues(alpha: 0.5),
+                          radius: AppRadii.card,
+                          borderColor: AppColors.dottedBorder,
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.cardSurface,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.add_a_photo_outlined,
+                                      size: 18,
+                                      color: AppColors.terracotta,
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Flexible(
+                                    child: Text(
+                                      'pehchan_photo_label'.tr(),
+                                      style: AppTextStyles.bodyMedium.copyWith(
+                                        color: AppColors.ink,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: AppButton(
+                                      label: 'take_photo'.tr(),
+                                      icon: Icons.camera_alt,
+                                      type: AppButtonType.outlined,
+                                      isCompact: true,
+                                      isLoading: _isPickingPehchanPhoto,
+                                      onPressed: () => _pickPehchanPhoto(ImageSource.camera),
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Expanded(
+                                    child: AppButton(
+                                      label: 'upload_gallery'.tr(),
+                                      icon: Icons.photo_library,
+                                      type: AppButtonType.outlined,
+                                      isCompact: true,
+                                      isLoading: _isPickingPehchanPhoto,
+                                      onPressed: () => _pickPehchanPhoto(ImageSource.gallery),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.all(AppSpacing.sm),
+                          decoration: BoxDecoration(
+                            color: AppColors.parchmentDeep.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(AppRadii.card),
+                            border: Border.all(color: AppColors.line),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(AppRadii.sm),
+                                child: SizedBox(
+                                  height: 140,
+                                  width: double.infinity,
+                                  child: Image.file(
+                                    _pehchanImageFile!,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.check_circle,
+                                    color: AppColors.terracotta,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'pehchan_photo_attached'.tr(),
+                                      style: AppTextStyles.labelMedium.copyWith(
+                                        color: AppColors.ink,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () => _pickPehchanPhoto(ImageSource.camera),
+                                    icon: const Icon(Icons.refresh, size: 16, color: AppColors.terracotta),
+                                    label: Text(
+                                      'change_photo'.tr(),
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: AppColors.terracotta,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.inkSoft),
+                                    tooltip: 'remove_photo'.tr(),
+                                    onPressed: _removePehchanPhoto,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                // 8. Bank Details Section (Optional)
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardSurface,
+                    borderRadius: BorderRadius.circular(AppRadii.card),
+                    border: Border.all(color: AppColors.line),
+                    boxShadow: AppElevation.cardShadow,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Section Header
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(AppSpacing.sm),
+                            decoration: BoxDecoration(
+                              color: AppColors.terracotta.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.account_balance_outlined,
+                              color: AppColors.terracotta,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'bank_details_title'.tr(),
+                                  style: AppTextStyles.headlineSmall.copyWith(
+                                    color: AppColors.terracotta,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'bank_details_subtitle'.tr(),
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: AppSpacing.sm),
+
+                      // Helper-note banner (yellow/gold banner)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm + 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.goldLight,
+                          borderRadius: BorderRadius.circular(AppRadii.card),
+                          border: Border.all(
+                            color: AppColors.gold.withValues(alpha: 0.4),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              padding: const EdgeInsets.all(5),
+                              decoration: const BoxDecoration(
+                                color: AppColors.cardSurface,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.lock_outline,
+                                color: AppColors.goldDark,
+                                size: 16,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                'bank_details_desc'.tr(),
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.inkSoft,
+                                  fontSize: 12,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: AppSpacing.md),
+
+                      // 1. Account Holder Name
+                      TextFormField(
+                        controller: _bankAccountHolderController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          labelText: 'bank_account_holder_label'.tr(),
+                          hintText: 'bank_account_holder_hint'.tr(),
+                          prefixIcon: const Icon(Icons.person_outline),
+                        ),
+                      ),
+
+                      const SizedBox(height: AppSpacing.md),
+
+                      // 2. Account Number
+                      TextFormField(
+                        controller: _bankAccountNumberController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'bank_account_number_label'.tr(),
+                          hintText: 'bank_account_number_hint'.tr(),
+                          prefixIcon: const Icon(Icons.pin_outlined),
+                        ),
+                      ),
+
+                      const SizedBox(height: AppSpacing.md),
+
+                      // 3. IFSC Code
+                      TextFormField(
+                        controller: _bankIfscController,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: InputDecoration(
+                          labelText: 'bank_ifsc_label'.tr(),
+                          hintText: 'bank_ifsc_hint'.tr(),
+                          prefixIcon: const Icon(Icons.confirmation_number_outlined),
+                        ),
+                      ),
+
+                      const SizedBox(height: AppSpacing.md),
+
+                      // 4. Bank Name
+                      TextFormField(
+                        controller: _bankNameController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          labelText: 'bank_name_label'.tr(),
+                          hintText: 'bank_name_hint'.tr(),
+                          prefixIcon: const Icon(Icons.account_balance_outlined),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 

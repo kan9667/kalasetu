@@ -57,17 +57,16 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            title: const Text('Resume previous draft?'),
-            content: const Text(
-                'We found an unfinished product draft. Resume it or start fresh?'),
+            title: Text('resume_draft_title'.tr(context: context)),
+            content: Text('resume_draft_msg'.tr(context: context)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Start fresh'),
+                child: Text('start_fresh_btn'.tr(context: context)),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Resume'),
+                child: Text('resume_btn'.tr(context: context)),
               ),
             ],
           ),
@@ -89,6 +88,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild when the locale or user language preferences change
+    final _ = Localizations.maybeLocaleOf(context);
+    final _ = ref.watch(userProfileProvider).preferredLanguage;
+
     final currentIndex = ref.watch(homeTabIndexProvider);
 
     const screens = [
@@ -129,7 +132,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 Expanded(
                   child: _NavItem(
                     icon: Icons.add_photo_alternate_outlined,
-                    label: 'tab_add_product'.tr(),
+                    label: 'tab_add_product'.tr(context: context),
                     isActive: currentIndex == 0,
                     onTap: () => _handleTabTap(0),
                   ),
@@ -137,7 +140,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 Expanded(
                   child: _NavItem(
                     icon: Icons.grid_view_outlined,
-                    label: 'tab_catalogue'.tr(),
+                    label: 'tab_catalogue'.tr(context: context),
                     isActive: currentIndex == 1,
                     onTap: () => _handleTabTap(1),
                   ),
@@ -145,7 +148,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 Expanded(
                   child: _NavItem(
                     icon: Icons.receipt_long_outlined,
-                    label: 'tab_my_orders'.tr(),
+                    label: 'tab_my_orders'.tr(context: context),
                     isActive: currentIndex == 2,
                     onTap: () => _handleTabTap(2),
                   ),
@@ -153,7 +156,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 Expanded(
                   child: _NavItem(
                     icon: Icons.person_outline,
-                    label: 'tab_profile'.tr(),
+                    label: 'tab_profile'.tr(context: context),
                     isActive: currentIndex == 3,
                     onTap: () => _handleTabTap(3),
                   ),

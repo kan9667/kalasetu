@@ -60,8 +60,8 @@ class ProductDetailScreen extends ConsumerWidget {
                   TextField(
                     controller: priceCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Price (₹)',
+                    decoration: InputDecoration(
+                      labelText: '${'price_label'.tr()} (₹)',
                       prefixText: '₹ ',
                       filled: true,
                       fillColor: AppColors.surface,
@@ -134,10 +134,10 @@ class ProductDetailScreen extends ConsumerWidget {
   void _showSoldOutDialog(BuildContext context, WidgetRef ref, Product product) {
     showAppConfirmationDialog(
       context: context,
-      title: 'Mark as Sold Out',
-      message: 'Mark this item as sold out on ONDC. It remains saved in your catalogue and can be relisted anytime once restocked.',
+      title: 'mark_sold_out_dialog_title'.tr(),
+      message: 'mark_sold_out_dialog_msg'.tr(),
       icon: Icons.pause_circle_outline_rounded,
-      confirmLabel: 'Mark Sold Out',
+      confirmLabel: 'mark_sold_out_btn'.tr(),
       confirmColor: AppColors.terracotta,
       onConfirm: () async {
         final updated = product.copyWith(
@@ -148,8 +148,8 @@ class ProductDetailScreen extends ConsumerWidget {
         if (context.mounted) {
           Navigator.of(context, rootNavigator: true).pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Product marked as Sold Out.'),
+            SnackBar(
+              content: Text('product_marked_sold_out'.tr()),
               backgroundColor: AppColors.terracotta,
             ),
           );
@@ -161,17 +161,17 @@ class ProductDetailScreen extends ConsumerWidget {
   void _showRemoveListingDialog(BuildContext context, WidgetRef ref, Product product) {
     showAppConfirmationDialog(
       context: context,
-      title: 'Remove Listing from ONDC',
+      title: 'remove_listing_dialog_title'.tr(),
       icon: Icons.visibility_off_outlined,
-      confirmLabel: 'Remove from ONDC',
+      confirmLabel: 'remove_listing_btn'.tr(),
       confirmColor: AppColors.goldDark,
       contentWidget: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: AppSpacing.sm),
-          const Text(
-            'This will pull the item from the public ONDC store immediately.',
-            style: TextStyle(fontSize: 14, color: AppColors.ink),
+          Text(
+            'remove_listing_dialog_msg'.tr(),
+            style: const TextStyle(fontSize: 14, color: AppColors.ink),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -182,9 +182,9 @@ class ProductDetailScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(AppRadii.sm),
               border: Border.all(color: AppColors.line),
             ),
-            child: const Text(
-              '• It remains saved in your private catalogue.\n• You can relist it back to Live status anytime.\n• This is NOT permanent deletion.',
-              style: TextStyle(fontSize: 13, color: AppColors.inkSoft, height: 1.4),
+            child: Text(
+              '• ${'remove_listing_note_1'.tr()}\n• ${'remove_listing_note_2'.tr()}\n• ${'remove_listing_note_3'.tr()}',
+              style: const TextStyle(fontSize: 13, color: AppColors.inkSoft, height: 1.4),
             ),
           ),
         ],
@@ -198,8 +198,8 @@ class ProductDetailScreen extends ConsumerWidget {
         if (context.mounted) {
           Navigator.of(context, rootNavigator: true).pop();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Listing removed from ONDC. Saved in your catalogue.'),
+            SnackBar(
+              content: Text('product_removed_ondc'.tr()),
               backgroundColor: AppColors.ink,
             ),
           );
@@ -216,8 +216,8 @@ class ProductDetailScreen extends ConsumerWidget {
     await ref.read(productListProvider.notifier).updateProduct(updated);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Product relisted and now Live on ONDC!'),
+        SnackBar(
+          content: Text('product_relisted_live'.tr()),
           backgroundColor: AppColors.statusSuccessFg,
         ),
       );
@@ -238,7 +238,7 @@ class ProductDetailScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Listing Management Guide',
+                'listing_guide_title'.tr(),
                 style: AppTextStyles.headlineSmall.copyWith(
                   color: AppColors.ink,
                   fontWeight: FontWeight.w600,
@@ -246,15 +246,15 @@ class ProductDetailScreen extends ConsumerWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSpacing.md),
-              const Text('• Mark as Sold Out:', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.ink)),
-              const Text('Keeps item visible on ONDC & catalogue but purchase is disabled. Relist anytime once restocked.\n', style: TextStyle(color: AppColors.inkSoft)),
-              const Text('• Remove Listing:', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.ink)),
-              const Text('Pulls the item from public ONDC search. Remains safely in your private catalogue for future relisting.\n', style: TextStyle(color: AppColors.inkSoft)),
-              const Text('• Delete Product:', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.error)),
-              const Text('Permanently deletes the product from your catalogue. Cannot be undone.', style: TextStyle(color: AppColors.inkSoft)),
+              Text('• ${'mark_sold_out_dialog_title'.tr()}:', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.ink)),
+              Text('${'mark_sold_out_dialog_msg'.tr()}\n', style: const TextStyle(color: AppColors.inkSoft)),
+              Text('• ${'remove_listing_dialog_title'.tr()}:', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.ink)),
+              Text('${'remove_vs_delete_hint'.tr()}\n', style: const TextStyle(color: AppColors.inkSoft)),
+              Text('• ${'delete_product_confirm_title'.tr()}:', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.error)),
+              Text('delete_product_confirm_msg'.tr(), style: const TextStyle(color: AppColors.inkSoft)),
               const SizedBox(height: AppSpacing.lg),
               AppButton(
-                label: 'Understood',
+                label: 'understood_btn'.tr(),
                 onPressed: () => Navigator.pop(ctx),
               ),
             ],
@@ -319,6 +319,8 @@ class ProductDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final _ = Localizations.maybeLocaleOf(context);
+    final _ = ref.watch(userProfileProvider).preferredLanguage;
     final productsAsync = ref.watch(productListProvider);
 
     return AppScaffold(
@@ -381,7 +383,7 @@ class ProductDetailScreen extends ConsumerWidget {
                         child: PopupMenuButton<String>(
                           padding: EdgeInsets.zero,
                           icon: const Icon(Icons.more_vert, color: AppColors.ink, size: 20),
-                          tooltip: 'Listing Actions',
+                          tooltip: 'listing_actions'.tr(),
                           color: AppColors.cardSurface,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(AppRadii.card),
@@ -408,46 +410,46 @@ class ProductDetailScreen extends ConsumerWidget {
                           },
                           itemBuilder: (ctx) => [
                             if (isNonLive)
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'relist',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.refresh, color: AppColors.statusSuccessFg, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Relist Item (Make Live)'),
+                                    const Icon(Icons.refresh, color: AppColors.statusSuccessFg, size: 18),
+                                    const SizedBox(width: 8),
+                                    Text('relist_item_btn'.tr()),
                                   ],
                                 ),
                               )
                             else ...[
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'sold_out',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.remove_shopping_cart_outlined, color: AppColors.terracotta, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Mark as Sold Out'),
+                                    const Icon(Icons.remove_shopping_cart_outlined, color: AppColors.terracotta, size: 18),
+                                    const SizedBox(width: 8),
+                                    Text('mark_sold_out_btn'.tr()),
                                   ],
                                 ),
                               ),
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'remove_listing',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.visibility_off_outlined, color: AppColors.goldDark, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Remove Listing from ONDC'),
+                                    const Icon(Icons.visibility_off_outlined, color: AppColors.goldDark, size: 18),
+                                    const SizedBox(width: 8),
+                                    Text('remove_listing_btn'.tr()),
                                   ],
                                 ),
                               ),
                             ],
                             const PopupMenuDivider(),
-                            const PopupMenuItem(
+                            PopupMenuItem(
                               value: 'legend',
                               child: Row(
                                 children: [
-                                  Icon(Icons.info_outline, size: 18, color: AppColors.inkSoft),
-                                  SizedBox(width: 8),
-                                  Text('Remove vs Delete Info'),
+                                  const Icon(Icons.info_outline, size: 18, color: AppColors.inkSoft),
+                                  const SizedBox(width: 8),
+                                  Text('listing_info_btn'.tr()),
                                 ],
                               ),
                             ),
@@ -520,8 +522,10 @@ class ProductDetailScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Flexible(child: _buildCategoryBadge(product.category)),
-                        const SizedBox(width: 8),
+                        if (product.category.trim().isNotEmpty) ...[
+                          Flexible(child: _buildCategoryBadge(product.category)),
+                          const SizedBox(width: 8),
+                        ],
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
@@ -638,78 +642,128 @@ class ProductDetailScreen extends ConsumerWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'LISTING STATUS',
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.inkFaint,
-                                  letterSpacing: 0.8,
-                                  fontWeight: FontWeight.w700,
+                              Flexible(
+                                child: Text(
+                                  'listing_status_header'.tr(),
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: AppColors.inkFaint,
+                                    letterSpacing: 0.8,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              if (product.statusUpdatedAt != null)
-                                Text(
-                                  'Updated ${product.statusUpdatedAt!.day}/${product.statusUpdatedAt!.month}/${product.statusUpdatedAt!.year}',
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: AppColors.inkFaint,
+                              if (product.statusUpdatedAt != null) ...[
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    'status_updated_at'.tr(
+                                      namedArgs: {
+                                        'date': '${product.statusUpdatedAt!.day}/${product.statusUpdatedAt!.month}/${product.statusUpdatedAt!.year}',
+                                      },
+                                    ),
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.inkFaint,
+                                    ),
+                                    textAlign: TextAlign.end,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: AppSpacing.sm),
                           if (isNonLive) ...[
                             AppButton(
-                              label: 'Relist Item (Make Live)',
+                              label: 'relist_item_btn'.tr(),
                               icon: Icons.refresh,
                               type: AppButtonType.secondary,
                               onPressed: () => _relistProduct(context, ref, product),
                             ),
                           ] else ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => _showSoldOutDialog(context, ref, product),
-                                    icon: const Icon(Icons.remove_shopping_cart_outlined, size: 16, color: AppColors.terracotta),
-                                    label: Text(
-                                      'Sold Out',
-                                      style: AppTextStyles.labelMedium.copyWith(
-                                        color: AppColors.terracotta,
-                                        fontWeight: FontWeight.w600,
+                            IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () => _showSoldOutDialog(context, ref, product),
+                                      style: OutlinedButton.styleFrom(
+                                        backgroundColor: AppColors.parchmentDeep,
+                                        side: const BorderSide(color: AppColors.line),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(AppRadii.button),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       ),
-                                    ),
-                                    style: OutlinedButton.styleFrom(
-                                      backgroundColor: AppColors.parchmentDeep,
-                                      side: const BorderSide(color: AppColors.line),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(AppRadii.button),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.remove_shopping_cart_outlined, size: 16, color: AppColors.terracotta),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                'mark_sold_out_btn'.tr(),
+                                                textAlign: TextAlign.center,
+                                                maxLines: 2,
+                                                style: AppTextStyles.labelMedium.copyWith(
+                                                  color: AppColors.terracotta,
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 12,
+                                                  height: 1.2,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: AppSpacing.sm),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => _showRemoveListingDialog(context, ref, product),
-                                    icon: const Icon(Icons.visibility_off_outlined, size: 16, color: AppColors.inkSoft),
-                                    label: Text(
-                                      'Remove Listing',
-                                      style: AppTextStyles.labelMedium.copyWith(
-                                        color: AppColors.inkSoft,
-                                        fontWeight: FontWeight.w600,
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () => _showRemoveListingDialog(context, ref, product),
+                                      style: OutlinedButton.styleFrom(
+                                        backgroundColor: AppColors.parchmentDeep,
+                                        side: const BorderSide(color: AppColors.line),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(AppRadii.button),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       ),
-                                    ),
-                                    style: OutlinedButton.styleFrom(
-                                      backgroundColor: AppColors.parchmentDeep,
-                                      side: const BorderSide(color: AppColors.line),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(AppRadii.button),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.visibility_off_outlined, size: 16, color: AppColors.inkSoft),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                'remove_listing_btn'.tr(),
+                                                textAlign: TextAlign.center,
+                                                maxLines: 2,
+                                                style: AppTextStyles.labelMedium.copyWith(
+                                                  color: AppColors.inkSoft,
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 12,
+                                                  height: 1.2,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ],
                           const SizedBox(height: AppSpacing.sm),
@@ -720,7 +774,7 @@ class ProductDetailScreen extends ConsumerWidget {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  '"Remove Listing" keeps item in your private catalogue, while "Delete" removes it permanently.',
+                                  'remove_vs_delete_hint'.tr(),
                                   style: AppTextStyles.caption.copyWith(color: AppColors.inkFaint, fontSize: 11),
                                 ),
                               ),

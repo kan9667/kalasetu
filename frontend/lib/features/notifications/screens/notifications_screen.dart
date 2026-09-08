@@ -62,8 +62,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       final opened = await _tts.openVoiceDownloadScreen();
       if (!opened && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please download the voice from phone settings'),
+          SnackBar(
+            content: Text('voice_download_settings_hint'.tr()),
           ),
         );
       }

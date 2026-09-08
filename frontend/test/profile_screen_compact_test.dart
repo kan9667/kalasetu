@@ -50,7 +50,7 @@ void main() {
   });
 
   group('Profile Screen Compact Header & Stat Cards Test', () {
-    testWidgets('Renders compact horizontal header and 3 stat cards in a single row without overflow', (tester) async {
+    testWidgets('Renders compact horizontal header and confirms stat cards are removed', (tester) async {
       tester.view.physicalSize = const Size(320 * 2, 600 * 2);
       tester.view.devicePixelRatio = 2.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -93,10 +93,13 @@ void main() {
       expect(find.text('+91 98765 43210'), findsOneWidget);
       expect(find.text('Blue Pottery'), findsOneWidget);
 
-      // Verify all 3 stat cards exist
-      expect(find.text('total_listings'), findsOneWidget);
-      expect(find.text('pending_sync_count'), findsOneWidget);
-      expect(find.text('estimated_earnings'), findsOneWidget);
+      // Verify all 3 stat cards are removed
+      expect(find.text('total_listings'), findsNothing);
+      expect(find.text('pending_sync_count'), findsNothing);
+      expect(find.text('estimated_earnings'), findsNothing);
+
+      // Verify menu items render cleanly
+      expect(find.text('language_settings_title'), findsOneWidget);
     });
   });
 

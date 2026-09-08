@@ -32,6 +32,13 @@ class _MyOrdersScreenState extends ConsumerState<MyOrdersScreen> {
 
     return AppScaffold(
       title: 'my_orders_title'.tr(),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.analytics_outlined),
+          tooltip: 'artisan_analytics_tooltip'.tr(),
+          onPressed: () => context.pushNamed(AppRouteConstants.myStats),
+        ),
+      ],
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

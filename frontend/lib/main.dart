@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -25,6 +26,10 @@ Future<Box<T>> _openSafeBox<T>(String boxName) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  rootBundle.evict('assets/translations/en.json');
+  rootBundle.evict('assets/translations/hi.json');
+  rootBundle.evict('assets/translations/ta.json');
+  rootBundle.evict('assets/translations/bn.json');
   await EasyLocalization.ensureInitialized();
 
   await Hive.initFlutter();

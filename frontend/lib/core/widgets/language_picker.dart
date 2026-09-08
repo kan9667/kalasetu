@@ -17,17 +17,17 @@ class LanguagePicker extends ConsumerWidget {
     {'code': 'hi', 'name': 'Hindi', 'native': 'हिन्दी'},
     {'code': 'ta', 'name': 'Tamil', 'native': 'தமிழ்'},
     {'code': 'bn', 'name': 'Bengali', 'native': 'বাংলা'},
-    {'code': 'pa', 'name': 'Punjabi', 'native': 'ਪੰਜਾਬੀ'},
   ];
 
   void _showLanguageBottomSheet(BuildContext context, WidgetRef ref) {
     showMehrabBottomSheet(
       context: context,
       builder: (modalContext) {
-        String currentLocaleCode = 'en';
-        try {
-          currentLocaleCode = context.locale.languageCode;
-        } catch (_) {}
+        final profileLang = ref.read(userProfileProvider).preferredLanguage;
+        final liveLocale = Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode ??
+            profileLang;
+        final currentLocaleCode = liveLocale.isNotEmpty ? liveLocale : 'en';
 
         return Padding(
           padding: const EdgeInsets.only(
@@ -124,10 +124,11 @@ class LanguagePicker extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    String currentCode = 'en';
-    try {
-      currentCode = context.locale.languageCode;
-    } catch (_) {}
+    final profileLang = ref.watch(userProfileProvider).preferredLanguage;
+    final liveLocale = Localizations.maybeLocaleOf(context)?.languageCode ??
+        EasyLocalization.of(context)?.locale.languageCode ??
+        profileLang;
+    final currentCode = liveLocale.isNotEmpty ? liveLocale : 'en';
 
     final currentLang = languages.firstWhere(
       (l) => l['code'] == currentCode,

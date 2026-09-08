@@ -80,8 +80,8 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       final opened = await _tts.openVoiceDownloadScreen();
       if (!opened && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please download the voice from phone settings'),
+          SnackBar(
+            content: Text('voice_download_settings_hint'.tr()),
           ),
         );
       }
@@ -94,12 +94,20 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
     final draft = ref.read(addProductFlowProvider);
     final isOnline = ref.read(connectivityProvider).value ?? true;
 
+    final fallbackCategory = ref.read(userProfileProvider).craftType.trim().isNotEmpty
+        ? ref.read(userProfileProvider).craftType.trim()
+        : 'craft_category_handicraft'.tr();
+
+    final effectiveCategory = draft.category.trim().isNotEmpty
+        ? draft.category.trim()
+        : fallbackCategory;
+
     const fallbackPhoto =
         'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=600&q=80';
 
     final newProduct = Product(
       id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
-      title: draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted ${draft.category}',
+      title: draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted $effectiveCategory',
       titleHi: draft.titleHi,
       description: draft.descriptionEn.isNotEmpty ? draft.descriptionEn : draft.voiceTranscript,
       descriptionHi: draft.descriptionHi,
@@ -107,7 +115,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       photoPath: draft.originalImagePath.isNotEmpty ? draft.originalImagePath : fallbackPhoto,
       aiEnhancedPhotoPath: draft.isEnhanced ? draft.enhancedImagePath : '',
       additionalPhotoPaths: draft.additionalImagePaths,
-      category: draft.category,
+      category: effectiveCategory,
       tags: draft.tags,
       status: isOnline ? ProductStatus.live : ProductStatus.pendingSync,
       createdAt: DateTime.now(),
@@ -128,6 +136,12 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
 
     if (mounted) {
       setState(() => _isPublishing = false);
+
+      final finalPrice = draft.finalPrice;
+      final floorCost = draft.floorPrice > 0
+          ? draft.floorPrice
+          : (draft.rawMaterialCost + (draft.laborHours * draft.hourlyRate));
+      final profit = (finalPrice - floorCost).clamp(0.0, double.infinity);
 
       showDialog(
         context: context,
@@ -152,11 +166,132 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                 ),
               ],
             ),
-            content: Text(
-              isOnline
-                  ? 'Your craft listing is live and visible to buyers.'
-                  : 'Product saved locally. KalaSetu will automatically upload it when internet returns.',
-              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    isOnline
+                        ? 'listing_online_desc'.tr()
+                        : 'listing_offline_desc'.tr(),
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardSurface,
+                      borderRadius: BorderRadius.circular(AppRadii.card),
+                      border: Border.all(color: AppColors.line),
+                      boxShadow: AppElevation.cardShadow,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.savings_outlined, size: 18, color: AppColors.terracotta),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'profit_popup_title'.tr(),
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.terracotta,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'final_selling_price_label'.tr(),
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+                            ),
+                            Text(
+                              '₹${finalPrice.toStringAsFixed(0)}',
+                              style: AppTextStyles.headlineSmall.copyWith(color: AppColors.ink),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'floor_cost_label'.tr(),
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+                            ),
+                            Text(
+                              '₹${floorCost.toStringAsFixed(0)}',
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+                            ),
+                          ],
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                          child: Divider(color: AppColors.line, height: 1),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.trending_up, size: 16, color: AppColors.success),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'profit_earned_label'.tr(),
+                                  style: AppTextStyles.labelMedium.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.ink,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              '+₹${profit.toStringAsFixed(0)}',
+                              style: AppTextStyles.headlineMedium.copyWith(
+                                color: AppColors.success,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.goldLight,
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      border: Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.auto_awesome, size: 14, color: AppColors.goldDark),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'profit_encouragement_msg'.tr(namedArgs: {'profit': profit.toStringAsFixed(0)}),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.inkSoft,
+                              fontSize: 11.5,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
             actions: [
               AppButton(
@@ -431,7 +566,11 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                     source: 'add_flow',
                     allImages: images,
                     title: draft.titleEn,
-                    category: draft.category,
+                    category: draft.category.trim().isNotEmpty
+                        ? draft.category.trim()
+                        : (ref.read(userProfileProvider).craftType.trim().isNotEmpty
+                            ? ref.read(userProfileProvider).craftType.trim()
+                            : 'craft_category_handicraft'.tr()),
                     description: draft.descriptionEn.isNotEmpty
                         ? draft.descriptionEn
                         : draft.voiceTranscript,
