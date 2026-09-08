@@ -63,6 +63,47 @@ final hasSelectedLanguageProvider =
       return HasSelectedLanguageNotifier();
     });
 
+// --- Listing Tutorial Provider ---
+class ListingTutorialNotifier extends StateNotifier<bool> {
+  static const String _boxName = 'app_settings_box';
+  static const String _keyPrefix = 'has_seen_listing_tutorial_';
+
+  ListingTutorialNotifier() : super(false);
+
+  bool hasSeenTutorial(String userId) {
+    if (!Hive.isBoxOpen(_boxName)) return false;
+    final box = Hive.box(_boxName);
+    return box.get('$_keyPrefix$userId', defaultValue: false) as bool;
+  }
+
+  /// Checks if tutorial is needed for [userId]. If not seen yet, marks it seen immediately and returns true (indicating it should launch).
+  Future<bool> checkAndMarkTutorialSeen(String userId) async {
+    if (!Hive.isBoxOpen(_boxName)) return false;
+    final box = Hive.box(_boxName);
+    final key = '$_keyPrefix$userId';
+    final alreadySeen = box.get(key, defaultValue: false) as bool;
+    if (!alreadySeen) {
+      await box.put(key, true);
+      state = true;
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> resetTutorial(String userId) async {
+    if (Hive.isBoxOpen(_boxName)) {
+      final box = Hive.box(_boxName);
+      await box.delete('$_keyPrefix$userId');
+      state = false;
+    }
+  }
+}
+
+final listingTutorialProvider =
+    StateNotifierProvider<ListingTutorialNotifier, bool>((ref) {
+  return ListingTutorialNotifier();
+});
+
 // --- Services Providers ---
 final apiServiceProvider = Provider<ApiService>((ref) {
   if (kMockAiBackend) {
