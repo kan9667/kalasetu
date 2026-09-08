@@ -5,7 +5,6 @@ import 'package:easy_localization/easy_localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/router/app_route_constants.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_image.dart';
@@ -14,6 +13,7 @@ import '../../../core/widgets/motifs/craft_category_badge.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../data/models/product.dart';
 import '../../social_media/providers/social_media_provider.dart';
+import '../../social_media/widgets/social_media_launchpad_sheet.dart';
 
 class ProductDetailScreen extends ConsumerWidget {
   final String productId;
@@ -550,23 +550,42 @@ class ProductDetailScreen extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.sm),
 
                     // Title
-                    Text(
-                      product.title,
-                      style: AppTextStyles.headlineMedium.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w600,
-                        height: 1.25,
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+                                EasyLocalization.of(context)?.locale.languageCode) ==
+                            'hi';
+                        final primaryTitle = (isHindi && product.titleHi.trim().isNotEmpty)
+                            ? product.titleHi
+                            : product.title;
+                        final secondaryTitle = (isHindi && product.titleHi.trim().isNotEmpty)
+                            ? product.title
+                            : (product.titleHi.trim().isNotEmpty ? product.titleHi : null);
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              primaryTitle,
+                              style: AppTextStyles.headlineMedium.copyWith(
+                                color: AppColors.ink,
+                                fontWeight: FontWeight.w600,
+                                height: 1.25,
+                              ),
+                            ),
+                            if (secondaryTitle != null && secondaryTitle.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                secondaryTitle,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.inkSoft,
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
                     ),
-                    if (product.titleHi.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        product.titleHi,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.inkSoft,
-                        ),
-                      ),
-                    ],
 
                     const SizedBox(height: AppSpacing.sm),
 
@@ -585,9 +604,9 @@ class ProductDetailScreen extends ConsumerWidget {
                     AppButton(
                       label: 'social_media_helper'.tr(),
                       icon: Icons.share_rounded,
-                      onPressed: () => context.pushNamed(
-                        AppRouteConstants.socialMediaHelper,
-                        extra: SocialMediaArgs(
+                      onPressed: () => showSocialMediaLaunchpadSheet(
+                        context,
+                        SocialMediaArgs(
                           listingId: product.id,
                           source: 'catalogue',
                           allImages: product.allPhotoPaths,

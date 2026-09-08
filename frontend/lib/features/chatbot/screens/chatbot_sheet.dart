@@ -5,23 +5,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import '../../../core/providers/app_providers.dart';
 import '../../../core/services/app_tts_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/speaker_affordance.dart';
+import '../../../core/widgets/motifs/mehrab_clipper.dart';
 import '../../../data/models/chat_message.dart';
 import '../providers/chat_provider.dart';
 
 class ChatbotSheet extends ConsumerStatefulWidget {
   const ChatbotSheet({super.key});
 
-  /// Helper static method to display the Chatbot as a modal bottom sheet.
+  /// Helper static method to display the Chatbot as a modal bottom sheet with scalloped Mehrab border.
   static Future<void> show(BuildContext context) {
-    return showModalBottomSheet(
+    return showMehrabBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) => const ChatbotSheet(),
     );
   }
@@ -52,6 +52,19 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
   /// Any Devanagari character marks the reply as Hindi for voice selection.
   static final RegExp _devanagari = RegExp(r'[ऀ-ॿ]');
 
+  /// Resolves active language across EasyLocalization, UserProfile, and standard Flutter locale.
+  String _getLanguage() {
+    final easyLocale = EasyLocalization.of(context)?.locale.languageCode;
+    if (easyLocale != null && easyLocale.isNotEmpty) {
+      return easyLocale;
+    }
+    final profileLang = ref.read(userProfileProvider).preferredLanguage;
+    if (profileLang.isNotEmpty) {
+      return profileLang;
+    }
+    return Localizations.maybeLocaleOf(context)?.languageCode ?? 'en';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +75,12 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
     _tts.onStateChanged = () {
       if (!_tts.isSpeaking && mounted) setState(() => _speakingMessageId = null);
     };
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final lang = _getLanguage();
+        ref.read(chatNotifierProvider.notifier).syncLanguage(lang.isNotEmpty ? lang : 'en');
+      }
+    });
   }
 
   Future<void> _speakMessage(ChatMessageModel msg) async {
@@ -137,7 +156,7 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
     if (_isRecording) return;
     if (!await _recorder.hasPermission()) {
       if (mounted) {
-        final isHi = context.locale.languageCode == 'hi';
+        final isHi = _getLanguage() == 'hi';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -268,7 +287,7 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatNotifierProvider);
-    final isHi = context.locale.languageCode == 'hi';
+    final isHi = _getLanguage() == 'hi';
 
     // Auto-scroll on new message
     ref.listen<ChatState>(chatNotifierProvider, (prev, next) {
@@ -280,145 +299,122 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return Container(
+    return SizedBox(
       height: screenHeight * 0.88,
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow,
-            blurRadius: 16,
-            offset: Offset(0, -4),
-          ),
-        ],
-      ),
       child: Column(
         children: [
           // ── Header ────────────────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
             decoration: const BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border(bottom: BorderSide(color: AppColors.divider, width: 0.8)),
+              color: AppColors.cardSurface,
+              border: Border(bottom: BorderSide(color: AppColors.line, width: 1)),
             ),
-            child: Column(
+            child: Row(
               children: [
-                // Top drag pill
+                // Avatar
                 Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 10),
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    color: AppColors.oak.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(2),
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.terracotta.withValues(alpha: 0.2),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: AppColors.terracotta.withValues(alpha: 0.3),
+                      width: 1.5,
+                    ),
                   ),
-                ),
-                Row(
-                  children: [
-                    // Avatar
-                    Container(
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/images/kalamitra_logo.png',
                       width: 44,
                       height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.terracotta.withValues(alpha: 0.25),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                        border: Border.all(
-                          color: AppColors.terracotta.withValues(alpha: 0.2),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/kalamitra_logo.png',
-                          width: 44,
-                          height: 44,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const Center(
-                            child: Icon(Icons.smart_toy_outlined, color: AppColors.terracotta, size: 22),
-                          ),
-                        ),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const Center(
+                        child: Icon(Icons.smart_toy_outlined, color: AppColors.terracotta, size: 22),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    // Title & Persona
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                // Title & Persona
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                isHi ? 'कला-मित्र' : 'KalaMitra',
-                                style: AppTextStyles.headlineSmall.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.online.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 6,
-                                      height: 6,
-                                      decoration: const BoxDecoration(
-                                        color: AppColors.online,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'AI Guide',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.online,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
                           Text(
-                            isHi ? 'शिल्प व बाज़ार सहायक • नेविगेटर' : 'Artisan Assistant • Craft & Market Guide',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
+                            'kalamitra_title'.tr(),
+                            style: AppTextStyles.headlineSmall.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.successLight,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.success.withValues(alpha: 0.25)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.success,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'AI Guide',
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    // Refresh chat
-                    IconButton(
-                      icon: const Icon(Icons.refresh, color: AppColors.charcoalSoft, size: 20),
-                      tooltip: isHi ? 'चैट रीसेट करें' : 'Reset Chat',
-                      onPressed: () {
-                        ref.read(chatNotifierProvider.notifier).clearChat(context.locale.languageCode);
-                      },
-                    ),
-                    // Close button
-                    IconButton(
-                      icon: const Icon(Icons.close, color: AppColors.charcoal, size: 22),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
+                      Text(
+                        'kalamitra_subtitle'.tr(),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Refresh chat
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, color: AppColors.inkSoft, size: 20),
+                  tooltip: 'kalamitra_reset'.tr(),
+                  onPressed: () {
+                    ref.read(chatNotifierProvider.notifier).clearChat(
+                      EasyLocalization.of(context)?.locale.languageCode ?? 'en',
+                    );
+                  },
+                ),
+                // Close button
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: AppColors.ink, size: 22),
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
             ),
@@ -427,11 +423,11 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
           // ── Quick Topics Horizontal Bar ───────────────────────────────────
           if (chatState.quickTopics.isNotEmpty)
             Container(
-              height: 48,
-              color: AppColors.surfaceVariant.withValues(alpha: 0.5),
+              height: 46,
+              color: AppColors.parchmentDeep.withValues(alpha: 0.4),
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 5),
                 itemCount: chatState.quickTopics.length,
                 itemBuilder: (context, index) {
                   final topic = chatState.quickTopics[index];
@@ -441,18 +437,18 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                   return Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: ActionChip(
-                      backgroundColor: AppColors.surface,
-                      side: const BorderSide(color: AppColors.oak, width: 0.6),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      backgroundColor: AppColors.cardSurface,
+                      side: const BorderSide(color: AppColors.line, width: 0.8),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       labelPadding: EdgeInsets.zero,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,
                       label: Text(
                         label,
-                        style: const TextStyle(
+                        style: AppTextStyles.labelSmall.copyWith(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.charcoal,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                       onPressed: () => _handleSuggestedTap(query),
@@ -464,18 +460,21 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
 
           // ── Message History ───────────────────────────────────────────────
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              itemCount: chatState.messages.length + (chatState.isLoading ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == chatState.messages.length && chatState.isLoading) {
-                  return _buildTypingIndicator();
-                }
+            child: Container(
+              color: AppColors.parchment,
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                itemCount: chatState.messages.length + (chatState.isLoading ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == chatState.messages.length && chatState.isLoading) {
+                    return _buildTypingIndicator();
+                  }
 
-                final msg = chatState.messages[index];
-                return _buildMessageItem(msg);
-              },
+                  final msg = chatState.messages[index];
+                  return _buildMessageItem(msg);
+                },
+              ),
             ),
           ),
 
@@ -488,7 +487,8 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
               bottom: 8 + keyboardHeight,
             ),
             decoration: const BoxDecoration(
-              color: AppColors.surface,
+              color: AppColors.cardSurface,
+              border: Border(top: BorderSide(color: AppColors.line, width: 1)),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.shadow,
@@ -510,10 +510,10 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                         Expanded(
                           child: Container(
                             decoration: BoxDecoration(
-                              color: AppColors.background,
+                              color: AppColors.parchment,
                               borderRadius: BorderRadius.circular(24),
                               border: Border.all(
-                                color: AppColors.oak.withValues(alpha: 0.5),
+                                color: AppColors.line,
                               ),
                             ),
                             child: TextField(
@@ -522,9 +522,7 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                               textInputAction: TextInputAction.send,
                               onSubmitted: (_) => _handleSend(),
                               decoration: InputDecoration(
-                                hintText: isHi
-                                    ? 'बोलें या सवाल टाइप करें...'
-                                    : 'Speak or type your question...',
+                                hintText: 'kalamitra_hint'.tr(),
                                 hintStyle: AppTextStyles.bodySmall.copyWith(
                                   color: AppColors.textTertiary,
                                 ),
@@ -547,7 +545,7 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                           child: IconButton(
                             icon: const Icon(
                               Icons.send_rounded,
-                              color: AppColors.cream,
+                              color: AppColors.cardSurface,
                               size: 20,
                             ),
                             onPressed: _handleSend,
@@ -701,7 +699,7 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                 child: Text(
                   msg.text,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.cream,
+                    color: AppColors.cardSurface,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -726,14 +724,14 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
               color: Colors.white,
               shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.terracotta.withValues(alpha: 0.2),
+                color: AppColors.terracotta.withValues(alpha: 0.25),
                 width: 1,
               ),
-              boxShadow: [
+              boxShadow: const [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
+                  color: AppColors.shadow,
                   blurRadius: 4,
-                  offset: const Offset(0, 1),
+                  offset: Offset(0, 1),
                 ),
               ],
             ),
@@ -746,7 +744,7 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                 errorBuilder: (_, _, _) => Container(
                   color: AppColors.terracotta,
                   child: const Center(
-                    child: Icon(Icons.smart_toy_outlined, color: AppColors.cream, size: 16),
+                    child: Icon(Icons.smart_toy_outlined, color: AppColors.cardSurface, size: 16),
                   ),
                 ),
               ),
@@ -759,14 +757,21 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: AppColors.cardSurface,
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(4),
                       topRight: Radius.circular(16),
                       bottomLeft: Radius.circular(16),
                       bottomRight: Radius.circular(16),
                     ),
-                    border: Border.all(color: AppColors.oak.withValues(alpha: 0.35)),
+                    border: Border.all(color: AppColors.line),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: AppColors.shadow,
+                        blurRadius: 4,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -776,7 +781,7 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.normal,
-                          height: 1.4,
+                          height: 1.45,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -811,24 +816,31 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceVariant,
+                            color: AppColors.cardSurface,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.terracottaLight.withValues(alpha: 0.6)),
+                            border: Border.all(color: AppColors.terracotta.withValues(alpha: 0.35)),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: AppColors.shadow,
+                                blurRadius: 2,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.chat_bubble_outline, size: 12, color: AppColors.terracotta),
-                              const SizedBox(width: 4),
+                              const Icon(Icons.chat_bubble_outline_rounded, size: 12, color: AppColors.terracotta),
+                              const SizedBox(width: 5),
                               Flexible(
                                 child: Text(
                                   q.replaceAll('*', ''),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 11,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    fontSize: 11.5,
                                     fontWeight: FontWeight.w500,
-                                    color: AppColors.charcoal,
+                                    color: AppColors.textPrimary,
                                   ),
                                 ),
                               ),
@@ -853,19 +865,22 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
     final isFilter = action.isCatalogueFilter;
     final icon = _getDestinationIcon(action);
 
+    final lang = EasyLocalization.of(context)?.locale.languageCode ?? 'en';
+    final isHi = lang == 'hi';
+
     String subtitle;
     if (isStatus) {
       subtitle = action.isUndone
-          ? (context.locale.languageCode == 'hi' ? 'स्थिति पहले जैसी कर दी गई' : 'Status restored to previous')
-          : (context.locale.languageCode == 'hi' ? 'कैटलॉग में सीधे अपडेट किया गया' : 'Updated directly in your catalogue');
+          ? (isHi ? 'स्थिति पहले जैसी कर दी गई' : 'Status restored to previous')
+          : (isHi ? 'कैटलॉग में सीधे अपडेट किया गया' : 'Updated directly in your catalogue');
     } else if (isSync) {
       subtitle = action.isExecuted
-          ? (context.locale.languageCode == 'hi' ? 'सिंक पूरा हुआ • कैटलॉग देखें' : 'Sync completed • Tap to open catalogue')
-          : (context.locale.languageCode == 'hi' ? 'लंबित उत्पाद सिंक करने के लिए टैप करें' : 'Tap to sync pending products now');
+          ? (isHi ? 'सिंक पूरा हुआ • कैटलॉग देखें' : 'Sync completed • Tap to open catalogue')
+          : (isHi ? 'लंबित उत्पाद सिंक करने के लिए टैप करें' : 'Tap to sync pending products now');
     } else if (isFilter) {
-      subtitle = context.locale.languageCode == 'hi' ? 'फ़िल्टर किए गए उत्पाद देखने के लिए टैप करें' : 'Tap to view filtered products';
+      subtitle = isHi ? 'फ़िल्टर किए गए उत्पाद देखने के लिए टैप करें' : 'Tap to view filtered products';
     } else {
-      subtitle = context.locale.languageCode == 'hi' ? 'सीधे इस स्क्रीन पर जाने के लिए टैप करें' : 'Tap to jump directly to this screen';
+      subtitle = isHi ? 'सीधे इस स्क्रीन पर जाने के लिए टैप करें' : 'Tap to jump directly to this screen';
     }
 
     final bool isSuccessGreen = isStatus && !action.isUndone;
@@ -873,18 +888,18 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
     return Container(
       decoration: BoxDecoration(
         color: isSuccessGreen
-            ? AppColors.forestGreenLight.withValues(alpha: 0.15)
-            : AppColors.plaster,
+            ? AppColors.successLight
+            : AppColors.cardSurface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isSuccessGreen
-              ? AppColors.forestGreenDark.withValues(alpha: 0.5)
-              : AppColors.terracotta,
+              ? AppColors.success
+              : AppColors.terracotta.withValues(alpha: 0.6),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: (isSuccessGreen ? AppColors.forestGreenDark : AppColors.terracotta).withValues(alpha: 0.12),
+            color: (isSuccessGreen ? AppColors.success : AppColors.terracotta).withValues(alpha: 0.1),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -904,10 +919,10 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: isSuccessGreen ? AppColors.forestGreenDark : AppColors.terracotta,
+                    color: isSuccessGreen ? AppColors.success : AppColors.terracotta,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, color: AppColors.cream, size: 16),
+                  child: Icon(icon, color: AppColors.cardSurface, size: 16),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

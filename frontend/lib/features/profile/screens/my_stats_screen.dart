@@ -294,7 +294,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'All listings respect your material cost + fair labor floor price.',
+                          'floor_price_guarantee_desc'.tr(),
                           style: AppTextStyles.caption.copyWith(color: AppColors.inkSoft),
                         ),
                       ],
@@ -351,13 +351,19 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
                   ]
                 : null,
           ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.labelSmall.copyWith(
-              fontSize: 12.0,
-              fontWeight: FontWeight.w700,
-              color: isSelected ? AppColors.ink : AppColors.inkSoft,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.labelSmall.copyWith(
+                  fontSize: 12.0,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? AppColors.ink : AppColors.inkSoft,
+                ),
+              ),
             ),
           ),
         ),
@@ -395,32 +401,48 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.trending_up_rounded, size: 16, color: Colors.white),
-                      const SizedBox(width: 6),
-                      Text(
-                        'total_sales_revenue'.tr(),
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
+                  Expanded(
+                    flex: 3,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.trending_up_rounded, size: 16, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'total_sales_revenue'.tr(),
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(999),
+                      ],
                     ),
-                    child: Text(
-                      '$ordersCount orders',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    flex: 2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'orders_count_suffix'.tr(namedArgs: {'count': '$ordersCount'}),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -438,7 +460,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
               ),
               const SizedBox(height: 4),
               Text(
-                'Estimated additional earnings',
+                'estimated_additional_earnings'.tr(),
                 style: AppTextStyles.bodySmall.copyWith(
                   color: Colors.white.withValues(alpha: 0.85),
                   fontSize: 12,
@@ -452,14 +474,19 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'average_order_value'.tr(),
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.90),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Text(
+                      'average_order_value'.tr(),
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.90),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     '₹${NumberFormat('#,##,###').format(aov.round())}',
                     style: const TextStyle(
@@ -498,12 +525,16 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
             children: [
               const Icon(Icons.shield_outlined, color: AppColors.goldDark, size: 18),
               const SizedBox(width: 8),
-              Text(
-                'fair_wage_premium_title'.tr(),
-                style: AppTextStyles.headlineSmall.copyWith(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.ink,
+              Expanded(
+                child: Text(
+                  'fair_wage_premium_title'.tr(),
+                  style: AppTextStyles.headlineSmall.copyWith(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -530,16 +561,18 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
                   Row(
                     children: [
                       SizedBox(
-                        width: 76,
-                        child: Text(
-                          'middleman_rate_label'.tr(),
-                          style: AppTextStyles.labelSmall.copyWith(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.inkSoft,
+                        width: 80,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'middleman_rate_label'.tr(),
+                            style: AppTextStyles.labelSmall.copyWith(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.inkSoft,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -583,16 +616,18 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
                   Row(
                     children: [
                       SizedBox(
-                        width: 76,
-                        child: Text(
-                          'kalasetu_earned_label'.tr(),
-                          style: AppTextStyles.labelSmall.copyWith(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.inkSoft,
+                        width: 80,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'kalasetu_earned_label'.tr(),
+                            style: AppTextStyles.labelSmall.copyWith(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.inkSoft,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -666,11 +701,15 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
             children: [
               const Icon(Icons.trending_up_rounded, color: AppColors.terracotta, size: 20),
               const SizedBox(width: AppSpacing.xs),
-              Text(
-                'sales_trend_title'.tr(),
-                style: AppTextStyles.labelMedium.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.ink,
+              Expanded(
+                child: Text(
+                  'sales_trend_title'.tr(),
+                  style: AppTextStyles.labelMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.ink,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -683,43 +722,50 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
                 height: 130,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: bars.map((bar) {
                     final ratio = (bar.$2 / maxAmount).clamp(0.15, 1.0);
                     final isPeak = bar == bars.last;
                     final currentH = (80 * ratio * _animation.value).clamp(10.0, 90.0);
-                    return Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Opacity(
-                          opacity: _animation.value,
-                          child: Text(
-                            '₹${(bar.$2 / 1000).toStringAsFixed(1)}k',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: isPeak ? AppColors.terracottaDark : AppColors.inkSoft,
+                    return Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Opacity(
+                            opacity: _animation.value,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                '₹${(bar.$2 / 1000).toStringAsFixed(1)}k',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: isPeak ? AppColors.terracottaDark : AppColors.inkSoft,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          width: 26,
-                          height: currentH,
-                          decoration: BoxDecoration(
-                            color: isPeak ? AppColors.terracotta : AppColors.terracottaLight,
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                          const SizedBox(height: 4),
+                          Container(
+                            width: 22,
+                            height: currentH,
+                            decoration: BoxDecoration(
+                              color: isPeak ? AppColors.terracotta : AppColors.terracottaLight,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          bar.$1,
-                          style: AppTextStyles.caption.copyWith(
-                            fontWeight: isPeak ? FontWeight.bold : FontWeight.w500,
-                            color: isPeak ? AppColors.ink : AppColors.inkFaint,
+                          const SizedBox(height: 6),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              bar.$1,
+                              style: AppTextStyles.caption.copyWith(
+                                fontWeight: isPeak ? FontWeight.bold : FontWeight.w500,
+                                color: isPeak ? AppColors.ink : AppColors.inkFaint,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     );
                   }).toList(),
                 ),
@@ -752,24 +798,34 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'order_fulfillment_title'.tr(),
-                style: AppTextStyles.labelMedium.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.ink,
+              Expanded(
+                child: Text(
+                  'order_fulfillment_title'.tr(),
+                  style: AppTextStyles.labelMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.ink,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.statusSuccessBg,
-                  borderRadius: BorderRadius.circular(AppRadii.chip),
-                ),
-                child: Text(
-                  '$rate% Reliability',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.statusSuccessFg,
-                    fontWeight: FontWeight.bold,
+              const SizedBox(width: AppSpacing.xs),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.statusSuccessBg,
+                    borderRadius: BorderRadius.circular(AppRadii.chip),
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'reliability_badge'.tr(namedArgs: {'rate': rate}),
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.statusSuccessFg,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -791,16 +847,26 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
             children: [
               const Icon(Icons.repeat, size: 16, color: AppColors.terracotta),
               const SizedBox(width: AppSpacing.xs),
-              Text(
-                'repeat_buyers'.tr(),
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+              Expanded(
+                child: Text(
+                  'repeat_buyers'.tr(),
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const Spacer(),
-              Text(
-                '$repeatBuyers repeat customers',
-                style: AppTextStyles.labelSmall.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.ink,
+              const SizedBox(width: AppSpacing.xs),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'repeat_customers_suffix'.tr(namedArgs: {'count': '$repeatBuyers'}),
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.ink,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -813,7 +879,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
   Widget _buildFulfillmentPill(String label, String count, Color color) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppRadii.sm),
@@ -821,19 +887,26 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
         ),
         child: Column(
           children: [
-            Text(
-              count,
-              style: AppTextStyles.labelLarge.copyWith(
-                fontWeight: FontWeight.bold,
-                color: color,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                count,
+                style: AppTextStyles.labelLarge.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              label,
-              style: AppTextStyles.caption.copyWith(
-                color: AppColors.inkSoft,
-                fontSize: 10,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.inkSoft,
+                  fontSize: 10,
+                ),
+                maxLines: 1,
               ),
             ),
           ],
@@ -864,18 +937,24 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
                     fontWeight: FontWeight.bold,
                     color: AppColors.ink,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.parchmentDeep,
-                  borderRadius: BorderRadius.circular(AppRadii.chip),
-                ),
-                child: Row(
-                  children: [
-                    _buildSortOption(PopularSort.bySales, 'sort_by_sales'.tr()),
-                    _buildSortOption(PopularSort.byViews, 'sort_by_views'.tr()),
-                  ],
+              const SizedBox(width: AppSpacing.xs),
+              Flexible(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.parchmentDeep,
+                    borderRadius: BorderRadius.circular(AppRadii.chip),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(child: _buildSortOption(PopularSort.bySales, 'sort_by_sales'.tr())),
+                      Flexible(child: _buildSortOption(PopularSort.byViews, 'sort_by_views'.tr())),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -891,8 +970,8 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
               return Row(
                 children: [
                   Container(
-                    width: 24,
-                    height: 24,
+                    width: 22,
+                    height: 22,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: index < 3 ? AppColors.terracotta : AppColors.parchmentDeep,
@@ -901,32 +980,36 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
                     child: Text(
                       '#${index + 1}',
                       style: TextStyle(
-                        fontSize: 10.5,
+                        fontSize: 10,
                         fontWeight: FontWeight.bold,
                         color: index < 3 ? Colors.white : AppColors.ink,
                       ),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
+                  const SizedBox(width: 6),
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 34,
+                    height: 34,
                     decoration: BoxDecoration(
                       color: AppColors.parchmentDeep,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.brush, color: AppColors.terracotta, size: 22),
+                    child: const Icon(Icons.brush, color: AppColors.terracotta, size: 18),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          craft.title,
+                          ((Localizations.maybeLocaleOf(context)?.languageCode ?? 'en') == 'hi' &&
+                                  (craft.titleHi?.isNotEmpty ?? false))
+                              ? craft.titleHi!
+                              : craft.title,
                           style: AppTextStyles.bodyMedium.copyWith(
                             fontWeight: FontWeight.w600,
                             color: AppColors.ink,
+                            fontSize: 12.5,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -935,41 +1018,57 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
                         Text(
                           craft.category,
                           style: AppTextStyles.caption.copyWith(color: AppColors.inkSoft),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '${craft.views} views',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.ink,
+                  const SizedBox(width: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 80),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'views_count'.tr(namedArgs: {'count': '${craft.views}'}),
+                            style: AppTextStyles.labelSmall.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.ink,
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Text(
-                            '${craft.unitsSold} sold',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.success,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        const SizedBox(height: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'units_sold_count'.tr(namedArgs: {'count': '${craft.unitsSold}'}),
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.success,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '(${craft.conversionRate}%)',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.inkSoft,
+                                  fontSize: 9.5,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '(${craft.conversionRate}%)',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.inkSoft,
-                              fontSize: 9.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               );
@@ -985,17 +1084,20 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
     return GestureDetector(
       onTap: () => setState(() => _popularSort = sort),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.terracotta : Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadii.chip),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : AppColors.inkSoft,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : AppColors.inkSoft,
+            ),
           ),
         ),
       ),
@@ -1014,6 +1116,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
         final conv = views > 0 ? ((units / views) * 100).toStringAsFixed(1) : '0.0';
         return _CraftMetric(
           title: p.title,
+          titleHi: p.titleHi,
           category: p.category,
           views: views,
           unitsSold: units > 0 ? units : 3,
@@ -1025,6 +1128,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
     return [
       _CraftMetric(
         title: 'Terracotta Water Pot (Matka)',
+        titleHi: 'टेराकोटा पानी का मटका',
         category: 'Pottery',
         views: 248,
         unitsSold: 18,
@@ -1032,6 +1136,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
       ),
       _CraftMetric(
         title: 'Block-Print Kota Saree',
+        titleHi: 'ब्लॉक-प्रिंट कोटा साड़ी',
         category: 'Textiles',
         views: 194,
         unitsSold: 12,
@@ -1039,20 +1144,23 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
       ),
       _CraftMetric(
         title: 'Dhokra Brass Elephant',
+        titleHi: 'ढोकरा पीतल का हाथी',
         category: 'Metalwork',
         views: 165,
         unitsSold: 9,
         conversionRate: '5.5',
       ),
       _CraftMetric(
-        title: 'Warli Tribal Painting',
-        category: 'Paintings',
+        title: 'Blue Pottery Ceramic Vase',
+        titleHi: 'ब्लू पॉटरी सिरेमिक फूलदान',
+        category: 'Pottery',
         views: 132,
         unitsSold: 8,
         conversionRate: '6.1',
       ),
       _CraftMetric(
         title: 'Channapatna Wooden Toy Set',
+        titleHi: 'चन्नापटना लकड़ी का खिलौना सेट',
         category: 'Woodwork',
         views: 110,
         unitsSold: 6,
@@ -1064,6 +1172,7 @@ class _MyStatsScreenState extends ConsumerState<MyStatsScreen>
 
 class _CraftMetric {
   final String title;
+  final String? titleHi;
   final String category;
   final int views;
   final int unitsSold;
@@ -1071,6 +1180,7 @@ class _CraftMetric {
 
   _CraftMetric({
     required this.title,
+    this.titleHi,
     required this.category,
     required this.views,
     required this.unitsSold,
@@ -1083,14 +1193,12 @@ class _StatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color iconColor;
-  final bool isSmallValue;
 
   const _StatCard({
     required this.title,
     required this.value,
     required this.icon,
     required this.iconColor,
-    this.isSmallValue = false,
   });
 
   @override
@@ -1110,12 +1218,10 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             value,
-            style: isSmallValue
-                ? AppTextStyles.headlineSmall.copyWith(fontWeight: FontWeight.w700)
-                : AppTextStyles.headlineLarge.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
-                  ),
+            style: AppTextStyles.headlineLarge.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),

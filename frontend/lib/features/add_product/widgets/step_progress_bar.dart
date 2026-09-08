@@ -89,9 +89,17 @@ class StepProgressBar extends StatelessWidget {
               child = Icon(iconData, size: 16, color: iconColor);
             }
 
+            // Only allow navigating back to completed steps (checkmark).
+            // Future or current steps cannot be jumped to via the step indicator.
+            final canNavigateBack = isCompleted;
+
             return GestureDetector(
-              onTap: onStepTapped != null ? () => onStepTapped!(stepIndex) : null,
-              behavior: HitTestBehavior.opaque,
+              onTap: (canNavigateBack && onStepTapped != null)
+                  ? () => onStepTapped!(stepIndex)
+                  : null,
+              behavior: canNavigateBack
+                  ? HitTestBehavior.opaque
+                  : HitTestBehavior.deferToChild,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
                 width: 34,

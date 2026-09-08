@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/services/app_tts_service.dart';
 import '../../../core/services/tts_page_guides.dart';
@@ -11,10 +10,10 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/widgets/speaker_affordance.dart';
 import '../../../core/providers/app_providers.dart';
-import '../../../core/router/app_route_constants.dart';
 import '../../../data/models/product.dart';
 import '../../../data/services/social_media_service.dart';
 import '../../social_media/providers/social_media_provider.dart';
+import '../../social_media/widgets/social_media_launchpad_sheet.dart';
 import '../../home/screens/home_shell.dart';
 
 class Step5ConfirmWidget extends ConsumerStatefulWidget {
@@ -62,18 +61,20 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       await _tts.stop();
       return;
     }
-    final isHindi = context.locale.languageCode == 'hi';
+    final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    final langCode = isHindi ? 'hi' : 'en';
     final title = isHindi && titleHi.isNotEmpty ? titleHi : titleEn;
     final description = isHindi && descriptionHi.isNotEmpty ? descriptionHi : descriptionEn;
     final priceStatement = isHindi
         ? 'मूल्य ${price.toStringAsFixed(0)} रुपये। '
         : 'Price: ${price.toStringAsFixed(0)} rupees. ';
-    final guide =
-        TtsPageGuides.confirmPublish.forLanguage(context.locale.languageCode);
+    final guide = TtsPageGuides.confirmPublish.forLanguage(langCode);
     final summary = '$guide$title. $priceStatement$description';
     final result = await _tts.speak(
       summary,
-      languageCode: context.locale.languageCode,
+      languageCode: langCode,
     );
     if (result == TtsResult.voiceUnavailable && mounted) {
       final opened = await _tts.openVoiceDownloadScreen();
@@ -178,6 +179,24 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
     final draft = ref.watch(addProductFlowProvider);
     final isOnline = ref.watch(connectivityProvider).value ?? true;
     final displayImage = draft.isEnhanced ? draft.enhancedImagePath : draft.originalImagePath;
+
+    final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    final defaultTitleEn =
+        draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted ${draft.category}';
+    final primaryTitle = (isHindi && draft.titleHi.trim().isNotEmpty)
+        ? draft.titleHi
+        : defaultTitleEn;
+    final secondaryTitle = (isHindi && draft.titleHi.trim().isNotEmpty)
+        ? defaultTitleEn
+        : (draft.titleHi.trim().isNotEmpty ? draft.titleHi : null);
+
+    final defaultDescEn =
+        draft.descriptionEn.isNotEmpty ? draft.descriptionEn : draft.voiceTranscript;
+    final displayDescription = (isHindi && draft.descriptionHi.trim().isNotEmpty)
+        ? draft.descriptionHi
+        : defaultDescEn;
 
     return SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
@@ -324,13 +343,13 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                       const SizedBox(height: 8),
 
                       Text(
-                        draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted ${draft.category}',
+                        primaryTitle,
                         style: AppTextStyles.headlineMedium,
                       ),
-                      if (draft.titleHi.isNotEmpty) ...[
+                      if (secondaryTitle != null && secondaryTitle.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          draft.titleHi,
+                          secondaryTitle,
                           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
                         ),
                       ],
@@ -348,7 +367,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                       const SizedBox(height: 10),
 
                       Text(
-                        draft.descriptionEn.isNotEmpty ? draft.descriptionEn : draft.voiceTranscript,
+                        displayDescription,
                         style: AppTextStyles.bodySmall.copyWith(
                           color: AppColors.inkSoft,
                           height: 1.4,
@@ -405,9 +424,9 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                   ...draft.additionalImagePaths,
                 ].where((path) => path.isNotEmpty).toList();
 
-                context.pushNamed(
-                  AppRouteConstants.socialMediaHelper,
-                  extra: SocialMediaArgs(
+                showSocialMediaLaunchpadSheet(
+                  context,
+                  SocialMediaArgs(
                     draftKey: draft.draftId,
                     source: 'add_flow',
                     allImages: images,

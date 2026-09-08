@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/app_tts_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/app_spacing.dart';
+import 'speaker_affordance.dart';
 
 /// Data model representing a guidance cue for artisan onboarding,
 /// photography tips, and description suggestions.
@@ -181,11 +183,11 @@ class _CyclingGuidanceCueState extends State<CyclingGuidanceCue> {
     final allTips = widget.cues.map((c) => c.text).join('. ');
     final script = intro == null || intro.isEmpty ? allTips : '$intro $allTips';
 
-    // Cue text is authored in English and is not run through
-    // easy_localization, so it has to be spoken by the English voice whatever
-    // the app language is — the Hindi voice renders English words as
-    // unintelligible phonetic approximations.
-    final result = await _tts.speak(script, languageCode: 'en');
+    String lang = 'en';
+    try {
+      lang = context.locale.languageCode;
+    } catch (_) {}
+    final result = await _tts.speak(script, languageCode: lang);
 
     if (result == TtsResult.voiceUnavailable && mounted) {
       final opened = await _tts.openVoiceDownloadScreen();
@@ -254,41 +256,9 @@ class _CyclingGuidanceCueState extends State<CyclingGuidanceCue> {
                     ),
                   ),
                   // Persistent "Tap to hear" affordance for TTS readiness
-                  InkWell(
+                  SpeakerAffordance(
+                    isSpeaking: _tts.isSpeaking,
                     onTap: () => _onHearAffordanceTap(currentCue),
-                    borderRadius: BorderRadius.circular(AppRadii.chip),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.terracotta.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(AppRadii.chip),
-                        border: Border.all(
-                          color: AppColors.terracotta.withValues(alpha: 0.35),
-                          width: 0.8,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _tts.isSpeaking
-                                ? Icons.stop_circle_outlined
-                                : Icons.volume_up_rounded,
-                            size: 13,
-                            color: AppColors.terracottaDark,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _tts.isSpeaking ? 'Stop' : 'Tap to hear',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.terracottaDark,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 10.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ),
                 ],
               ),

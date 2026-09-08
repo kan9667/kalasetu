@@ -27,6 +27,7 @@ extension OrderStatusX on OrderStatus {
 class Order {
   final String id;
   final String productTitle;
+  final String? productTitleHi;
   final String productCategory;
   final String productImagePath;
   final String buyerName;
@@ -41,6 +42,7 @@ class Order {
   const Order({
     required this.id,
     required this.productTitle,
+    this.productTitleHi,
     required this.productCategory,
     required this.productImagePath,
     required this.buyerName,
@@ -60,6 +62,7 @@ class Order {
   Order copyWith({
     String? id,
     String? productTitle,
+    String? productTitleHi,
     String? productCategory,
     String? productImagePath,
     String? buyerName,

@@ -97,7 +97,7 @@ class _MyOrdersScreenState extends ConsumerState<MyOrdersScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  'Status updated to ${next.labelKey.tr()}',
+                                  'status_updated_to'.tr(namedArgs: {'status': next.labelKey.tr()}),
                                 ),
                                 backgroundColor: AppColors.terracotta,
                                 duration: const Duration(seconds: 2),
@@ -223,16 +223,21 @@ class _OrderCardState extends State<_OrderCard> {
       return;
     }
     final order = widget.order;
-    final isHindi = context.locale.languageCode == 'hi';
+    final locale = Localizations.maybeLocaleOf(context)?.languageCode ?? 'en';
+    final isHindi = locale == 'hi';
     final lead = TtsPageGuides.orderCardLead
-        .forLanguage(context.locale.languageCode);
+        .forLanguage(locale);
 
     // Built in the app language rather than always in English: the status
     // label is already translated, so an English carrier sentence around a
     // Hindi word — read by whichever single voice is selected — mispronounces
     // one half or the other whichever way it is spoken.
+    final productTitle = (isHindi && order.productTitleHi != null)
+        ? order.productTitleHi!
+        : order.productTitle;
+
     final summary = isHindi
-        ? '${order.productTitle} का ऑर्डर, ${order.buyerCity} से '
+        ? '$productTitle का ऑर्डर, ${order.buyerCity} से '
             '${order.buyerName} की ओर से। राशि '
             '${order.amount.toStringAsFixed(0)} रुपये। स्थिति: '
             '${order.status.labelKey.tr()}।'
@@ -249,8 +254,8 @@ class _OrderCardState extends State<_OrderCard> {
       final opened = await _tts.openVoiceDownloadScreen();
       if (!opened && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please download the voice from phone settings'),
+          SnackBar(
+            content: Text('voice_download_settings_hint'.tr()),
           ),
         );
       }
@@ -263,6 +268,12 @@ class _OrderCardState extends State<_OrderCard> {
     final onTap = widget.onTap;
     final onStatusAdvance = widget.onStatusAdvance;
     final canAdvance = order.status.next != null;
+    final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    final displayProductTitle = (isHindi && order.productTitleHi != null)
+        ? order.productTitleHi!
+        : order.productTitle;
 
     return Dismissible(
       key: ValueKey('${order.id}_${order.status}'),
@@ -280,7 +291,9 @@ class _OrderCardState extends State<_OrderCard> {
             const Icon(Icons.arrow_forward, color: AppColors.terracottaDark),
             const SizedBox(width: AppSpacing.xs),
             Text(
-              'Mark as ${order.status.next?.labelKey.tr() ?? ''}',
+              'mark_as_status'.tr(namedArgs: {
+                'status': order.status.next?.labelKey.tr() ?? '',
+              }),
               style: AppTextStyles.labelSmall.copyWith(color: AppColors.terracottaDark),
             ),
           ],
@@ -341,7 +354,7 @@ class _OrderCardState extends State<_OrderCard> {
                         children: [
                           Expanded(
                             child: Text(
-                              order.productTitle,
+                              displayProductTitle,
                               style: AppTextStyles.headlineSmall.copyWith(
                                 fontSize: 15.5,
                                 fontWeight: FontWeight.w600,
@@ -487,8 +500,8 @@ class _OrderCardState extends State<_OrderCard> {
   String _formatDate(DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inHours < 24) return 'hours_ago'.tr(namedArgs: {'hours': '${diff.inHours}'});
+    if (diff.inDays == 1) return 'yesterday'.tr();
     return '${dt.day}/${dt.month}';
   }
 }

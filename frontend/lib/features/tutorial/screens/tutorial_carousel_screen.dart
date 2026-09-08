@@ -111,27 +111,34 @@ class _TutorialCarouselScreenState extends ConsumerState<TutorialCarouselScreen>
             // --- Top App Bar Area ---
             Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.xs,
+                horizontal: AppSpacing.screenPadding,
+                vertical: AppSpacing.sm,
               ),
-              child: Row(
-                children: [
-                  // Close / Back button
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 26, color: AppColors.charcoal),
-                    tooltip: 'close'.tr(),
-                    onPressed: _skipTutorial,
-                  ),
-
-                  // Center Step Indicator Badge
-                  Expanded(
-                    child: Center(
+              child: SizedBox(
+                height: 40,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Center Step Indicator Badge
+                    Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: AppColors.cardSurface,
                           borderRadius: BorderRadius.circular(AppRadii.full),
-                          border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+                          border: Border.all(
+                            color: AppColors.border.withValues(alpha: 0.6),
+                          ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: AppColors.shadow,
+                              blurRadius: 4,
+                              offset: Offset(0, 1),
+                            ),
+                          ],
                         ),
                         child: Text(
                           currentSlide.isIntro
@@ -146,42 +153,35 @@ class _TutorialCarouselScreenState extends ConsumerState<TutorialCarouselScreen>
                                     ),
                           style: AppTextStyles.labelMedium.copyWith(
                             color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                     ),
-                  ),
 
-                  // Voice Narration Button
-                  IconButton(
-                    icon: Icon(
-                      _ttsService.isPlaying
-                          ? Icons.volume_up_rounded
-                          : Icons.volume_down_rounded,
-                      color: _ttsService.isPlaying ? AppColors.terracotta : AppColors.charcoal,
-                    ),
-                    tooltip: _ttsService.isPlaying
-                        ? 'stop_narration'.tr()
-                        : 'listen_narration'.tr(),
-                    onPressed: _toggleSpeakCurrentSlide,
-                  ),
-
-                  // Skip Button
-                  if (!isLastPage)
-                    TextButton(
-                      onPressed: _skipTutorial,
-                      child: Text(
-                        'skip'.tr(),
-                        style: AppTextStyles.labelMedium.copyWith(
-                          color: AppColors.charcoalSoft,
-                          fontWeight: FontWeight.bold,
+                    // Skip Action Button
+                    if (!isLastPage)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _skipTutorial,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xs,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            'skip'.tr(),
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                         ),
                       ),
-                    )
-                  else
-                    const SizedBox(width: 48),
-                ],
+                  ],
+                ),
               ),
             ),
 
@@ -254,7 +254,7 @@ class _TutorialCarouselScreenState extends ConsumerState<TutorialCarouselScreen>
                               side: const BorderSide(color: AppColors.border),
                               padding: const EdgeInsets.all(12),
                             ),
-                            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.charcoal),
+                            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
                           ),
                           const SizedBox(width: AppSpacing.sm),
                         ],
