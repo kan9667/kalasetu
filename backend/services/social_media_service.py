@@ -44,15 +44,7 @@ Description: {description}
 Tone: {tone}
 
 Using the attached product image and the details above, write:
-1. A caption (1–3 short paragraphs) in a warm, authentic voice. Do not invent \
-facts (sizes, materials, care instructions) not present in the listing details \
-or clearly visible in the image. Use no more than 2 emoji. Do NOT use \
-unverified claims.
-2. 15–30 relevant hashtags for social media discovery: mix a few broad \
-high-volume tags (e.g. #handmade, #shopsmall, #supportsmallbusiness) with \
-more specific, niche tags derived from the category, materials, and craft \
-technique (niche tags drive more relevant artisan-buyer discovery than generic \
-ones).
+{channel_instructions}
 
 Language: respond in the language matching the locale "{locale}".
 
@@ -60,6 +52,18 @@ Respond with ONLY valid JSON in this exact shape, no markdown fences, no extra \
 text:
 {{"caption": "...", "hashtags": ["#tag1", "#tag2", ...]}}
 """
+
+_WHATSAPP_INSTRUCTIONS = """\
+1. Write a short (2–4 lines), direct, warm, and personal caption specifically crafted for a WhatsApp message or status update to customers and community contacts. Keep it friendly, clear, and punchy. Include a warm artisan greeting (like "Namaste!" or "Hello!"), mention the handcrafted nature, and end with a clear call-to-action to reply or message to order. Do not invent facts not present in the listing details. Use no more than 2 tasteful emojis.
+2. Hashtags: WhatsApp messages do not use heavy hashtags. Return an empty list or at most 1-2 minimal tags (e.g. ["#handmade", "#artisan"])."""
+
+_INSTAGRAM_INSTRUCTIONS = """\
+1. Write an engaging Instagram caption (1–3 short paragraphs) with a rich craft heritage and storytelling angle. Focus on the visual beauty, texture, artisan technique, and tactile materials. Include an aesthetic opening hook and an invitation to appreciate handmade craft. Do not invent facts (sizes, materials, care instructions) not present in the listing details or clearly visible in the image. Use 2-4 appropriate emojis.
+2. 15–25 high-discovery hashtags for Instagram: mix a few broad high-volume tags (e.g. #handmade, #craftsmanship, #supportlocal) with niche craft tags derived from the category, materials, and artisan tradition (e.g. #handcrafteddecor, #traditionalcraft, #artisanmade)."""
+
+_FACEBOOK_INSTRUCTIONS = """\
+1. Write a community-focused Facebook post (2–3 short paragraphs) with an authentic artisan story angle. Facebook audiences connect with the maker's journey, heritage traditions, family legacy, and community impact. Share what makes this piece special, and encourage friends, family, and craft lovers to like, comment, and share to support local handmade art. Use 2-3 warm emojis.
+2. 5–10 relevant Facebook community and discovery hashtags (e.g. #SupportLocalArtisans, #HandmadeCommunity, #IndianCrafts, #VocalForLocal, #TraditionalArt)."""
 
 # ── Rate-Limit Store ─────────────────────────────────────────────────────────
 # Keyed by a string (listing_id+image_url or draft_key+image_url).
@@ -118,6 +122,7 @@ class SocialMediaService:
         description: str = "",
         tone: str = "warm and authentic",
         locale: str = "en-US",
+        channel: str = "instagram",
         rate_limit_key: str = "",
     ) -> dict:
         """
@@ -141,6 +146,14 @@ class SocialMediaService:
         if rate_limit_key:
             _check_rate_limit(rate_limit_key)
 
+        channel_lower = (channel or "instagram").lower()
+        if channel_lower == "whatsapp":
+            channel_instructions = _WHATSAPP_INSTRUCTIONS
+        elif channel_lower == "facebook":
+            channel_instructions = _FACEBOOK_INSTRUCTIONS
+        else:
+            channel_instructions = _INSTAGRAM_INSTRUCTIONS
+
         prompt = _PROMPT_TEMPLATE.format(
             title=title or "(not provided)",
             category=category or "(not provided)",
@@ -148,25 +161,52 @@ class SocialMediaService:
             description=description or "(not provided)",
             tone=tone,
             locale=locale,
+            channel_instructions=channel_instructions,
         )
 
         # ── 1. Try Groq Cloud ───────────────────────────────────────────────
         if self.groq_client.is_available() and self.settings.llm_provider == "groq":
             try:
+                if channel_lower == "whatsapp":
+                    system_content = (
+                        "You are writing a short, personal WhatsApp message/status (2-4 lines) for a handmade artisan product with an artisan greeting and buy call-to-action. "
+                        "No heavy hashtags. Respond with ONLY valid JSON: {\"caption\": \"...\", \"hashtags\": [\"#handmade\"]}"
+                    )
+                    default_caption = f"Namaste! ✨ Check out this handcrafted {title} made with traditional artisan skill. Reply here to order!"
+                    default_tags = ["#handmade"]
+                elif channel_lower == "facebook":
+                    system_content = (
+                        "You are writing a community and heritage storytelling Facebook post (2-3 paragraphs) for a handmade artisan product, focusing on maker pride, tradition, and community support. "
+                        "Include 5-10 community hashtags. Respond with ONLY valid JSON: {\"caption\": \"...\", \"hashtags\": [\"#SupportLocalArtisans\", \"#IndianCrafts\"]}"
+                    )
+                    default_caption = (
+                        f"We are proud to share our latest handcrafted creation: {title}. "
+                        f"Every piece is shaped by hand with dedication to traditional heritage craftsmanship. "
+                        f"Please support local artisans by sharing this with your friends and family! ✨"
+                    )
+                    default_tags = ["#SupportLocalArtisans", "#IndianCrafts", "#HandmadeCommunity", "#VocalForLocal", "#TraditionalArt"]
+                else:
+                    system_content = (
+                        "You are writing an aesthetic Instagram caption (1-3 paragraphs) for a handmade artisan product with craft storytelling and 15-25 discovery hashtags. "
+                        "Respond with ONLY valid JSON: {\"caption\": \"...\", \"hashtags\": [\"#handmade\", \"#artisanmade\"]}"
+                    )
+                    default_caption = (
+                        f"Admire the timeless beauty of this handcrafted {title}. "
+                        f"Made by master artisans with passion and heritage techniques. Support local art! ✨"
+                    )
+                    default_tags = ["#handmade", "#artisan", "#handcrafted", "#supportartisans", "#craftsmanship", "#indiancrafts", "#shopsmall"]
+
                 messages = [
                     {
                         "role": "system",
-                        "content": (
-                            "You are writing a social media caption and hashtags for a handmade artisan product. "
-                            "Respond with ONLY valid JSON: {\"caption\": \"...\", \"hashtags\": [\"#tag1\", \"#tag2\"]}"
-                        ),
+                        "content": system_content,
                     },
                     {"role": "user", "content": prompt},
                 ]
                 data = await self.groq_client.chat_json(messages)
                 return {
-                    "caption": data.get("caption", f"Handcrafted {title} made with traditional artisan skill."),
-                    "hashtags": data.get("hashtags", ["#handmade", "#artisan", "#handcrafted", "#supportartisans"]),
+                    "caption": data.get("caption", default_caption),
+                    "hashtags": data.get("hashtags", default_tags),
                 }
             except Exception as e:
                 logger.warning("[SocialMediaService] Groq generation failed: %s. Trying Gemini fallback.", e)
@@ -176,7 +216,32 @@ class SocialMediaService:
             return await self._call_with_retry(prompt=prompt, image_url=image_url)
 
         # ── 3. Offline / Rule-based Fallback ────────────────────────────────
-        tags = ["#handmade", "#handcrafted", "#artisan", "#vocalforlocal", "#indiancrafts"]
+        if channel_lower == "whatsapp":
+            return {
+                "caption": (
+                    f"Namaste! ✨ Take a look at this handcrafted {title or 'creation'}. "
+                    f"Made with love using traditional artisan techniques. Message me to order!"
+                ),
+                "hashtags": ["#handmade"],
+            }
+        elif channel_lower == "facebook":
+            return {
+                "caption": (
+                    f"We are excited to present this handcrafted {title or 'creation'}! ✨\n\n"
+                    f"Rooted in authentic tradition and crafted with immense care by local artisans. "
+                    f"Every purchase directly empowers our artisan community. "
+                    f"If you love handmade art, please like and share with your family and friends!"
+                ),
+                "hashtags": [
+                    "#SupportLocalArtisans",
+                    "#HandmadeCommunity",
+                    "#IndianCrafts",
+                    "#VocalForLocal",
+                    "#TraditionalArt",
+                ],
+            }
+
+        tags = ["#handmade", "#handcrafted", "#artisan", "#vocalforlocal", "#indiancrafts", "#artisanmade", "#craftsmanship"]
         if category:
             tags.insert(0, f"#{category.lower().replace(' ', '')}")
         return {

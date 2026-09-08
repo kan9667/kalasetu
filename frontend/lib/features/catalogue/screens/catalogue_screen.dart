@@ -14,6 +14,7 @@ import '../../../core/widgets/motifs/empty_craft_state.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../data/models/product.dart';
 import '../../social_media/providers/social_media_provider.dart';
+import '../../social_media/widgets/social_media_launchpad_sheet.dart';
 import '../../home/screens/home_shell.dart';
 import '../providers/catalogue_filter_provider.dart';
 
@@ -460,9 +461,9 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                         },
                         onSocialTap: item.allPhotoPaths.isEmpty
                             ? null
-                            : () => context.pushNamed(
-                                  AppRouteConstants.socialMediaHelper,
-                                  extra: SocialMediaArgs(
+                            : () => showSocialMediaLaunchpadSheet(
+                                  context,
+                                  SocialMediaArgs(
                                     listingId: item.id,
                                     source: 'catalogue',
                                     allImages: item.allPhotoPaths,

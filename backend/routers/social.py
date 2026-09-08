@@ -1,11 +1,11 @@
 """
 Social Media Helper Router.
 
-Endpoints:
-  POST /api/v1/listings/{listing_id}/social-draft   — generate for a saved listing
-  POST /api/v1/listings/unsaved/social-draft         — generate for an unsaved add-flow draft
-  PUT  /api/v1/social-drafts/{draft_id}              — save / update caption + hashtags
-  GET  /api/v1/social-drafts/{draft_id}              — reload an existing draft
+Streamlined Endpoints:
+  GET  /api/v1/social-drafts/lookup    — find a saved draft by (listing/draft_key, image)
+  POST /api/v1/social-drafts/generate  — generate caption + hashtags for listing or draft
+  POST /api/v1/social-drafts/link      — link add-flow drafts to a published listing
+  PUT  /api/v1/social-drafts/{draft_id}— persist manual caption / hashtag edits
 """
 
 import json
@@ -57,12 +57,13 @@ def _upsert_draft(
     hashtags: list[str],
     image_url: str,
     source: str,
+    channel: str = "instagram",
     listing_id: Optional[str] = None,
     draft_key: Optional[str] = None,
     edited_by_user: bool = False,
 ) -> SocialDraftDB:
     """
-    Find an existing draft for (listing_id, image_url) or (draft_key, image_url)
+    Find an existing draft for (listing_id, image_url, channel) or (draft_key, image_url, channel)
     and update it; otherwise create a new row.
     """
     existing: Optional[SocialDraftDB] = None
@@ -73,6 +74,7 @@ def _upsert_draft(
             .filter(
                 SocialDraftDB.listing_id == listing_id,
                 SocialDraftDB.image_url == image_url,
+                SocialDraftDB.channel == channel,
             )
             .first()
         )
@@ -82,6 +84,7 @@ def _upsert_draft(
             .filter(
                 SocialDraftDB.draft_key == draft_key,
                 SocialDraftDB.image_url == image_url,
+                SocialDraftDB.channel == channel,
             )
             .first()
         )
@@ -90,6 +93,7 @@ def _upsert_draft(
         existing.caption = caption
         existing.hashtags = json.dumps(hashtags)
         existing.source = source
+        existing.channel = channel
         existing.edited_by_user = edited_by_user
         existing.updated_at = datetime.now()
         db.commit()
@@ -101,6 +105,7 @@ def _upsert_draft(
         listing_id=listing_id,
         draft_key=draft_key,
         image_url=image_url,
+        channel=channel,
         caption=caption,
         hashtags=json.dumps(hashtags),
         source=source,
@@ -118,15 +123,49 @@ def _upsert_draft(
 @router.get(
     "/api/v1/social-drafts/lookup",
     response_model=SocialDraftResponse,
-    summary="Find a saved social draft by listing or draft key and image",
+    summary="Find a saved social draft by listing or draft key and image and channel",
 )
+# Updated lookup with fallback for image_url mismatch
 async def lookup_draft(
     image_url: str = Query(...),
     listing_id: Optional[str] = Query(None),
     draft_key: Optional[str] = Query(None),
+    channel: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ) -> SocialDraftResponse:
-    """Return a saved draft for an image, or 404 when none exists."""
+    """Return a saved draft for an image and channel, or 404 when none exists.
+    Includes fallback to the most recent draft for a listing when the image URL differs.
+    """
+    if not listing_id and not draft_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Either listing_id or draft_key is required.",
+        )
+
+    # Primary query: match by image_url plus listing_id/draft_key and optional channel
+    query = db.query(SocialDraftDB).filter(SocialDraftDB.image_url == image_url)
+    if listing_id:
+        query = query.filter(SocialDraftDB.listing_id == listing_id)
+    else:
+        query = query.filter(SocialDraftDB.draft_key == draft_key)
+    if channel:
+        query = query.filter(SocialDraftDB.channel == channel)
+
+    draft = query.order_by(SocialDraftDB.updated_at.desc()).first()
+    if draft:
+        return _draft_to_response(draft)
+
+    # Fallback: if not found and we have a listing_id, ignore image_url and fetch the latest draft for that listing and channel
+    if listing_id:
+        fallback_query = db.query(SocialDraftDB).filter(SocialDraftDB.listing_id == listing_id)
+        if channel:
+            fallback_query = fallback_query.filter(SocialDraftDB.channel == channel)
+        fallback = fallback_query.order_by(SocialDraftDB.updated_at.desc()).first()
+        if fallback:
+            return _draft_to_response(fallback)
+
+    raise HTTPException(status_code=404, detail="Social draft not found.")
+    """Return a saved draft for an image and channel, or 404 when none exists."""
     if not listing_id and not draft_key:
         raise HTTPException(
             status_code=400,
@@ -139,14 +178,10 @@ async def lookup_draft(
     else:
         query = query.filter(SocialDraftDB.draft_key == draft_key)
 
+    if channel:
+        query = query.filter(SocialDraftDB.channel == channel)
+
     draft = query.order_by(SocialDraftDB.updated_at.desc()).first()
-    if not draft and listing_id:
-        draft = (
-            db.query(SocialDraftDB)
-            .filter(SocialDraftDB.listing_id == listing_id)
-            .order_by(SocialDraftDB.updated_at.desc())
-            .first()
-        )
     if not draft:
         raise HTTPException(status_code=404, detail="Social draft not found.")
     return _draft_to_response(draft)
@@ -173,17 +208,21 @@ async def link_drafts_to_listing(
 
 
 @router.post(
-    "/api/v1/listings/unsaved/social-draft",
+    "/api/v1/social-drafts/generate",
     response_model=SocialDraftResponse,
-    summary="Generate social-media caption + hashtags for an unsaved add-flow draft",
+    summary="Generate social-media caption + hashtags for a listing or draft",
 )
-async def generate_for_unsaved_priority(
-    body: SocialDraftUnsavedRequest,
+async def generate_draft(
+    body: SocialDraftRequest,
     db: Session = Depends(get_db),
     service: SocialMediaService = Depends(_get_service),
 ) -> SocialDraftResponse:
-    """Handle the static unsaved path before the dynamic listing path."""
-    rate_key = f"{body.draft_key}:{body.image_url}"
+    """
+    Unified endpoint to generate an AI-drafted caption and hashtag set.
+    Accepts either listing_id (saved catalogue product) or draft_key (add-flow draft).
+    """
+    channel = (body.channel or "instagram").lower()
+    rate_key = f"{body.listing_id or body.draft_key or 'unknown'}:{body.image_url}:{channel}"
     result = await service.generate(
         image_url=body.image_url,
         title=body.title or "",
@@ -192,23 +231,43 @@ async def generate_for_unsaved_priority(
         description=body.description or "",
         tone=body.tone or "warm and authentic",
         locale=body.locale or "en-US",
+        channel=channel,
         rate_limit_key=rate_key,
     )
+
     draft = _upsert_draft(
         db,
         caption=result["caption"],
         hashtags=result["hashtags"],
         image_url=body.image_url,
         source=body.source,
+        channel=channel,
+        listing_id=body.listing_id,
         draft_key=body.draft_key,
     )
     return _draft_to_response(draft)
 
 
+# ── Backward-Compatible Route Aliases ─────────────────────────────────────────
+
+@router.post(
+    "/api/v1/listings/unsaved/social-draft",
+    response_model=SocialDraftResponse,
+    include_in_schema=False,
+)
+async def generate_for_unsaved_priority(
+    body: SocialDraftUnsavedRequest,
+    db: Session = Depends(get_db),
+    service: SocialMediaService = Depends(_get_service),
+) -> SocialDraftResponse:
+    """Legacy alias routing to unified generate_draft."""
+    return await generate_draft(body, db, service)
+
+
 @router.post(
     "/api/v1/listings/{listing_id}/social-draft",
     response_model=SocialDraftResponse,
-    summary="Generate social-media caption + hashtags for a saved listing",
+    include_in_schema=False,
 )
 async def generate_for_listing(
     listing_id: str,
@@ -216,33 +275,12 @@ async def generate_for_listing(
     db: Session = Depends(get_db),
     service: SocialMediaService = Depends(_get_service),
 ) -> SocialDraftResponse:
-    """
-    Call the Gemini vision model to produce an AI-drafted caption and
-    hashtag set for the given image/listing.  Rate-limited to
-    5 regenerations per (listing, image) per hour.
-    """
-    rate_key = f"{listing_id}:{body.image_url}"
-    result = await service.generate(
-        image_url=body.image_url,
-        title=body.title or "",
-        category=body.category or "",
-        materials=body.materials or [],
-        description=body.description or "",
-        tone=body.tone or "warm and authentic",
-        locale=body.locale or "en-US",
-        rate_limit_key=rate_key,
-    )
+    """Legacy alias routing to unified generate_draft."""
+    body.listing_id = listing_id
+    return await generate_draft(body, db, service)
 
-    draft = _upsert_draft(
-        db,
-        caption=result["caption"],
-        hashtags=result["hashtags"],
-        image_url=body.image_url,
-        source=body.source,
-        listing_id=listing_id,
-    )
-    return _draft_to_response(draft)
 
+# ── Save Edits ───────────────────────────────────────────────────────────────
 
 @router.put(
     "/api/v1/social-drafts/{draft_id}",
@@ -268,20 +306,4 @@ async def save_draft(
     draft.updated_at = datetime.now()
     db.commit()
     db.refresh(draft)
-    return _draft_to_response(draft)
-
-
-@router.get(
-    "/api/v1/social-drafts/{draft_id}",
-    response_model=SocialDraftResponse,
-    summary="Reload an existing social-media draft",
-)
-async def get_draft(
-    draft_id: str,
-    db: Session = Depends(get_db),
-) -> SocialDraftResponse:
-    """Return a previously generated / saved social-media draft by its ID."""
-    draft = db.query(SocialDraftDB).filter(SocialDraftDB.id == draft_id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Social draft not found.")
     return _draft_to_response(draft)

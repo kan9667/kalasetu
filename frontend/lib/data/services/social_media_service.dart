@@ -43,6 +43,7 @@ abstract class SocialMediaService {
     String tone,
     String locale,
     String source,
+    String channel,
   });
 
   /// Generate a caption + hashtag draft for an **unsaved** add-flow draft.
@@ -55,6 +56,7 @@ abstract class SocialMediaService {
     List<String> materials,
     String tone,
     String locale,
+    String channel,
   });
 
   /// Persist the (possibly user-edited) draft.
@@ -68,11 +70,12 @@ abstract class SocialMediaService {
   /// Reload a previously saved draft by its ID.
   Future<SocialDraft> loadDraft(String draftId);
 
-  /// Find a saved draft for the current listing/draft image.
+  /// Find a saved draft for the current listing/draft image and channel.
   Future<SocialDraft?> loadDraftForImage({
     String? listingId,
     String? draftKey,
     required String imageUrl,
+    String? channel,
   });
 
   Future<void> linkDraftsToListing({
@@ -111,9 +114,11 @@ class HttpSocialMediaService implements SocialMediaService {
     String tone = 'warm and authentic',
     String locale = 'en-US',
     String source = 'catalogue',
+    String channel = 'instagram',
   }) async {
     final body = {
       'image_url': imageUrl,
+      'listing_id': listingId,
       'title': title,
       'category': category,
       'description': description,
@@ -121,8 +126,9 @@ class HttpSocialMediaService implements SocialMediaService {
       'tone': tone,
       'locale': locale,
       'source': source,
+      'channel': channel,
     };
-    return _post('$_base/api/v1/listings/$listingId/social-draft', body);
+    return _post('$_base/api/v1/social-drafts/generate', body);
   }
 
   @override
@@ -135,6 +141,7 @@ class HttpSocialMediaService implements SocialMediaService {
     List<String> materials = const [],
     String tone = 'warm and authentic',
     String locale = 'en-US',
+    String channel = 'instagram',
   }) async {
     final body = {
       'draft_key': draftKey,
@@ -146,8 +153,9 @@ class HttpSocialMediaService implements SocialMediaService {
       'tone': tone,
       'locale': locale,
       'source': 'add_flow',
+      'channel': channel,
     };
-    return _post('$_base/api/v1/listings/unsaved/social-draft', body);
+    return _post('$_base/api/v1/social-drafts/generate', body);
   }
 
   @override
@@ -188,6 +196,7 @@ class HttpSocialMediaService implements SocialMediaService {
     String? listingId,
     String? draftKey,
     required String imageUrl,
+    String? channel,
   }) async {
     try {
       final response = await _dio.get(
@@ -196,6 +205,7 @@ class HttpSocialMediaService implements SocialMediaService {
           'image_url': imageUrl,
           'listing_id': ?listingId,
           'draft_key': ?draftKey,
+          'channel': ?channel,
         },
       );
       return SocialDraft.fromJson(response.data as Map<String, dynamic>);
