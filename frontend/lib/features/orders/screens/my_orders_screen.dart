@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../../core/services/app_tts_service.dart';
+import '../../../core/services/tts_page_guides.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -10,6 +12,7 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/widgets/motifs/empty_craft_state.dart';
 import '../../../core/widgets/motifs/craft_category_badge.dart';
+import '../../../core/widgets/speaker_affordance.dart';
 import '../models/order.dart';
 import '../providers/orders_provider.dart';
 import '../services/label_maker_service.dart';
@@ -179,7 +182,7 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-class _OrderCard extends StatelessWidget {
+class _OrderCard extends StatefulWidget {
   final Order order;
   final VoidCallback onTap;
   final VoidCallback onStatusAdvance;
@@ -191,7 +194,74 @@ class _OrderCard extends StatelessWidget {
   });
 
   @override
+  State<_OrderCard> createState() => _OrderCardState();
+}
+
+class _OrderCardState extends State<_OrderCard> {
+  final AppTtsService _tts = AppTtsService();
+
+  @override
+  void initState() {
+    super.initState();
+    _tts.onStateChanged = () {
+      if (mounted) setState(() {});
+    };
+  }
+
+  @override
+  void dispose() {
+    _tts.dispose();
+    super.dispose();
+  }
+
+  // A short spoken summary of the order — enough for an artisan to identify
+  // it by ear from a list, without reading. Not every field on the card,
+  // just what identifies and matters: what, who, where, how much, status.
+  Future<void> _speakSummary() async {
+    if (_tts.isSpeaking) {
+      await _tts.stop();
+      return;
+    }
+    final order = widget.order;
+    final isHindi = context.locale.languageCode == 'hi';
+    final lead = TtsPageGuides.orderCardLead
+        .forLanguage(context.locale.languageCode);
+
+    // Built in the app language rather than always in English: the status
+    // label is already translated, so an English carrier sentence around a
+    // Hindi word — read by whichever single voice is selected — mispronounces
+    // one half or the other whichever way it is spoken.
+    final summary = isHindi
+        ? '${order.productTitle} का ऑर्डर, ${order.buyerCity} से '
+            '${order.buyerName} की ओर से। राशि '
+            '${order.amount.toStringAsFixed(0)} रुपये। स्थिति: '
+            '${order.status.labelKey.tr()}।'
+        : 'Order for ${order.productTitle}, from ${order.buyerName} in '
+            '${order.buyerCity}. Amount: ${order.amount.toStringAsFixed(0)} '
+            'rupees. Status: ${order.status.labelKey.tr()}.';
+
+    final result = await _tts.speak(
+      lead + summary,
+      languageCode: context.locale.languageCode,
+    );
+
+    if (result == TtsResult.voiceUnavailable && mounted) {
+      final opened = await _tts.openVoiceDownloadScreen();
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please download the voice from phone settings'),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final order = widget.order;
+    final onTap = widget.onTap;
+    final onStatusAdvance = widget.onStatusAdvance;
     final canAdvance = order.status.next != null;
 
     return Dismissible(
@@ -282,7 +352,12 @@ class _OrderCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 4),
+                          SpeakerAffordance.compact(
+                            isSpeaking: _tts.isSpeaking,
+                            onTap: _speakSummary,
+                          ),
+                          const SizedBox(width: 4),
                           _StatusBadge(status: order.status),
                         ],
                       ),

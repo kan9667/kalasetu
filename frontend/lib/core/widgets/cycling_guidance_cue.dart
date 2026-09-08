@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/app_tts_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/app_spacing.dart';
@@ -57,6 +58,13 @@ class CyclingGuidanceCue extends StatefulWidget {
   /// Cycle interval between automatic advances. Defaults to 3.8 seconds.
   final Duration interval;
 
+  /// Spoken before the cues when the listen button is tapped, and never
+  /// displayed. The cues are short because they have to fit inside a pill;
+  /// that leaves no room to say which buttons this screen has and which one
+  /// moves the artisan forward — which is exactly what someone who is
+  /// listening rather than reading needs first.
+  final String? spokenIntro;
+
   const CyclingGuidanceCue({
     super.key,
     required this.cues,
@@ -66,6 +74,7 @@ class CyclingGuidanceCue extends StatefulWidget {
     this.onCueTap,
     this.isPaused = false,
     this.interval = const Duration(milliseconds: 3800),
+    this.spokenIntro,
   });
 
   @override
@@ -76,12 +85,27 @@ class _CyclingGuidanceCueState extends State<CyclingGuidanceCue> {
   int _currentIndex = 0;
   Timer? _timer;
 
+  // Only the explicit "Tap to hear" affordance speaks. Auto-cycling and the
+  // manual chevrons change the cue silently — narrating on every 3.8s
+  // auto-advance would talk over itself and interrupt the reader.
+  final AppTtsService _tts = AppTtsService();
+
   @override
   void initState() {
     super.initState();
     if (!widget.isPaused && widget.cues.length > 1) {
       _startTimer();
     }
+    _tts.onStateChanged = () {
+      if (mounted) setState(() {});
+    };
+  }
+
+  @override
+  void dispose() {
+    _tts.dispose();
+    _stopTimer();
+    super.dispose();
   }
 
   @override
@@ -94,12 +118,6 @@ class _CyclingGuidanceCueState extends State<CyclingGuidanceCue> {
         _startTimer();
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _stopTimer();
-    super.dispose();
   }
 
   void _startTimer() {
@@ -146,17 +164,40 @@ class _CyclingGuidanceCueState extends State<CyclingGuidanceCue> {
     _resetTimer();
   }
 
-  void _onHearAffordanceTap(GuidanceCue currentCue) {
-    // TODO: hook TTS playback here via onCueChanged
+  Future<void> _onHearAffordanceTap(GuidanceCue currentCue) async {
     widget.onCueChanged?.call(currentCue);
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🔊 Reading aloud: "${currentCue.text}" (TTS Audio Coming Soon)'),
-        backgroundColor: AppColors.terracottaDark,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+
+    if (_tts.isSpeaking) {
+      await _tts.stop();
+      return;
+    }
+
+    // Read every tip in the set, not just whichever one happens to be
+    // showing when the artisan taps — they should hear all of them once,
+    // regardless of where auto-cycling had landed. The screen walk-through
+    // goes first: the tips say what makes a good photo or a good description,
+    // but not how to actually work the screen.
+    final intro = widget.spokenIntro;
+    final allTips = widget.cues.map((c) => c.text).join('. ');
+    final script = intro == null || intro.isEmpty ? allTips : '$intro $allTips';
+
+    // Cue text is authored in English and is not run through
+    // easy_localization, so it has to be spoken by the English voice whatever
+    // the app language is — the Hindi voice renders English words as
+    // unintelligible phonetic approximations.
+    final result = await _tts.speak(script, languageCode: 'en');
+
+    if (result == TtsResult.voiceUnavailable && mounted) {
+      final opened = await _tts.openVoiceDownloadScreen();
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please download the voice from phone settings'),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -229,14 +270,16 @@ class _CyclingGuidanceCueState extends State<CyclingGuidanceCue> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
-                            Icons.volume_up_rounded,
+                          Icon(
+                            _tts.isSpeaking
+                                ? Icons.stop_circle_outlined
+                                : Icons.volume_up_rounded,
                             size: 13,
                             color: AppColors.terracottaDark,
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'Tap to hear',
+                            _tts.isSpeaking ? 'Stop' : 'Tap to hear',
                             style: AppTextStyles.labelSmall.copyWith(
                               color: AppColors.terracottaDark,
                               fontWeight: FontWeight.w600,

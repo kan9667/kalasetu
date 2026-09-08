@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../../core/services/app_tts_service.dart';
+import '../../../core/services/tts_page_guides.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_image.dart';
+import '../../../core/widgets/speaker_affordance.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/router/app_route_constants.dart';
 import '../../../data/models/product.dart';
@@ -23,6 +26,66 @@ class Step5ConfirmWidget extends ConsumerStatefulWidget {
 
 class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
   bool _isPublishing = false;
+  final AppTtsService _tts = AppTtsService();
+
+  @override
+  void initState() {
+    super.initState();
+    _tts.onStateChanged = () {
+      if (mounted) setState(() {});
+    };
+  }
+
+  @override
+  void dispose() {
+    _tts.dispose();
+    super.dispose();
+  }
+
+  // This is the last checkpoint before the listing goes live. Reading the
+  // full title, description, and price back as one summary is the final
+  // version of the same correctness gate as step 3 — the artisan confirms
+  // what is actually about to publish, not just what was drafted earlier.
+  //
+  // Title and description are picked by the current app language, not
+  // hardcoded to English — speaking English text through a Hindi voice
+  // renders it as mispronounced phonetic gibberish, the same code-mixing
+  // failure the voice pipeline's transcription stage exists to avoid.
+  Future<void> _speakSummary({
+    required String titleEn,
+    required String titleHi,
+    required String descriptionEn,
+    required String descriptionHi,
+    required double price,
+  }) async {
+    if (_tts.isSpeaking) {
+      await _tts.stop();
+      return;
+    }
+    final isHindi = context.locale.languageCode == 'hi';
+    final title = isHindi && titleHi.isNotEmpty ? titleHi : titleEn;
+    final description = isHindi && descriptionHi.isNotEmpty ? descriptionHi : descriptionEn;
+    final priceStatement = isHindi
+        ? 'मूल्य ${price.toStringAsFixed(0)} रुपये। '
+        : 'Price: ${price.toStringAsFixed(0)} rupees. ';
+    final guide =
+        TtsPageGuides.confirmPublish.forLanguage(context.locale.languageCode);
+    final summary = '$guide$title. $priceStatement$description';
+    final result = await _tts.speak(
+      summary,
+      languageCode: context.locale.languageCode,
+    );
+    if (result == TtsResult.voiceUnavailable && mounted) {
+      final opened = await _tts.openVoiceDownloadScreen();
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please download the voice from phone settings'),
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _handleListProduct() async {
     setState(() => _isPublishing = true);
@@ -238,7 +301,27 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                         ],
                       ),
 
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
+
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: SpeakerAffordance(
+                          isSpeaking: _tts.isSpeaking,
+                          onTap: () => _speakSummary(
+                            titleEn: draft.titleEn.isNotEmpty
+                                ? draft.titleEn
+                                : 'Handcrafted ${draft.category}',
+                            titleHi: draft.titleHi,
+                            descriptionEn: draft.descriptionEn.isNotEmpty
+                                ? draft.descriptionEn
+                                : draft.voiceTranscript,
+                            descriptionHi: draft.descriptionHi,
+                            price: draft.finalPrice,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
 
                       Text(
                         draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted ${draft.category}',

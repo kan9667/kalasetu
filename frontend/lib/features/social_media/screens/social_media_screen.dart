@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../../core/services/app_tts_service.dart';
+import '../../../core/services/tts_page_guides.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_image.dart';
+import '../../../core/widgets/speaker_affordance.dart';
 import '../providers/social_media_provider.dart';
 
 class SocialMediaScreen extends ConsumerStatefulWidget {
@@ -19,13 +22,56 @@ class SocialMediaScreen extends ConsumerStatefulWidget {
 class _SocialMediaScreenState extends ConsumerState<SocialMediaScreen> {
   final _captionController = TextEditingController();
   final _hashtagController = TextEditingController();
+  final AppTtsService _tts = AppTtsService();
   String? _lastDraftId;
+  bool _voiceUnavailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tts.onStateChanged = () {
+      if (mounted) setState(() {});
+    };
+  }
 
   @override
   void dispose() {
     _captionController.dispose();
     _hashtagController.dispose();
+    _tts.dispose();
     super.dispose();
+  }
+
+  // The caption is AI-generated, and an artisan who cannot read English well
+  // has no way to check it says what they intended before it goes on their
+  // page. Read back the caption they're about to post, not the original
+  // draft — they may have edited it.
+  Future<void> _speakCaption() async {
+    if (_tts.isSpeaking) {
+      await _tts.stop();
+      return;
+    }
+    final languageCode = context.locale.languageCode;
+    final guide = TtsPageGuides.socialMedia.forLanguage(languageCode);
+
+    final result = await _tts.speak(
+      guide + _captionController.text,
+      languageCode: languageCode,
+    );
+    if (mounted) {
+      setState(() => _voiceUnavailable = result == TtsResult.voiceUnavailable);
+    }
+  }
+
+  Future<void> _handleVoiceDownload() async {
+    final opened = await _tts.openVoiceDownloadScreen();
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please download the voice from phone settings'),
+        ),
+      );
+    }
   }
 
   @override
@@ -79,7 +125,7 @@ class _SocialMediaScreenState extends ConsumerState<SocialMediaScreen> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: widget.args.allImages.length,
-                separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.xs),
+                separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.xs),
                 itemBuilder: (context, index) {
                   final image = widget.args.allImages[index];
                   final selected = image == state.selectedImageUrl;
@@ -158,6 +204,15 @@ class _SocialMediaScreenState extends ConsumerState<SocialMediaScreen> {
               runSpacing: AppSpacing.xs,
               children: [
                 OutlinedButton.icon(
+                  onPressed: _speakCaption,
+                  icon: Icon(
+                    _tts.isSpeaking
+                        ? Icons.stop_circle_outlined
+                        : Icons.volume_up_rounded,
+                  ),
+                  label: Text(_tts.isSpeaking ? 'Stop' : 'Listen'),
+                ),
+                OutlinedButton.icon(
                   onPressed: state.isLoading ? null : notifier.regenerate,
                   icon: const Icon(Icons.refresh),
                   label: Text('regenerate_btn'.tr()),
@@ -176,6 +231,8 @@ class _SocialMediaScreenState extends ConsumerState<SocialMediaScreen> {
                 ),
               ],
             ),
+            if (_voiceUnavailable)
+              VoiceUnavailableNotice(onDownload: _handleVoiceDownload),
           ],
         ],
       ),

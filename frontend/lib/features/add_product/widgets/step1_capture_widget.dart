@@ -64,6 +64,11 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
 
   static const List<GuidanceCue> _captureCues = [
     GuidanceCue(
+      text:
+          "Tap 'Take Photo' to use your camera, or 'Upload from Gallery' to pick an existing photo",
+      icon: Icons.touch_app_outlined,
+    ),
+    GuidanceCue(
       text: 'Show the full item in frame',
       icon: Icons.crop_free_rounded,
     ),
@@ -85,6 +90,14 @@ class _Step1CaptureWidgetState extends ConsumerState<Step1CaptureWidget> {
     return CyclingGuidanceCue(
       headerTitle: 'PHOTO TIPS',
       headerIcon: Icons.tips_and_updates_outlined,
+      spokenIntro:
+          'This is the first step of adding your craft. Here you give the app '
+          'one photo of the item you want to sell. Tap the Take Photo button '
+          'to open your camera, or tap Upload from Gallery to choose a photo '
+          'you have already taken. The photo then appears on the screen for '
+          'you to check: tap Looks Good at the bottom to keep it and move on '
+          'to describing your craft, or Try Another Photo to take it again. '
+          'These tips will help the photo come out well.',
       cues: _captureCues,
       isPaused: _isPickingImage,
       onCueChanged: (cue) {
