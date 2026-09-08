@@ -62,6 +62,7 @@ uploads/
 *.ogg
 *.aac
 *.flac
+!frontend/assets/sounds/*
 **/chat_voice_recordings/
 
 # OS & Filesystem Metadata

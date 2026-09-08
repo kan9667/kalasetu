@@ -9,6 +9,7 @@ import 'data/models/user_profile.dart';
 import 'core/offline_sync/offline_sync_service.dart';
 import 'core/offline_sync/services/upload_api.dart';
 import 'core/config/api_config.dart';
+import 'core/services/app_sound_service.dart';
 
 Future<Box<T>> _openSafeBox<T>(String boxName) async {
   try {
@@ -52,6 +53,7 @@ void main() async {
   await _openSafeBox('auth_box');
   await _openSafeBox('draft_box');
   await _openSafeBox('app_settings_box');
+  await AppSoundService.instance.init();
 
   final activeBaseUrl = await ApiConfig.discoverWorkingUrl();
 
