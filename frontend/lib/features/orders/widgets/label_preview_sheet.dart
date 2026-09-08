@@ -81,8 +81,8 @@ class _LabelPreviewSheetState extends ConsumerState<_LabelPreviewSheet> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not generate label — please try again.'),
+          SnackBar(
+            content: Text('label_generation_failed'.tr()),
             backgroundColor: AppColors.error,
           ),
         );

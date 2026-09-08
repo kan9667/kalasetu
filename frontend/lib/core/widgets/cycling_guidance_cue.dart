@@ -194,8 +194,8 @@ class _CyclingGuidanceCueState extends State<CyclingGuidanceCue> {
       if (!opened && mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please download the voice from phone settings'),
+          SnackBar(
+            content: Text('voice_download_settings_hint'.tr()),
           ),
         );
       }

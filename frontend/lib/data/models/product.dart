@@ -198,7 +198,9 @@ class Product extends HiveObject {
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       photoPath: json['photoPath'] as String? ??
           (json['image_url'] as String? ?? (json['imageUrl'] as String? ?? '')),
-      category: json['category'] as String? ?? 'General',
+      category: (json['category'] as String?)?.trim().isNotEmpty == true
+          ? (json['category'] as String).trim()
+          : 'Handicraft',
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       status: ProductStatus.values.firstWhere(
         (e) => e.name == json['status'],

@@ -143,7 +143,11 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
       if (mounted) {
         setState(() => _isPlayingAudio = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unable to play recording: $e')),
+          SnackBar(
+            content: Text(
+              'unable_to_play_recording'.tr(namedArgs: {'error': e.toString()}),
+            ),
+          ),
         );
       }
     }

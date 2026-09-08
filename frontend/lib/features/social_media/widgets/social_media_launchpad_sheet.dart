@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -7,17 +7,16 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/services/social_sharing_service.dart';
+import '../../../core/widgets/motifs/mehrab_clipper.dart';
 import '../providers/social_media_provider.dart';
 
-/// Shows the 2-step Social Media Launchpad bottom sheet.
+/// Shows the 2-step Social Media Launchpad bottom sheet with Mehrab scalloped top.
 Future<void> showSocialMediaLaunchpadSheet(
    BuildContext context,
    SocialMediaArgs args,
 ) {
-   return showModalBottomSheet<void>(
+   return showMehrabBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) => SocialMediaLaunchpadSheet(args: args),
    );
 }
@@ -73,6 +72,7 @@ class _SocialMediaLaunchpadSheetState
 
    @override
    Widget build(BuildContext context) {
+      final _ = Localizations.maybeLocaleOf(context);
       final state = ref.watch(socialMediaProvider(widget.args));
       final notifier = ref.read(socialMediaProvider(widget.args).notifier);
       final sharingService = ref.read(socialSharingServiceProvider);
@@ -81,31 +81,13 @@ class _SocialMediaLaunchpadSheetState
 
       return Container(
          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.88,
-         ),
-         decoration: const BoxDecoration(
-            color: AppColors.parchment,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
          ),
          child: SafeArea(
             top: false,
             child: Column(
                mainAxisSize: MainAxisSize.min,
                children: [
-                  // Drag handle
-                  const SizedBox(height: AppSpacing.xs),
-                  Center(
-                     child: Container(
-                        width: 44,
-                        height: 4.5,
-                        decoration: BoxDecoration(
-                           color: AppColors.inkFaint.withValues(alpha: 0.4),
-                           borderRadius: BorderRadius.circular(3),
-                        ),
-                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-
                   // Header bar
                   _buildHeader(context, state),
                   const Divider(height: 1, color: AppColors.line),
@@ -130,26 +112,60 @@ class _SocialMediaLaunchpadSheetState
       );
    }
 
+   String _t(
+      BuildContext context,
+      String key, {
+      String? fallbackEn,
+      String? fallbackHi,
+      Map<String, String>? namedArgs,
+   }) {
+      final trValue = namedArgs != null ? key.tr(namedArgs: namedArgs) : key.tr();
+      if (trValue != key && trValue.isNotEmpty) {
+         return trValue;
+      }
+      final lang = Localizations.localeOf(context).languageCode;
+      String text = (lang == 'hi' ? fallbackHi : fallbackEn) ?? fallbackEn ?? key;
+      if (namedArgs != null) {
+         namedArgs.forEach((k, v) {
+            text = text.replaceAll('{$k}', v);
+         });
+      }
+      return text;
+   }
+
+   String _resolveCategory(BuildContext context, String rawCategory) {
+      if (rawCategory.isEmpty || rawCategory == 'craft_category_handicraft') {
+         return _t(
+            context,
+            'craft_category_handicraft',
+            fallbackEn: 'Handicraft',
+            fallbackHi: 'हस्तशिल्प',
+         );
+      }
+      final translated = rawCategory.tr();
+      if (translated != rawCategory && translated.isNotEmpty) {
+         return translated;
+      }
+      return rawCategory;
+   }
+
    Widget _buildHeader(BuildContext context, SocialMediaState state) {
       String title;
       if (_step == 1) {
-         title = 'social_media_launchpad'.tr(args: [], gender: null);
-         if (title == 'social_media_launchpad') {
-            title = 'Social Media Launchpad';
-         }
+         title = _t(context, 'social_media_launchpad', fallbackEn: 'Social Media Launchpad', fallbackHi: 'सोशल मीडिया लॉन्चपैड');
       } else {
          switch (state.currentChannel) {
             case 'whatsapp':
-               title = 'WhatsApp Share';
+               title = _t(context, 'whatsapp_share_title', fallbackEn: 'Share on WhatsApp', fallbackHi: 'व्हाट्सएप पर साझा करें');
                break;
             case 'instagram':
-               title = 'Instagram Post';
+               title = _t(context, 'instagram_post_title', fallbackEn: 'Post on Instagram', fallbackHi: 'इंस्टाग्राम पर पोस्ट करें');
                break;
             case 'facebook':
-               title = 'Facebook Post';
+               title = _t(context, 'facebook_post_title', fallbackEn: 'Post on Facebook', fallbackHi: 'फेसबुक पर पोस्ट करें');
                break;
             default:
-               title = 'Social Share';
+               title = _t(context, 'social_share_title', fallbackEn: 'Social Media Share', fallbackHi: 'सोशल मीडिया शेयर');
          }
       }
 
@@ -164,7 +180,7 @@ class _SocialMediaLaunchpadSheetState
                   IconButton(
                      icon: const Icon(Icons.arrow_back_rounded, color: AppColors.ink),
                      onPressed: () => setState(() => _step = 1),
-                     tooltip: 'back'.tr(),
+                     tooltip: _t(context, 'back', fallbackEn: 'Back', fallbackHi: 'वापस'),
                   ),
                Expanded(
                   child: Text(
@@ -184,7 +200,7 @@ class _SocialMediaLaunchpadSheetState
       );
    }
 
-   //        Step 1: Channel Selection                                                                                                                                           
+   // ─── Step 1: Channel Selection ──────────────────────────────────────────────
 
    Widget _buildStep1ChannelSelection(
       BuildContext context,
@@ -193,10 +209,13 @@ class _SocialMediaLaunchpadSheetState
    ) {
       final title = widget.args.title.isNotEmpty
             ? widget.args.title
-            : 'Handcrafted Product';
-      final category = widget.args.category.isNotEmpty
-            ? widget.args.category
-            : 'Craft';
+            : _t(
+                  context,
+                  'handcrafted_product',
+                  fallbackEn: 'Handcrafted Product',
+                  fallbackHi: 'हस्तनिर्मित उत्पाद',
+               );
+      final category = _resolveCategory(context, widget.args.category);
 
       return Column(
          crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,7 +288,7 @@ class _SocialMediaLaunchpadSheetState
             const SizedBox(height: AppSpacing.md),
 
             Text(
-               'Select where you want to share:',
+               _t(context, 'select_share_channel', fallbackEn: 'Select where you want to share:', fallbackHi: 'चुनें कि आप कहाँ साझा करना चाहते हैं:'),
                style: AppTextStyles.labelMedium.copyWith(
                   color: AppColors.inkSoft,
                   fontWeight: FontWeight.w600,
@@ -280,7 +299,7 @@ class _SocialMediaLaunchpadSheetState
             // 1. WhatsApp Card
             _buildChannelOptionCard(
                title: 'WhatsApp',
-               subtitle: 'Direct 1-tap share with photo and prefilled message',
+               subtitle: _t(context, 'whatsapp_channel_desc', fallbackEn: 'Send photo & details directly to customer', fallbackHi: 'ग्राहक को फोटो और विवरण भेजें'),
                brandColor: const Color(0xFF25D366),
                icon: Icons.chat_rounded,
                onTap: () {
@@ -295,7 +314,7 @@ class _SocialMediaLaunchpadSheetState
             // 2. Instagram Card
             _buildChannelOptionCard(
                title: 'Instagram',
-               subtitle: 'Storytelling caption & hashtags + photo save',
+               subtitle: _t(context, 'instagram_channel_desc', fallbackEn: 'Copy caption & tags, save photo to gallery', fallbackHi: 'कैप्शन व हैशटैग कॉपी करें और फोटो सहेजें'),
                brandColor: const Color(0xFFE1306C),
                icon: Icons.camera_alt_rounded,
                onTap: () {
@@ -310,7 +329,7 @@ class _SocialMediaLaunchpadSheetState
             // 3. Facebook Card
             _buildChannelOptionCard(
                title: 'Facebook',
-               subtitle: 'Community post & hashtags + photo save',
+               subtitle: _t(context, 'facebook_channel_desc', fallbackEn: 'Copy post copy & share to your audience', fallbackHi: 'कैप्शन कॉपी करें और पोस्ट साझा करें'),
                brandColor: const Color(0xFF1877F2),
                icon: Icons.thumb_up_alt_rounded,
                onTap: () {
@@ -453,7 +472,13 @@ class _SocialMediaLaunchpadSheetState
                         const CircularProgressIndicator(color: AppColors.terracotta),
                         const SizedBox(height: AppSpacing.md),
                         Text(
-                           'Generating $platformName caption with AI...',
+                           _t(
+                              context,
+                              'generating_caption_ai',
+                              fallbackEn: 'Generating {platform} caption with KalaMitra AI...',
+                              fallbackHi: 'कला-मित्र AI द्वारा {platform} कैप्शन तैयार किया जा रहा है...',
+                              namedArgs: {'platform': platformName},
+                           ),
                            style: AppTextStyles.bodyMedium.copyWith(
                               color: AppColors.inkSoft,
                            ),
@@ -493,9 +518,9 @@ class _SocialMediaLaunchpadSheetState
                               notifier.regenerate();
                            },
                            icon: const Icon(Icons.refresh, color: AppColors.terracotta),
-                           label: const Text(
-                              'Try Again',
-                              style: TextStyle(color: AppColors.terracotta),
+                           label: Text(
+                              _t(context, 'try_again_btn', fallbackEn: 'Try Again', fallbackHi: 'पुनः प्रयास करें'),
+                              style: const TextStyle(color: AppColors.terracotta),
                            ),
                         ),
                      ],
@@ -507,7 +532,7 @@ class _SocialMediaLaunchpadSheetState
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                      Text(
-                        isWhatsApp ? 'WhatsApp Message' : 'Caption & Hashtags',
+                        isWhatsApp ? _t(context, 'whatsapp_message_label', fallbackEn: 'WhatsApp Message', fallbackHi: 'व्हाट्सएप संदेश') : _t(context, 'caption_and_hashtags_label', fallbackEn: 'Caption & Hashtags', fallbackHi: 'कैप्शन और हैशटैग'),
                         style: AppTextStyles.labelLarge.copyWith(
                            fontWeight: FontWeight.w700,
                            color: AppColors.ink,
@@ -521,7 +546,7 @@ class _SocialMediaLaunchpadSheetState
                                     notifier.regenerate();
                                  },
                         icon: const Icon(Icons.refresh_rounded, size: 16),
-                        label: const Text('Regenerate'),
+                        label: Text(_t(context, 'regenerate_btn', fallbackEn: 'Regenerate', fallbackHi: 'पुनः बनाएं')),
                         style: TextButton.styleFrom(
                            foregroundColor: AppColors.terracotta,
                            visualDensity: VisualDensity.compact,
@@ -541,7 +566,7 @@ class _SocialMediaLaunchpadSheetState
                   decoration: InputDecoration(
                      filled: true,
                      fillColor: AppColors.cardSurface,
-                     hintText: 'Craft caption...',
+                     hintText: _t(context, 'craft_caption_hint', fallbackEn: 'Edit your post caption here...', fallbackHi: 'यहाँ अपना पोस्ट कैप्शन संपादित करें...'),
                      border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: AppColors.line),
@@ -561,7 +586,7 @@ class _SocialMediaLaunchpadSheetState
                ),
                const SizedBox(height: AppSpacing.md),
 
-               //        Platform-Specific Action Buttons                                                                                              
+               // ─── Platform-Specific Action Buttons ─────────────────────────
                if (isWhatsApp) ...[
                   // WhatsApp Direct Share Button
                   SizedBox(
@@ -592,7 +617,15 @@ class _SocialMediaLaunchpadSheetState
                                        if (context.mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                              SnackBar(
-                                                content: Text('Sharing failed: $e'),
+                                                content: Text(
+                                                   _t(
+                                                      context,
+                                                      'sharing_failed_snack',
+                                                      fallbackEn: 'Could not share: {error}',
+                                                      fallbackHi: 'साझा नहीं किया जा सका: {error}',
+                                                      namedArgs: {'error': e.toString()},
+                                                   ),
+                                                ),
                                              ),
                                           );
                                        }
@@ -613,7 +646,7 @@ class _SocialMediaLaunchpadSheetState
                                  )
                               : const Icon(Icons.send_rounded),
                         label: Text(
-                           'Share to WhatsApp',
+                           _t(context, 'share_to_whatsapp', fallbackEn: 'Share to WhatsApp', fallbackHi: 'व्हाट्सएप पर शेयर करें'),
                            style: AppTextStyles.labelLarge.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
@@ -624,7 +657,7 @@ class _SocialMediaLaunchpadSheetState
                   const SizedBox(height: 6),
                   Center(
                      child: Text(
-                        'Opens WhatsApp with the photo attached and caption pre-filled.',
+                        _t(context, 'share_to_whatsapp_sub', fallbackEn: 'KalaSetu does not send messages automatically. WhatsApp will open for you to choose a recipient and confirm.', fallbackHi: 'कलासेतु स्वचालित रूप से संदेश नहीं भेजता है। व्हाट्सएप खुलेगा ताकि आप प्राप्तकर्ता चुन सकें और पुष्टि कर सकें।'),
                         style: AppTextStyles.caption.copyWith(
                            color: AppColors.inkSoft,
                            fontSize: 11.5,
@@ -659,7 +692,13 @@ class _SocialMediaLaunchpadSheetState
                                        ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
                                              content: Text(
-                                                'Caption copied! Don\'t forget to save the photo before you open $platformName.',
+                                                _t(
+                                                   context,
+                                                   'caption_copied_snack',
+                                                   fallbackEn: 'Caption copied! Open {platform} to paste and share.',
+                                                   fallbackHi: 'कैप्शन कॉपी हो गया! पेस्ट और शेयर करने के लिए {platform} खोलें।',
+                                                   namedArgs: {'platform': platformName},
+                                                ),
                                              ),
                                              duration: const Duration(seconds: 4),
                                           ),
@@ -668,7 +707,7 @@ class _SocialMediaLaunchpadSheetState
                                  },
                                  icon: const Icon(Icons.copy_rounded, size: 18),
                                  label: Text(
-                                    'Copy Caption',
+                                    _t(context, 'copy_caption_btn', fallbackEn: 'Copy Caption', fallbackHi: 'कैप्शन कॉपी करें'),
                                     style: AppTextStyles.labelMedium.copyWith(
                                        fontWeight: FontWeight.w700,
                                        color: AppColors.terracotta,
@@ -702,8 +741,8 @@ class _SocialMediaLaunchpadSheetState
                                                 );
                                                 if (context.mounted) {
                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(
-                                                         content: Text('Photo saved to your Gallery!'),
+                                                      SnackBar(
+                                                         content: Text(_t(context, 'photo_saved_snack', fallbackEn: 'Photo saved to your gallery!', fallbackHi: 'फ़ोटो आपकी गैलरी में सहेजी गई!')),
                                                       ),
                                                    );
                                                 }
@@ -711,7 +750,15 @@ class _SocialMediaLaunchpadSheetState
                                                 if (context.mounted) {
                                                    ScaffoldMessenger.of(context).showSnackBar(
                                                       SnackBar(
-                                                         content: Text('Could not save photo: $e'),
+                                                         content: Text(
+                                                            _t(
+                                                               context,
+                                                               'photo_save_failed_snack',
+                                                               fallbackEn: 'Could not save photo: {error}',
+                                                               fallbackHi: 'फ़ोटो सहेजी नहीं जा सकी: {error}',
+                                                               namedArgs: {'error': e.toString()},
+                                                            ),
+                                                         ),
                                                       ),
                                                    );
                                                 }
@@ -732,7 +779,7 @@ class _SocialMediaLaunchpadSheetState
                                           )
                                        : const Icon(Icons.download_rounded, size: 18),
                                  label: Text(
-                                    'Save Image',
+                                    _t(context, 'save_image_btn', fallbackEn: 'Save Image', fallbackHi: 'फ़ोटो सहेजें'),
                                     style: AppTextStyles.labelMedium.copyWith(
                                        fontWeight: FontWeight.w700,
                                        color: Colors.white,
@@ -750,7 +797,15 @@ class _SocialMediaLaunchpadSheetState
                      child: TextButton.icon(
                         onPressed: () => sharingService.openApp(state.currentChannel),
                         icon: const Icon(Icons.open_in_new_rounded, size: 15),
-                        label: Text('Open $platformName'),
+                        label: Text(
+                           _t(
+                              context,
+                              'open_platform_btn',
+                              fallbackEn: 'Open {platform}',
+                              fallbackHi: '{platform} खोलें',
+                              namedArgs: {'platform': platformName},
+                           ),
+                        ),
                         style: TextButton.styleFrom(
                            foregroundColor: AppColors.inkSoft,
                            visualDensity: VisualDensity.compact,

@@ -80,7 +80,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     }).toList();
   }
 
-  Widget _buildStatusBadge(ProductStatus status) {
+  Widget _buildStatusBadge(ProductStatus status, BuildContext context) {
     if (status == ProductStatus.live) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -188,7 +188,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     );
   }
 
-  Widget _buildCategoryBadge(String catKey) {
+  Widget _buildCategoryBadge(String catKey, BuildContext context) {
     final isSelected = _selectedCategory == catKey;
     final label = catKey.tr();
 
@@ -247,6 +247,8 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final _ = Localizations.maybeLocaleOf(context);
+    final _ = ref.watch(userProfileProvider).preferredLanguage;
     final productsAsync = ref.watch(productListProvider);
 
     ref.listen<CatalogueFilterState>(catalogueFilterProvider, (prev, next) {
@@ -357,7 +359,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
               itemBuilder: (context, index) {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8.0),
-                  child: _buildCategoryBadge(categories[index]),
+                  child: _buildCategoryBadge(categories[index], context),
                 );
               },
             ),
@@ -379,7 +381,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                     children: [
                       const Icon(Icons.error_outline, size: 48, color: AppColors.terracottaDark),
                       const SizedBox(height: AppSpacing.md),
-                      Text('Error loading catalogue', style: AppTextStyles.headlineMedium),
+                      Text('error_loading_catalogue'.tr(), style: AppTextStyles.headlineMedium),
                       const SizedBox(height: AppSpacing.sm),
                       AppButton(
                         label: 'retry'.tr(),
@@ -452,7 +454,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                       final item = filtered[index];
                       return _GridProductCard(
                         product: item,
-                        statusBadge: _buildStatusBadge(item.status),
+                        statusBadge: _buildStatusBadge(item.status, context),
                         onTap: () {
                           context.pushNamed(
                             AppRouteConstants.productDetail,

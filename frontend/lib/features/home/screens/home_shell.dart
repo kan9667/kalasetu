@@ -23,17 +23,16 @@ class HomeShell extends ConsumerWidget {
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            title: const Text('Resume previous draft?'),
-            content: const Text(
-                'We found an unfinished product draft. Resume it or start fresh?'),
+            title: Text('resume_draft_title'.tr(context: context)),
+            content: Text('resume_draft_msg'.tr(context: context)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Start fresh'),
+                child: Text('start_fresh_btn'.tr(context: context)),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Resume'),
+                child: Text('resume_btn'.tr(context: context)),
               ),
             ],
           ),
@@ -52,6 +51,8 @@ class HomeShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final _ = Localizations.maybeLocaleOf(context);
+    final _ = ref.watch(userProfileProvider).preferredLanguage;
     final currentIndex = ref.watch(homeTabIndexProvider);
 
     const screens = [
@@ -92,7 +93,7 @@ class HomeShell extends ConsumerWidget {
                 Expanded(
                   child: _NavItem(
                     icon: Icons.add_photo_alternate_outlined,
-                    label: 'tab_add_product'.tr(),
+                    label: 'tab_add_product'.tr(context: context),
                     isActive: currentIndex == 0,
                     onTap: () => _handleTabTap(0, context, ref),
                   ),
@@ -100,7 +101,7 @@ class HomeShell extends ConsumerWidget {
                 Expanded(
                   child: _NavItem(
                     icon: Icons.grid_view_outlined,
-                    label: 'tab_catalogue'.tr(),
+                    label: 'tab_catalogue'.tr(context: context),
                     isActive: currentIndex == 1,
                     onTap: () => _handleTabTap(1, context, ref),
                   ),
@@ -108,7 +109,7 @@ class HomeShell extends ConsumerWidget {
                 Expanded(
                   child: _NavItem(
                     icon: Icons.receipt_long_outlined,
-                    label: 'tab_my_orders'.tr(),
+                    label: 'tab_my_orders'.tr(context: context),
                     isActive: currentIndex == 2,
                     onTap: () => _handleTabTap(2, context, ref),
                   ),
@@ -116,7 +117,7 @@ class HomeShell extends ConsumerWidget {
                 Expanded(
                   child: _NavItem(
                     icon: Icons.person_outline,
-                    label: 'tab_profile'.tr(),
+                    label: 'tab_profile'.tr(context: context),
                     isActive: currentIndex == 3,
                     onTap: () => _handleTabTap(3, context, ref),
                   ),

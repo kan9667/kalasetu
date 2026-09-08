@@ -60,8 +60,8 @@ void main() {
 
     await tester.pump(const Duration(seconds: 1));
 
-    // Verify presence of form text fields (Name, Phone, Location, Experience, Pehchan ID)
-    expect(find.byType(TextFormField), findsNWidgets(5));
+    // Verify presence of form text fields (Name, Phone, Location, Experience, Pehchan ID, plus 4 Bank Details fields)
+    expect(find.byType(TextFormField), findsNWidgets(9));
     // Verify presence of DropdownFormField (Craft Type, State)
     expect(find.byType(DropdownButtonFormField<String>), findsNWidgets(2));
 
@@ -72,6 +72,10 @@ void main() {
     await tester.enterText(textFields.at(2), 'Madhubani Art Cluster'); // Cluster
     await tester.enterText(textFields.at(3), '12'); // Experience
     await tester.enterText(textFields.at(4), 'PEH1234567890'); // Pehchan ID
+    await tester.enterText(textFields.at(5), 'Shanti Devi'); // Bank Account Holder
+    await tester.enterText(textFields.at(6), '012345678901'); // Bank Account Number
+    await tester.enterText(textFields.at(7), 'SBIN0001234'); // IFSC Code
+    await tester.enterText(textFields.at(8), 'State Bank of India'); // Bank Name
     await tester.pump();
 
     // Verify Register Button is rendered
