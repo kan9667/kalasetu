@@ -28,9 +28,8 @@ class AddProductFlowScreen extends ConsumerWidget {
     // internally — Step3 does not need to stay mounted during pricing.
     if (draft.isPricingProcessing && isOnline) {
       return _FullScreenAiLoading(
-        title: 'Calculating your fair price',
-        subtitle:
-            'AI is analysing material costs, labour time, and market data to suggest the best price for your product.',
+        title: 'calculating_price_title'.tr(context: context),
+        subtitle: 'calculating_price_subtitle'.tr(context: context),
         icon: Icons.monetization_on_outlined,
         onCancel: () =>
             ref.read(addProductFlowProvider.notifier).cancelPricingProcessing(),
@@ -65,9 +64,8 @@ class AddProductFlowScreen extends ConsumerWidget {
         draft.isAiProcessing &&
         !draft.isRegenerating) {
       return _FullScreenAiLoading(
-        title: 'Enhancing image and creating listing',
-        subtitle:
-            'AI is enhancing your product photo and generating your catalog listing. This usually takes a few seconds.',
+        title: 'ai_regenerating_title'.tr(context: context),
+        subtitle: 'ai_regenerating_subtitle'.tr(context: context),
         icon: Icons.auto_awesome,
         onCancel: () =>
             ref.read(addProductFlowProvider.notifier).cancelAiProcessing(),
@@ -107,16 +105,7 @@ class AddProductFlowScreen extends ConsumerWidget {
           StepProgressBar(
             currentStep: currentStep,
             onStepTapped: (step) {
-              final currentDraft = ref.read(addProductFlowProvider);
-              if (currentDraft.originalImagePath.isEmpty && step > 0) {
-                ref.read(addProductFlowProvider.notifier).setStep(step);
-                ref.read(addProductFlowProvider.notifier).updateListingDetails(
-                  titleEn: 'Hand-thrown Terracotta Vase',
-                  titleHi: 'मिट्टी का हस्तनिर्मित फूलदान',
-                  descriptionEn: 'Carefully shaped on a traditional potter wheel with natural river clay and sun-fired glaze.',
-                  descriptionHi: 'पारंपरिक कुम्हार के चाक पर प्राकृतिक नदी की मिट्टी से गढ़ा गया सुंदर फूलदान।',
-                );
-              } else {
+              if (step < currentStep) {
                 ref.read(addProductFlowProvider.notifier).setStep(step);
               }
             },
@@ -257,7 +246,7 @@ class _FullScreenAiLoadingState extends State<_FullScreenAiLoading>
                 if (_showCancel && widget.onCancel != null) ...[
                   const SizedBox(height: 36),
                   Text(
-                    'Taking longer than expected?',
+                    'taking_longer_prompt'.tr(context: context),
                     style: AppTextStyles.bodyMedium.copyWith(
                       color: const Color(0xFF9E8F80),
                       fontSize: 12,
@@ -272,9 +261,9 @@ class _FullScreenAiLoadingState extends State<_FullScreenAiLoading>
                       size: 18,
                       color: Color(0xFF8C533E),
                     ),
-                    label: const Text(
-                      'Go back',
-                      style: TextStyle(
+                    label: Text(
+                      'go_back'.tr(context: context),
+                      style: const TextStyle(
                         color: Color(0xFF8C533E),
                         fontWeight: FontWeight.w600,
                       ),
@@ -431,13 +420,13 @@ class _FullScreenOfflineWaitingState
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  'You\'re offline',
+                  'offline'.tr(context: context),
                   style: AppTextStyles.headlineMedium.copyWith(fontSize: 22),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Your photo has been saved. Once you\'re back online, we\'ll enhance your image and generate your listing automatically.',
+                  'offline_photo_saved_desc'.tr(context: context),
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: const Color(0xFF7A6E63),
                     height: 1.5,
@@ -462,7 +451,7 @@ class _FullScreenOfflineWaitingState
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Waiting for connection...',
+                          'waiting_for_connection'.tr(context: context),
                           style: TextStyle(
                             fontSize: 13,
                             color: Color.lerp(
@@ -487,9 +476,9 @@ class _FullScreenOfflineWaitingState
                     size: 18,
                     color: Color(0xFF8C533E),
                   ),
-                  label: const Text(
-                    'Go back & edit',
-                    style: TextStyle(
+                  label: Text(
+                    'go_back_and_edit'.tr(context: context),
+                    style: const TextStyle(
                       color: Color(0xFF8C533E),
                       fontWeight: FontWeight.w600,
                     ),
@@ -552,13 +541,13 @@ class _FullScreenOfflinePricing extends ConsumerWidget {
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  'You\'re offline',
+                  'offline'.tr(context: context),
                   style: AppTextStyles.headlineMedium.copyWith(fontSize: 22),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'AI pricing needs an internet connection. We\'ll use an estimated price for now — you can update it once you\'re back online.',
+                  'offline_pricing_desc'.tr(context: context),
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: const Color(0xFF7A6E63),
                     height: 1.5,
@@ -578,9 +567,9 @@ class _FullScreenOfflinePricing extends ConsumerWidget {
                     color: Colors.white,
                     size: 18,
                   ),
-                  label: const Text(
-                    'Continue with estimate',
-                    style: TextStyle(
+                  label: Text(
+                    'continue_with_estimate'.tr(context: context),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
@@ -607,9 +596,9 @@ class _FullScreenOfflinePricing extends ConsumerWidget {
                     size: 18,
                     color: Color(0xFF8C533E),
                   ),
-                  label: const Text(
-                    'Go back',
-                    style: TextStyle(
+                  label: Text(
+                    'go_back'.tr(context: context),
+                    style: const TextStyle(
                       color: Color(0xFF8C533E),
                       fontWeight: FontWeight.w600,
                     ),

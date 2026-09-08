@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../data/models/chat_message.dart';
 import '../../../data/models/product.dart';
+import '../../../data/models/user_profile.dart';
 import '../../../data/services/chat_service.dart';
 import '../../catalogue/providers/catalogue_filter_provider.dart';
 import '../../home/screens/home_shell.dart';
@@ -42,7 +43,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
 
   ChatNotifier(this._service, this._ref) : super(const ChatState()) {
-    init();
+    final prefLang = _ref.read(userProfileProvider).preferredLanguage;
+    init(languageCode: prefLang.isNotEmpty ? prefLang : 'en');
+  }
+
+  void syncLanguage(String languageCode) {
+    if (state.messages.length <= 1) {
+      init(languageCode: languageCode);
+    }
   }
 
   Future<void> init({String languageCode = 'en'}) async {
@@ -502,6 +510,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
 final chatNotifierProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
   final service = ref.watch(chatServiceProvider);
-  return ChatNotifier(service, ref);
+  final notifier = ChatNotifier(service, ref);
+  ref.listen<UserProfile>(userProfileProvider, (previous, next) {
+    if (previous?.preferredLanguage != next.preferredLanguage && next.preferredLanguage.isNotEmpty) {
+      notifier.syncLanguage(next.preferredLanguage);
+    }
+  });
+  return notifier;
 });
 

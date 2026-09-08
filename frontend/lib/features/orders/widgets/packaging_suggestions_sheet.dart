@@ -26,25 +26,25 @@ Map<String, List<_PackagingStep>> _guideForCategory(String category) {
   if (cat.contains('pottery') || cat.contains('ceramic') || cat.contains('clay')) {
     return {
       'pottery': [
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.layers_outlined,
-          title: 'Wrap in tissue paper',
-          detail: 'Use 2–3 layers of acid-free tissue to protect the glaze.',
+          title: 'packaging_pottery_step1_title'.tr(),
+          detail: 'packaging_pottery_step1_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.bubble_chart_outlined,
-          title: 'Bubble wrap (5cm)',
-          detail: 'Apply at least two layers of small-cell bubble wrap secured with tape.',
+          title: 'packaging_pottery_step2_title'.tr(),
+          detail: 'packaging_pottery_step2_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.inventory_2_outlined,
-          title: 'Double-box method',
-          detail: 'Place in a snug inner box, then a larger outer box with 5cm foam padding on all sides.',
+          title: 'packaging_pottery_step3_title'.tr(),
+          detail: 'packaging_pottery_step3_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.warning_amber_rounded,
-          title: 'Mark "fragile"',
-          detail: 'Add fragile stickers on all six faces of the outer box.',
+          title: 'packaging_pottery_step4_title'.tr(),
+          detail: 'packaging_pottery_step4_detail'.tr(),
           isWarning: true,
         ),
       ],
@@ -52,50 +52,50 @@ Map<String, List<_PackagingStep>> _guideForCategory(String category) {
   } else if (cat.contains('textile') || cat.contains('fabric') || cat.contains('saree') || cat.contains('silk') || cat.contains('cloth')) {
     return {
       'textile': [
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.layers_outlined,
-          title: 'Fold along natural creases',
-          detail: 'Fold garments carefully along natural drape lines to avoid permanent creases.',
+          title: 'packaging_textile_step1_title'.tr(),
+          detail: 'packaging_textile_step1_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.water_drop_outlined,
-          title: 'Moisture-proof bag',
-          detail: 'Seal in a zip-lock polythene bag to protect against humidity.',
+          title: 'packaging_textile_step2_title'.tr(),
+          detail: 'packaging_textile_step2_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.inventory_2_outlined,
-          title: 'Rigid cardboard box',
-          detail: 'Place in a sturdy box — avoid vacuum-sealing or over-compressing.',
+          title: 'packaging_textile_step3_title'.tr(),
+          detail: 'packaging_textile_step3_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.sticky_note_2_outlined,
-          title: 'Include craft care card',
-          detail: 'Add handwritten or printed artisan story and washing instructions.',
+          title: 'packaging_textile_step4_title'.tr(),
+          detail: 'packaging_textile_step4_detail'.tr(),
         ),
       ],
     };
   } else if (cat.contains('jewel') || cat.contains('silver') || cat.contains('gold') || cat.contains('brass')) {
     return {
       'jewelry': [
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.diamond_outlined,
-          title: 'Anti-tarnish pouch',
-          detail: 'Place each piece individually in an anti-tarnish zip pouch.',
+          title: 'packaging_jewelry_step1_title'.tr(),
+          detail: 'packaging_jewelry_step1_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.padding_outlined,
-          title: 'Padded insert box',
-          detail: 'Nest pouches in a velvet or foam-lined jewelry gift box.',
+          title: 'packaging_jewelry_step2_title'.tr(),
+          detail: 'packaging_jewelry_step2_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.lock_outline,
-          title: 'Secure tamper seal',
-          detail: 'Tape the box lid securely and wrap in protective bubble wrap.',
+          title: 'packaging_jewelry_step3_title'.tr(),
+          detail: 'packaging_jewelry_step3_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.shield_outlined,
-          title: 'Discreet outer package',
-          detail: 'Use plain, unmarked outer courier packaging for transit security.',
+          title: 'packaging_jewelry_step4_title'.tr(),
+          detail: 'packaging_jewelry_step4_detail'.tr(),
           isWarning: true,
         ),
       ],
@@ -103,25 +103,25 @@ Map<String, List<_PackagingStep>> _guideForCategory(String category) {
   } else if (cat.contains('wood') || cat.contains('toy') || cat.contains('cane') || cat.contains('bamboo')) {
     return {
       'woodwork': [
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.dry_cleaning_outlined,
-          title: 'Ensure fully seasoned',
-          detail: 'Ensure the wood is dry and oiled before packaging to prevent warps.',
+          title: 'packaging_woodwork_step1_title'.tr(),
+          detail: 'packaging_woodwork_step1_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.bubble_chart_outlined,
-          title: 'Bubble wrap carved edges',
-          detail: 'Give extra cushioning around delicate corners, joints, and carvings.',
+          title: 'packaging_woodwork_step2_title'.tr(),
+          detail: 'packaging_woodwork_step2_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.inventory_2_outlined,
-          title: 'Foam-lined outer carton',
-          detail: 'Use a rigid box with 3cm edge padding on all sides.',
+          title: 'packaging_woodwork_step3_title'.tr(),
+          detail: 'packaging_woodwork_step3_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.wb_sunny_outlined,
-          title: 'Keep away from moisture & heat',
-          detail: 'Mark "Keep Dry & Away from Direct Heat" on the outer package.',
+          title: 'packaging_woodwork_step4_title'.tr(),
+          detail: 'packaging_woodwork_step4_detail'.tr(),
           isWarning: true,
         ),
       ],
@@ -129,25 +129,25 @@ Map<String, List<_PackagingStep>> _guideForCategory(String category) {
   } else {
     return {
       'general': [
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.bubble_chart_outlined,
-          title: 'Wrap in bubble wrap',
-          detail: 'Use at least 2 layers of bubble wrap secured with packing tape.',
+          title: 'packaging_general_step1_title'.tr(),
+          detail: 'packaging_general_step1_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.inventory_2_outlined,
-          title: 'Snug-fitting outer box',
-          detail: 'Choose a box slightly larger than the craft, filling gaps with paper or foam.',
+          title: 'packaging_general_step2_title'.tr(),
+          detail: 'packaging_general_step2_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.label_outline,
-          title: 'Label clearly',
-          detail: 'Affix the shipping label clearly on the largest flat surface.',
+          title: 'packaging_general_step3_title'.tr(),
+          detail: 'packaging_general_step3_detail'.tr(),
         ),
-        const _PackagingStep(
+        _PackagingStep(
           icon: Icons.local_shipping_outlined,
-          title: 'Reinforce edges with tape',
-          detail: 'Use heavy-duty tape along all outer box seams and corners.',
+          title: 'packaging_general_step4_title'.tr(),
+          detail: 'packaging_general_step4_detail'.tr(),
         ),
       ],
     };
@@ -208,18 +208,16 @@ class _PackagingSuggestionsSheetState extends State<PackagingSuggestionsSheet> {
       return;
     }
 
+    final locale = Localizations.maybeLocaleOf(context)?.languageCode ?? 'en';
+    final isHindi = locale == 'hi';
+    final languageCode = isHindi ? 'hi' : 'en';
+    final prefix = isHindi ? 'चरण' : 'Step';
     final sentence = steps
         .asMap()
         .entries
-        .map((e) => 'Step ${e.key + 1}: ${e.value.title}. ${e.value.detail}')
+        .map((e) => '$prefix ${e.key + 1}: ${e.value.title}. ${e.value.detail}')
         .join(' ');
 
-    // The steps themselves are hardcoded English — they are not run through
-    // easy_localization — so this has to be spoken with the English voice
-    // regardless of the app language. Handing English text to the Hindi voice
-    // produces phonetic gibberish, and the guide has to match the content it
-    // introduces, so it is read in English too.
-    const languageCode = 'en';
     final guide = TtsPageGuides.packaging.forLanguage(languageCode);
 
     final result = await _tts.speak(
@@ -236,11 +234,31 @@ class _PackagingSuggestionsSheetState extends State<PackagingSuggestionsSheet> {
     final opened = await _tts.openVoiceDownloadScreen();
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please download the voice from phone settings'),
+        SnackBar(
+          content: Text('voice_download_settings_hint'.tr()),
         ),
       );
     }
+  }
+
+  String _localizedCategory(BuildContext context, String cat) {
+    final isHi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    if (!isHi) return cat;
+    final lower = cat.toLowerCase();
+    if (lower.contains('pottery') || lower.contains('clay') || lower.contains('ceramic')) {
+      return 'filter_pottery'.tr();
+    } else if (lower.contains('textile') || lower.contains('saree') || lower.contains('silk') || lower.contains('fabric') || lower.contains('handloom')) {
+      return 'filter_textiles'.tr();
+    } else if (lower.contains('jewel') || lower.contains('silver') || lower.contains('gold') || lower.contains('brass')) {
+      return 'filter_jewelry'.tr();
+    } else if (lower.contains('wood') || lower.contains('toy') || lower.contains('bamboo') || lower.contains('cane')) {
+      return 'filter_woodwork'.tr();
+    } else if (lower.contains('paint') || lower.contains('art')) {
+      return 'filter_paintings'.tr();
+    }
+    return cat;
   }
 
   @override
@@ -292,7 +310,7 @@ class _PackagingSuggestionsSheetState extends State<PackagingSuggestionsSheet> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      widget.category,
+                      _localizedCategory(context, widget.category),
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.inkSoft,
                         fontSize: 12.5,
@@ -401,8 +419,8 @@ class _PackagingSuggestionsSheetState extends State<PackagingSuggestionsSheet> {
           // Primary action button
           AppButton(
             label: widget.onMarkPacked != null
-                ? 'Update status: packed'
-                : 'Got it, ready to pack',
+                ? 'update_status_packed'.tr()
+                : 'ready_to_pack'.tr(),
             onPressed: () {
               Navigator.of(context).pop();
               widget.onMarkPacked?.call();

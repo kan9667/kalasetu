@@ -39,7 +39,7 @@ void main() {
 
       // Verify header and affordances
       expect(find.text('TEST TIPS'), findsOneWidget);
-      expect(find.text('Tap to hear'), findsOneWidget);
+      expect(find.text('tap_to_hear'), findsOneWidget);
       expect(find.text('First Tip'), findsOneWidget);
       expect(find.byIcon(Icons.lightbulb), findsOneWidget);
 

@@ -61,18 +61,20 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       await _tts.stop();
       return;
     }
-    final isHindi = context.locale.languageCode == 'hi';
+    final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    final langCode = isHindi ? 'hi' : 'en';
     final title = isHindi && titleHi.isNotEmpty ? titleHi : titleEn;
     final description = isHindi && descriptionHi.isNotEmpty ? descriptionHi : descriptionEn;
     final priceStatement = isHindi
         ? 'मूल्य ${price.toStringAsFixed(0)} रुपये। '
         : 'Price: ${price.toStringAsFixed(0)} rupees. ';
-    final guide =
-        TtsPageGuides.confirmPublish.forLanguage(context.locale.languageCode);
+    final guide = TtsPageGuides.confirmPublish.forLanguage(langCode);
     final summary = '$guide$title. $priceStatement$description';
     final result = await _tts.speak(
       summary,
-      languageCode: context.locale.languageCode,
+      languageCode: langCode,
     );
     if (result == TtsResult.voiceUnavailable && mounted) {
       final opened = await _tts.openVoiceDownloadScreen();
@@ -177,6 +179,24 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
     final draft = ref.watch(addProductFlowProvider);
     final isOnline = ref.watch(connectivityProvider).value ?? true;
     final displayImage = draft.isEnhanced ? draft.enhancedImagePath : draft.originalImagePath;
+
+    final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+            EasyLocalization.of(context)?.locale.languageCode) ==
+        'hi';
+    final defaultTitleEn =
+        draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted ${draft.category}';
+    final primaryTitle = (isHindi && draft.titleHi.trim().isNotEmpty)
+        ? draft.titleHi
+        : defaultTitleEn;
+    final secondaryTitle = (isHindi && draft.titleHi.trim().isNotEmpty)
+        ? defaultTitleEn
+        : (draft.titleHi.trim().isNotEmpty ? draft.titleHi : null);
+
+    final defaultDescEn =
+        draft.descriptionEn.isNotEmpty ? draft.descriptionEn : draft.voiceTranscript;
+    final displayDescription = (isHindi && draft.descriptionHi.trim().isNotEmpty)
+        ? draft.descriptionHi
+        : defaultDescEn;
 
     return SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
@@ -323,13 +343,13 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                       const SizedBox(height: 8),
 
                       Text(
-                        draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted ${draft.category}',
+                        primaryTitle,
                         style: AppTextStyles.headlineMedium,
                       ),
-                      if (draft.titleHi.isNotEmpty) ...[
+                      if (secondaryTitle != null && secondaryTitle.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          draft.titleHi,
+                          secondaryTitle,
                           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
                         ),
                       ],
@@ -347,7 +367,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                       const SizedBox(height: 10),
 
                       Text(
-                        draft.descriptionEn.isNotEmpty ? draft.descriptionEn : draft.voiceTranscript,
+                        displayDescription,
                         style: AppTextStyles.bodySmall.copyWith(
                           color: AppColors.inkSoft,
                           height: 1.4,
