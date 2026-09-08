@@ -19,6 +19,8 @@ you use; the request shape does not change.
 from __future__ import annotations
 
 import logging
+import re
+import subprocess
 from pathlib import Path
 
 import requests
@@ -30,6 +32,33 @@ from .base_transcriber import BaseTranscriber
 
 logger = logging.getLogger(__name__)
 
+LANGUAGE_NAME_TO_CODE = {
+    "hindi": "hi",
+    "hi": "hi",
+    "english": "en",
+    "en": "en",
+    "tamil": "ta",
+    "ta": "ta",
+    "bengali": "bn",
+    "bn": "bn",
+    "marathi": "mr",
+    "mr": "mr",
+    "telugu": "te",
+    "te": "te",
+    "gujarati": "gu",
+    "gu": "gu",
+    "kannada": "kn",
+    "kn": "kn",
+    "malayalam": "ml",
+    "ml": "ml",
+    "punjabi": "pa",
+    "pa": "pa",
+    "odia": "or",
+    "or": "or",
+    "urdu": "ur",
+    "ur": "ur",
+}
+
 
 class WhisperTranscriber(BaseTranscriber):
     """Speech-to-text backed by a Whisper model."""
@@ -38,6 +67,32 @@ class WhisperTranscriber(BaseTranscriber):
 
     def __init__(self):
         self.settings = get_settings()
+
+    @staticmethod
+    def _is_audio_silent(path: Path) -> bool:
+        """
+        Quick volume check using ffmpeg's volumedetect filter.
+        Returns True if max volume is below -40dB (essentially silent/ambient).
+        """
+        try:
+            cmd = [
+                "ffmpeg",
+                "-hide_banner",
+                "-i", str(path),
+                "-af", "volumedetect",
+                "-vn", "-sn", "-dn",
+                "-f", "null",
+                "/dev/null",
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            for line in res.stderr.splitlines():
+                if "max_volume:" in line:
+                    val_str = line.split("max_volume:")[1].replace("dB", "").strip()
+                    max_vol = float(val_str)
+                    return max_vol < -40.0
+        except Exception:
+            pass
+        return False
 
     def transcribe(self, note: VoiceNote, category_hint: str | None = None) -> Transcript:
         """
@@ -80,6 +135,27 @@ class WhisperTranscriber(BaseTranscriber):
 
         url = f"{self.settings.whisper_base_url.rstrip('/')}/audio/transcriptions"
         path = Path(note.audio_path)
+        if self._is_audio_silent(path):
+            logger.warning("Audio note %s has no audible sound (silent). Skipping Whisper.", note.id)
+            return self.fallback_transcript(
+                note, "No audible speech detected. Please speak closer to the microphone."
+            )
+
+        # Prepare request payload. When language_code is "auto", "detect", or None,
+        # omit the language parameter so Whisper auto-detects the spoken language.
+        is_auto_lang = (
+            not note.language_code
+            or str(note.language_code).strip().lower() in ["auto", "detect", "none", ""]
+        )
+
+        request_data = {
+            "model": self.settings.whisper_model,
+            "prompt": prompt,
+            "response_format": "verbose_json",
+            "temperature": 0,
+        }
+        if not is_auto_lang:
+            request_data["language"] = note.language_code
 
         for attempt in range(1, self.settings.stt_retry_attempts + 1):
             try:
@@ -88,25 +164,68 @@ class WhisperTranscriber(BaseTranscriber):
                         url,
                         headers={"Authorization": f"Bearer {self.settings.whisper_api_key}"},
                         files={"file": (path.name, audio, f"audio/{audio_format}")},
-                        data={
-                            "model": self.settings.whisper_model,
-                            "language": note.language_code,
-                            "prompt": prompt,
-                            "response_format": "json",
-                            "temperature": 0,
-                        },
+                        data=request_data,
                         timeout=self.settings.stt_request_timeout,
                     )
                 response.raise_for_status()
-                text = response.json().get("text", "").strip()
+                resp_json = response.json()
+                if isinstance(resp_json, dict):
+                    text = resp_json.get("text", "").strip()
+                    detected_raw = resp_json.get("language", "")
+                    detected_code = LANGUAGE_NAME_TO_CODE.get(
+                        str(detected_raw).lower().strip(),
+                        None
+                    )
+                else:
+                    text = str(resp_json).strip()
+                    detected_code = None
+
+                effective_lang = detected_code or (note.language_code if not is_auto_lang else "hi")
 
                 if not text:
                     return self.fallback_transcript(note, "empty transcript returned")
 
-                logger.info("Transcription complete (%d characters)", len(text))
+                # Filter known Whisper silence hallucinations (when microphone records silence/ambient noise)
+                clean_text = re.sub(r'[\s\.,!?:;\-_"\'()[\]{}।…~*]+', ' ', text).strip().lower()
+                silence_artifacts = {
+                    "thanks", "thank you", "thanks for watching", "thank you for watching",
+                    "thanks for listening", "thank you for listening", "thank you very much",
+                    "thank you so much", "please subscribe", "subscribe", "subtitles",
+                    "subtitles by", "bye", "bye bye", "you", "goodbye", "peace",
+                    "watching", "so", "the end", "see you next time", "thanks guys", "thank you all",
+                    "धन्यवाद", "बहुत धन्यवाद", "शुक्रिया", "बहुत शुक्रिया",
+                    "प्रस्तुत", "प्रश्नित", "प्रश्नित प्रश्नित", "झाल", "सब्सक्राइब करें",
+                    "लाइक करें", "शेयर करें", "चैनल को सब्सक्राइब करें",
+                }
+
+                words = clean_text.split()
+                is_hallucination = (
+                    clean_text in silence_artifacts or
+                    (len(words) <= 6 and (
+                        (("thank" in clean_text or "thanks" in clean_text) and "watching" in clean_text) or
+                        any(clean_text.startswith(prefix) for prefix in [
+                            "thanks", "thank you", "bye", "goodbye", "subtitles", "subscribe", "धन्यवाद", "शुक्रिया"
+                        ])
+                    ))
+                )
+
+                if is_hallucination:
+                    logger.warning(
+                        "Whisper silence hallucination detected: '%s'. Marking as unusable.", text
+                    )
+                    return self.fallback_transcript(
+                        note, "No audible speech detected. Please speak closer to the microphone."
+                    )
+
+                logger.info(
+                    "Transcription complete (%d characters, detected_lang=%s, effective_lang=%s)",
+                    len(text),
+                    detected_code,
+                    effective_lang,
+                )
                 return Transcript(
                     text=text,
-                    language_code=note.language_code,
+                    language_code=effective_lang,
                     provider=self.provider,
                     duration_seconds=note.duration_seconds,
                 )
@@ -118,7 +237,8 @@ class WhisperTranscriber(BaseTranscriber):
                     self.settings.stt_retry_attempts,
                     e,
                 )
-                if attempt == self.settings.stt_retry_attempts:
-                    return self.fallback_transcript(note, str(e))
+                if attempt < self.settings.stt_retry_attempts:
+                    import time
+                    time.sleep(self.settings.stt_retry_backoff_seconds * attempt)
 
-        return self.fallback_transcript(note, "exhausted retry attempts")
+        return self.fallback_transcript(note, "all retry attempts exhausted")

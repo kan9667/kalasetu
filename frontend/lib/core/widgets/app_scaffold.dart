@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../router/app_route_constants.dart';
 import '../theme/app_colors.dart';
-import 'connectivity_pill.dart';
+import 'app_header.dart';
 
-/// Shared scaffold for main screens. Builds the AppBar itself (from [title]
-/// + [actions] + [leading]) so the connectivity pill is always injected
-/// consistently — screens should stop constructing their own AppBar and use
-/// these params instead. [rawAppBar] remains as an escape hatch for a screen
-/// that truly needs a custom AppBar; in that case, add ConnectivityPill into
-/// its actions yourself.
+/// Shared scaffold for main screens.
+///
+/// Pass [title] and optional [actions] to build a consistent [AppHeader]
+/// with a notification bell + connectivity pill.
+///
+/// Set [showNotificationBell] = false on auth screens or nested detail
+/// screens that should not show the bell.
+///
+/// Set [rawAppBar] as an escape hatch when a fully custom AppBar is needed.
 class AppScaffold extends StatelessWidget {
   final String? title;
   final Widget? titleWidget;
@@ -19,6 +24,7 @@ class AppScaffold extends StatelessWidget {
   final Widget? bottomNavigationBar;
   final Widget? floatingActionButton;
   final bool showConnectivityPill;
+  final bool showNotificationBell;
   final Color? backgroundColor;
   final EdgeInsetsGeometry? padding;
 
@@ -34,28 +40,29 @@ class AppScaffold extends StatelessWidget {
     this.bottomNavigationBar,
     this.floatingActionButton,
     this.showConnectivityPill = true,
+    this.showNotificationBell = true,
     this.backgroundColor,
     this.padding,
   });
 
   @override
   Widget build(BuildContext context) {
-    final builtAppBar = rawAppBar ??
-        ((title != null || titleWidget != null)
-            ? AppBar(
-                title: titleWidget ?? Text(title!),
-                leading: leading,
-                automaticallyImplyLeading: automaticallyImplyLeading,
-                actions: [
-                  ...?actions,
-                  if (showConnectivityPill)
-                    const Padding(
-                      padding: EdgeInsets.only(right: 12),
-                      child: Center(child: ConnectivityPill()),
-                    ),
-                ],
-              )
-            : null);
+    PreferredSizeWidget? builtAppBar;
+
+    if (rawAppBar != null) {
+      builtAppBar = rawAppBar;
+    } else if (title != null || titleWidget != null) {
+      final titleStr = title ?? '';
+      builtAppBar = AppHeader(
+        title: titleStr,
+        extraActions: actions,
+        showNotificationBell: showNotificationBell,
+        showConnectivityPill: showConnectivityPill,
+        leading: leading,
+        automaticallyImplyLeading: automaticallyImplyLeading,
+        onBellTap: () => context.pushNamed(AppRouteConstants.notifications),
+      );
+    }
 
     return Scaffold(
       backgroundColor: backgroundColor ?? AppColors.background,

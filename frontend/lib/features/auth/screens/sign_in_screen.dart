@@ -32,7 +32,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     if (_formKey.currentState?.validate() ?? false) {
       final phone = _phoneController.text.trim();
       ref.read(authStateProvider.notifier).signInWithPhone(phone);
-      context.goNamed(AppRouteConstants.otp, queryParameters: {'phone': phone});
+      context.pushNamed(AppRouteConstants.otp, queryParameters: {'phone': phone});
     }
   }
 
@@ -56,7 +56,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.cardSurface,
                     borderRadius: BorderRadius.circular(AppRadii.lg),
                     boxShadow: [
                       BoxShadow(
@@ -160,7 +160,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               AppButton(
                 label: 'ngo_assist_btn'.tr(),
                 type: AppButtonType.outlined,
-                icon: Icons.support_agent,
+                icon: Icons.shield_outlined,
                 onPressed: () {
                   context.pushNamed(AppRouteConstants.ngoAuth);
                 },

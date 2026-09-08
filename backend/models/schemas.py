@@ -249,3 +249,92 @@ class VoiceGlossaryResponse(BaseModel):
     total_terms: int
     terms: List[str]
     categories: List[str]
+
+
+# ── Social Media Helper Schemas ──────────────────────────────────────────────
+
+
+class SocialDraftRequest(BaseModel):
+    """
+    Request body for generating a social-media caption + hashtags for a
+    persisted listing.  The listing_id is provided in the URL path.
+    """
+
+    image_url: str = Field(..., description="URL of the product image to use for the caption")
+    title: Optional[str] = Field(default="", description="Listing title (English)")
+    category: Optional[str] = Field(default="", description="Craft category")
+    materials: Optional[List[str]] = Field(default_factory=list, description="Materials used")
+    description: Optional[str] = Field(default="", description="Listing description")
+    tone: Optional[str] = Field(default="warm and authentic", description="Caption tone (warm | playful | minimal)")
+    locale: Optional[str] = Field(default="en-US", description="BCP-47 locale code for caption language")
+    source: str = Field(default="catalogue", description="Entry-point source: add_flow | catalogue")
+
+
+class SocialDraftUnsavedRequest(SocialDraftRequest):
+    """
+    Same as SocialDraftRequest but for an add-flow listing that hasn't been
+    saved to the DB yet.  The draft_key matches AddProductDraft.draftId on
+    the Flutter side and acts as the upsert key instead of listing_id.
+    """
+
+    draft_key: str = Field(..., description="Client-side draft ID from the add-product flow")
+
+
+class SocialDraftSaveRequest(BaseModel):
+    """Body used when the user saves (possibly edited) caption + hashtags."""
+
+    caption: str = Field(..., description="Caption text (may be user-edited)")
+    hashtags: List[str] = Field(..., description="Hashtag list (may be user-edited)")
+    edited_by_user: bool = Field(default=True, description="Whether the user modified the AI output")
+
+
+class SocialDraftResponse(BaseModel):
+    """Response from generate and save endpoints."""
+
+    draft_id: str = Field(description="UUID of the persisted social_drafts row")
+    caption: str
+    hashtags: List[str]
+
+
+# ── KalaMitra Chatbot & Navigation Agent Schemas ─────────────────────────────
+
+
+class ChatMessageSchema(BaseModel):
+    """Single message in a conversational thread."""
+    role: str = Field(..., description="'user' or 'assistant'")
+    content: str = Field(..., description="Message text")
+
+
+class ChatActionSchema(BaseModel):
+    """Structured in-app action emitted by the navigation & action agent."""
+    type: str = Field(default="navigate", description="Action type: 'navigate' | 'update_product_status' | 'filter_catalogue' | 'sync_pending'")
+    destination: str = Field(default="catalogue", description="Target screen identifier (e.g. 'add_product', 'catalogue', 'my_stats', 'sync')")
+    route: Optional[str] = Field(default=None, description="GoRouter route path (e.g. '/add-product', '/my-stats')")
+    tab_index: Optional[int] = Field(default=None, description="BottomNavigationBar tab index in HomeShell (0=add, 1=catalogue, 2=notifications, 3=profile)")
+    label: str = Field(..., description="Action button title (e.g. 'Go to Add Product' / 'उत्पाद जोड़ें पर जाएं')")
+    params: Optional[dict] = Field(default=None, description="Optional route, filter, or target product parameters")
+
+
+class ChatRequestSchema(BaseModel):
+    """User prompt to the KalaMitra assistant."""
+    message: str = Field(..., max_length=500, description="User query / utterance (capped at 500 chars to prevent prompt stuffing)")
+    history: List[ChatMessageSchema] = Field(default_factory=list, description="Recent conversation turns")
+    language_code: Optional[str] = Field(default="en", description="Preferred response language ('en', 'hi', etc.)")
+    current_screen: Optional[str] = Field(default=None, description="Identifier of the screen the user is currently on")
+    artisan_craft: Optional[str] = Field(default=None, description="Registered craft type from artisan profile (e.g. 'Terracotta Pottery', 'Chanderi Handloom')")
+
+
+class ChatResponseSchema(BaseModel):
+    """KalaMitra assistant response with optional navigation action."""
+    reply: str = Field(..., description="Empathetic, clear answer to the user's query")
+    action: Optional[ChatActionSchema] = Field(default=None, description="Navigation action if navigation intent was detected")
+    suggested_queries: List[str] = Field(default_factory=list, description="Follow-up quick question chips")
+
+
+class VoiceChatResponseSchema(BaseModel):
+    """KalaMitra voice chat response containing Whisper transcription and assistant reply."""
+    user_transcript: str = Field(..., description="Artisan spoken utterance transcribed by Whisper STT")
+    reply: str = Field(..., description="Empathetic, clear answer to the user's query")
+    action: Optional[ChatActionSchema] = Field(default=None, description="Navigation action if navigation intent was detected")
+    suggested_queries: List[str] = Field(default_factory=list, description="Follow-up quick question chips")
+

@@ -1,49 +1,138 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import '../../core/config/api_config.dart';
 import '../models/product.dart';
 
 /// Abstract API service contract
 abstract class ApiService {
-  Future<List<Product>> getProducts();
-  Future<Product> createProduct(Product product);
+  Future<List<Product>> getProducts({String? artisanId, String? category});
+  Future<Product> createProduct(Product product, {String? artisanId});
   Future<Product> updateProduct(Product product);
   Future<bool> deleteProduct(String id);
 }
 
+/// Live HTTP implementation connecting to FastAPI `/api/v1/products`
+class HttpApiService implements ApiService {
+  final Dio _dio;
+  final String? _explicitBaseUrl;
+
+  HttpApiService({String? baseUrl, Dio? dio})
+      : _explicitBaseUrl = baseUrl,
+        _dio = dio ??
+            Dio(
+              BaseOptions(
+                baseUrl: baseUrl ?? ApiConfig.baseUrl,
+                connectTimeout: const Duration(seconds: 8),
+                receiveTimeout: const Duration(seconds: 15),
+                sendTimeout: const Duration(seconds: 15),
+                headers: {
+                  'Accept': 'application/json',
+                  'Content-Type': 'application/json',
+                },
+              ),
+            );
+
+  void _syncBaseUrl() {
+    final activeUrl = _explicitBaseUrl ?? ApiConfig.baseUrl;
+    _dio.options.baseUrl = activeUrl;
+  }
+
+  @override
+  Future<List<Product>> getProducts({String? artisanId, String? category}) async {
+    _syncBaseUrl();
+    try {
+      final queryParams = <String, dynamic>{
+        if (artisanId != null && artisanId.isNotEmpty) 'artisan_id': artisanId,
+        if (category != null && category.isNotEmpty) 'category': category,
+        'limit': 100,
+      };
+
+      debugPrint('[HttpApiService] GET ${_dio.options.baseUrl}/api/v1/products');
+      final response = await _dio.get(
+        '/api/v1/products',
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        final list = response.data as List<dynamic>;
+        return list
+            .map((item) => Product.fromJson(Map<String, dynamic>.from(item as Map)))
+            .toList();
+      }
+      return [];
+    } on DioException catch (e) {
+      debugPrint('[HttpApiService] getProducts failed: ${e.message}');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Product> createProduct(Product product, {String? artisanId}) async {
+    _syncBaseUrl();
+    try {
+      final payload = product.toBackendJson(artisanId: artisanId);
+      debugPrint('[HttpApiService] POST ${_dio.options.baseUrl}/api/v1/products: ${product.title}');
+      final response = await _dio.post('/api/v1/products', data: payload);
+
+      if ((response.statusCode == 200 || response.statusCode == 201) && response.data != null) {
+        return Product.fromJson(Map<String, dynamic>.from(response.data as Map));
+      }
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        error: 'Failed to create product, status: ${response.statusCode}',
+      );
+    } on DioException catch (e) {
+      debugPrint('[HttpApiService] createProduct failed: ${e.message}');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Product> updateProduct(Product product) async {
+    _syncBaseUrl();
+    try {
+      final payload = product.toBackendJson();
+      debugPrint('[HttpApiService] PUT ${_dio.options.baseUrl}/api/v1/products/${product.id}');
+      final response = await _dio.put('/api/v1/products/${product.id}', data: payload);
+
+      if (response.statusCode == 200 && response.data != null) {
+        return Product.fromJson(Map<String, dynamic>.from(response.data as Map));
+      }
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        error: 'Failed to update product, status: ${response.statusCode}',
+      );
+    } on DioException catch (e) {
+      debugPrint('[HttpApiService] updateProduct failed: ${e.message}');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<bool> deleteProduct(String id) async {
+    _syncBaseUrl();
+    try {
+      debugPrint('[HttpApiService] DELETE ${_dio.options.baseUrl}/api/v1/products/$id');
+      final response = await _dio.delete('/api/v1/products/$id');
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      debugPrint('[HttpApiService] deleteProduct failed: ${e.message}');
+      rethrow;
+    }
+  }
+}
+
 /// Mock API service simulating backend `/products` endpoints with network latency
 class MockApiService implements ApiService {
-  final List<Product> _remoteProducts = [
-    Product(
-      id: 'prod_1',
-      title: 'Handcrafted Terracotta Chai Kulhad (Set of 6)',
-      titleHi: 'हस्तनिर्मित मिट्टी के चाय कुल्हड़ (6 का सेट)',
-      description: 'Pure natural clay tea cups made on traditional potter\'s wheel, wood-fired for authentic earthy aroma. 100% biodegradable and chemical-free.',
-      descriptionHi: 'पारंपरिक चाक पर शुद्ध प्राकृतिक मिट्टी से बने चाय के कुल्हड़, लकड़ी की भट्टी में पके हुए। पूर्णतः जैविक व रसायन मुक्त।',
-      price: 450.0,
-      photoPath: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=600&q=80',
-      category: 'Pottery',
-      tags: ['terracotta', 'eco-friendly', 'pottery', 'kitchenware'],
-      status: ProductStatus.live,
-      createdAt: DateTime.now().subtract(const Duration(days: 3)),
-    ),
-    Product(
-      id: 'prod_2',
-      title: 'Hand-woven Chanderi Silk Cotton Dupatta',
-      titleHi: 'हाथ से बुना चंदेरी सिल्क कॉटन दुपट्टा',
-      description: 'Lightweight handloom dupatta with traditional zari border, crafted by master weavers using natural vegetable dyes.',
-      descriptionHi: 'पारंपरिक ज़री बॉर्डर और प्राकृतिक वनस्पति रंगों से तैयार हल्का हथकरघा दुपट्टा।',
-      price: 1850.0,
-      photoPath: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=600&q=80',
-      category: 'Textiles',
-      tags: ['handloom', 'chanderi', 'silk', 'traditional'],
-      status: ProductStatus.live,
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-  ];
+  final List<Product> _remoteProducts = [];
 
   bool simulateNetworkFailure = false;
 
   @override
-  Future<List<Product>> getProducts() async {
+  Future<List<Product>> getProducts({String? artisanId, String? category}) async {
     await Future.delayed(const Duration(milliseconds: 600));
     if (simulateNetworkFailure) {
       throw Exception('Simulated network error: Unable to fetch products from backend');
@@ -52,7 +141,7 @@ class MockApiService implements ApiService {
   }
 
   @override
-  Future<Product> createProduct(Product product) async {
+  Future<Product> createProduct(Product product, {String? artisanId}) async {
     await Future.delayed(const Duration(milliseconds: 900));
     if (simulateNetworkFailure) {
       throw Exception('Simulated network error: Unable to create product');

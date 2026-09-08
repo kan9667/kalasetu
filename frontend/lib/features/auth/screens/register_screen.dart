@@ -6,6 +6,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/router/app_route_constants.dart';
+import '../../../core/services/app_tts_service.dart';
+import '../../../core/services/tts_page_guides.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/language_picker.dart';
@@ -29,6 +31,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   String _selectedCraft = 'Terracotta Pottery';
   String _selectedState = 'Delhi';
+  bool _isHelpCueDismissed = false;
 
   static const List<String> _craftCategories = [
     'Terracotta Pottery',
@@ -69,6 +72,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     'Other',
   ];
 
+  final AppTtsService _tts = AppTtsService();
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -76,6 +81,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _clusterController.dispose();
     _experienceController.dispose();
     _pehchanController.dispose();
+    _tts.dispose();
     super.dispose();
   }
 
@@ -95,11 +101,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         pehchanId: _pehchanController.text.trim().isNotEmpty
             ? _pehchanController.text.trim()
             : null,
-        preferredLanguage: context.locale.languageCode,
+        preferredLanguage: EasyLocalization.of(context)?.locale.languageCode ?? 'en',
       );
 
       ref.read(authStateProvider.notifier).registerWithDetails(profile);
-      context.goNamed(
+      context.pushNamed(
         AppRouteConstants.otp,
         queryParameters: {
           'phone': phone,
@@ -111,6 +117,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final _ = EasyLocalization.of(context)?.locale;
     final screenPadding = AppSpacing.getScreenPadding(context);
     final width = MediaQuery.of(context).size.width;
     final isCompact = width < 480;
@@ -128,11 +135,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             }
           },
         ),
-        title: Text(
-          'register_title'.tr(),
-          style: AppTextStyles.headlineMedium,
-        ),
-        centerTitle: true,
         actions: const [
           Padding(
             padding: EdgeInsets.only(right: AppSpacing.sm),
@@ -162,13 +164,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(AppSpacing.sm),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: AppColors.terracotta,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
                           Icons.person_add_alt_1,
-                          color: Colors.white,
+                          color: AppColors.textOnPrimary,
                           size: 24,
                         ),
                       ),
@@ -197,6 +199,145 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ],
                   ),
                 ),
+
+                if (!_isHelpCueDismissed) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm + 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.goldLight,
+                      borderRadius: BorderRadius.circular(AppRadii.card),
+                      border: Border.all(
+                        color: AppColors.gold.withValues(alpha: 0.4),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(top: 2),
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: AppColors.cardSurface,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.support_agent,
+                            color: AppColors.terracottaDark,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => context.pushNamed(AppRouteConstants.ngoAuth),
+                            borderRadius: BorderRadius.circular(AppRadii.sm),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'registration_help_cue_title'.tr(),
+                                          style: AppTextStyles.labelMedium.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.ink,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.arrow_forward_ios,
+                                        size: 12,
+                                        color: AppColors.inkSoft,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'registration_help_cue_body'.tr(),
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.inkSoft,
+                                      fontSize: 12,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        // TTS affordance button — the help text is already
+                        // translated in 4 languages; this was only ever
+                        // showing it back as a snackbar, never actually
+                        // speaking it.
+                        IconButton(
+                          icon: Icon(
+                            _tts.isSpeaking
+                                ? Icons.stop_circle_outlined
+                                : Icons.volume_up_outlined,
+                            size: 20,
+                            color: AppColors.terracotta,
+                          ),
+                          tooltip: _tts.isSpeaking ? 'Stop' : 'Tap to hear this',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          onPressed: () async {
+                            if (_tts.isSpeaking) {
+                              await _tts.stop();
+                              if (mounted) setState(() {});
+                              return;
+                            }
+                            // The on-screen cue only says "ask someone to help
+                            // you". Spoken, that is a dead end — so the read-
+                            // back walks through which fields are required and
+                            // which can be skipped, and keeps the ask-for-help
+                            // line as the closing fallback.
+                            final helpText = 'registration_help_cue_body'.tr();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(helpText),
+                                duration: const Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            final result = await _tts.speak(
+                              TtsPageGuides.register
+                                  .forLanguage(context.locale.languageCode),
+                              languageCode: context.locale.languageCode,
+                            );
+                            if (mounted) setState(() {});
+                            if (result == TtsResult.voiceUnavailable && mounted) {
+                              await _tts.openVoiceDownloadScreen();
+                            }
+                          },
+                        ),
+                        // Dismiss button
+                        IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                            size: 18,
+                            color: AppColors.inkSoft,
+                          ),
+                          tooltip: 'Dismiss',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                          onPressed: () {
+                            setState(() => _isHelpCueDismissed = true);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: AppSpacing.lg),
 

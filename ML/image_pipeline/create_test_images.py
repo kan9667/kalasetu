@@ -210,7 +210,7 @@ def main():
     print()
     print(f"Done! {8} test images created in: {input_dir}")
     print("Run the enhancer on them:")
-    print("  python main.py input/cluttered_bg.jpg")
+    print("  python run_enhancer.py input/cluttered_bg.jpg")
 
 
 if __name__ == "__main__":

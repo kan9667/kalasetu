@@ -1,38 +1,188 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import '../../core/config/api_config.dart';
 
+/// Comparable market product retrieved via ChromaDB RAG benchmark search.
+class ComparableProduct {
+  final String id;
+  final String title;
+  final double sellingPrice;
+  final String category;
+  final String sourcePlatform;
+  final double similarityScore;
+  final String? productUrl;
+
+  const ComparableProduct({
+    required this.id,
+    required this.title,
+    required this.sellingPrice,
+    required this.category,
+    required this.sourcePlatform,
+    required this.similarityScore,
+    this.productUrl,
+  });
+
+  factory ComparableProduct.fromJson(Map<String, dynamic> json) {
+    return ComparableProduct(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      sellingPrice: (json['selling_price'] as num?)?.toDouble() ?? 0.0,
+      category: json['category']?.toString() ?? '',
+      sourcePlatform: json['source_platform']?.toString() ?? 'E-Commerce',
+      similarityScore: (json['similarity_score'] as num?)?.toDouble() ?? 0.0,
+      productUrl: json['product_url']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'selling_price': sellingPrice,
+        'category': category,
+        'source_platform': sourcePlatform,
+        'similarity_score': similarityScore,
+        'product_url': productUrl,
+      };
+}
+
+/// Structured AI pricing recommendation matching backend PriceSuggestResponse.
 class PriceSuggestion {
   final double minPrice;
   final double maxPrice;
   final double suggestedPrice;
   final double floorPrice;
+  final double confidenceScore;
+  final String marketPosition;
   final String reasoning;
   final String reasoningHi;
+  final List<ComparableProduct> comparableProducts;
 
   const PriceSuggestion({
     required this.minPrice,
     required this.maxPrice,
     required this.suggestedPrice,
     required this.floorPrice,
+    this.confidenceScore = 0.85,
+    this.marketPosition = 'mid-range',
     required this.reasoning,
     required this.reasoningHi,
+    this.comparableProducts = const [],
   });
+
+  factory PriceSuggestion.fromJson(Map<String, dynamic> json) {
+    final rawComps = json['comparable_products'] as List<dynamic>?;
+    final comparables = rawComps
+            ?.map((c) => ComparableProduct.fromJson(c as Map<String, dynamic>))
+            .toList() ??
+        const [];
+
+    return PriceSuggestion(
+      suggestedPrice: (json['suggested_price'] as num?)?.toDouble() ?? 0.0,
+      minPrice: (json['min_price'] as num?)?.toDouble() ?? 0.0,
+      maxPrice: (json['max_price'] as num?)?.toDouble() ?? 0.0,
+      floorPrice: (json['floor_price'] as num?)?.toDouble() ?? 0.0,
+      confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.85,
+      marketPosition: json['market_position']?.toString() ?? 'mid-range',
+      reasoning: json['reasoning']?.toString() ?? '',
+      reasoningHi: json['reasoning_hi']?.toString() ?? '',
+      comparableProducts: comparables,
+    );
+  }
 }
 
 abstract class PricingService {
   Future<PriceSuggestion> suggestPrice({
+    String? description,
     required String category,
     required List<String> tags,
+    String? imageUrl,
     double? rawMaterialCost,
     double? laborHours,
     double? hourlyWage,
   });
 }
 
+/// Live HTTP implementation connecting to FastAPI `/api/v1/pricing/suggest`.
+/// Gracefully falls back to MockPricingService on timeout or offline state.
+class HttpPricingService implements PricingService {
+  final String _base;
+  final Dio _dio;
+  final MockPricingService _fallback;
+
+  HttpPricingService({String? baseUrl, Dio? dio})
+      : _base = baseUrl ?? ApiConfig.baseUrl,
+        _dio = dio ??
+            Dio(
+              BaseOptions(
+                connectTimeout: const Duration(seconds: 15),
+                receiveTimeout: const Duration(seconds: 45),
+                headers: {'Accept': 'application/json'},
+              ),
+            ),
+        _fallback = MockPricingService();
+
+  @override
+  Future<PriceSuggestion> suggestPrice({
+    String? description,
+    required String category,
+    required List<String> tags,
+    String? imageUrl,
+    double? rawMaterialCost,
+    double? laborHours,
+    double? hourlyWage,
+  }) async {
+    try {
+      final desc = (description != null && description.trim().isNotEmpty)
+          ? description.trim()
+          : '$category handcrafted product';
+
+      final payload = <String, dynamic>{
+        'description': desc,
+        'category': category,
+        if (imageUrl != null && imageUrl.trim().isNotEmpty) 'image_url': imageUrl.trim(),
+        if (rawMaterialCost != null) 'raw_material_cost': rawMaterialCost,
+        if (laborHours != null) 'labor_hours': laborHours,
+        if (hourlyWage != null) 'hourly_wage': hourlyWage,
+        'tags': tags,
+      };
+
+      final response = await _dio.post(
+        '$_base/api/v1/pricing/suggest',
+        data: payload,
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        return PriceSuggestion.fromJson(Map<String, dynamic>.from(response.data as Map));
+      }
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        error: 'Invalid response status ${response.statusCode} from pricing server',
+      );
+    } catch (e) {
+      debugPrint('[HttpPricingService] API call failed: $e. Falling back to offline calculation.');
+      return _fallback.suggestPrice(
+        description: description,
+        category: category,
+        tags: tags,
+        imageUrl: imageUrl,
+        rawMaterialCost: rawMaterialCost,
+        laborHours: laborHours,
+        hourlyWage: hourlyWage,
+      );
+    }
+  }
+}
+
+/// Offline fallback pricing service with ethical cost floor enforcement.
 class MockPricingService implements PricingService {
   @override
   Future<PriceSuggestion> suggestPrice({
+    String? description,
     required String category,
     required List<String> tags,
+    String? imageUrl,
     double? rawMaterialCost,
     double? laborHours,
     double? hourlyWage,
@@ -102,8 +252,11 @@ class MockPricingService implements PricingService {
       maxPrice: double.parse(maxPrice.toStringAsFixed(0)),
       suggestedPrice: double.parse(suggested.toStringAsFixed(0)),
       floorPrice: double.parse(finalFloor.toStringAsFixed(0)),
+      confidenceScore: 0.82,
+      marketPosition: 'mid-range',
       reasoning: reasonEn,
       reasoningHi: reasonHi,
+      comparableProducts: const [],
     );
   }
 }

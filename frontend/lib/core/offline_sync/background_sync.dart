@@ -1,9 +1,10 @@
 import 'package:workmanager/workmanager.dart';
 
+import '../config/api_config.dart';
 import 'offline_sync_service.dart';
 import 'services/upload_api.dart';
 
-const String kSyncTaskName = 'kaarigar-offline-sync-task';
+const String kSyncTaskName = 'kalasetu-offline-sync-task';
 
 /// Runs in a separate background isolate — re-initializes everything it
 /// needs from scratch (no state is shared with the foreground app).
@@ -11,9 +12,10 @@ const String kSyncTaskName = 'kaarigar-offline-sync-task';
 void syncCallbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
+      final activeUrl = ApiConfig.baseUrl;
       await OfflineSyncService.instance.init(
-        uploadApi: RealUploadApi(baseUrl: 'https://api.kaarigarconnect.in'),
-        healthCheckUrl: 'https://api.kaarigarconnect.in/health',
+        uploadApi: RealUploadApi(baseUrl: activeUrl),
+        healthCheckUrl: '$activeUrl/api/v1/health',
       );
       await OfflineSyncService.instance.triggerSyncNow();
       return true;

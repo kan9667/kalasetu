@@ -12,6 +12,10 @@ enum ProductStatus {
   draft,
   @HiveField(3)
   sold,
+  @HiveField(4)
+  soldOut,
+  @HiveField(5)
+  listingRemoved,
 }
 
 @HiveType(typeId: 0)
@@ -63,6 +67,18 @@ class Product extends HiveObject {
   @HiveField(12)
   final String aiEnhancedPhotoPath;
 
+  /// Timestamp of the last status update (e.g. marked sold out, removed listing, relisted)
+  @HiveField(13)
+  final DateTime? statusUpdatedAt;
+
+  /// Optional restock quantity entered when an item was marked sold out
+  @HiveField(14)
+  final int? restockQuantity;
+
+  /// Context or note for the current status change
+  @HiveField(15)
+  final String? statusReason;
+
   Product({
     required this.id,
     required this.title,
@@ -77,6 +93,9 @@ class Product extends HiveObject {
     DateTime? createdAt,
     this.additionalPhotoPaths = const [],
     this.aiEnhancedPhotoPath = '',
+    this.statusUpdatedAt,
+    this.restockQuantity,
+    this.statusReason,
   }) : createdAt = createdAt ?? DateTime.now();
 
   /// All captured photos in order (primary first), for the review screen's
@@ -88,6 +107,11 @@ class Product extends HiveObject {
   /// otherwise the original capture.
   String get displayPhotoPath =>
       aiEnhancedPhotoPath.isNotEmpty ? aiEnhancedPhotoPath : photoPath;
+
+  bool get isNonLive =>
+      status == ProductStatus.soldOut ||
+      status == ProductStatus.listingRemoved ||
+      status == ProductStatus.sold;
 
   Product copyWith({
     String? id,
@@ -103,6 +127,9 @@ class Product extends HiveObject {
     DateTime? createdAt,
     List<String>? additionalPhotoPaths,
     String? aiEnhancedPhotoPath,
+    DateTime? statusUpdatedAt,
+    int? restockQuantity,
+    String? statusReason,
   }) {
     return Product(
       id: id ?? this.id,
@@ -118,6 +145,9 @@ class Product extends HiveObject {
       createdAt: createdAt ?? this.createdAt,
       additionalPhotoPaths: additionalPhotoPaths ?? this.additionalPhotoPaths,
       aiEnhancedPhotoPath: aiEnhancedPhotoPath ?? this.aiEnhancedPhotoPath,
+      statusUpdatedAt: statusUpdatedAt ?? this.statusUpdatedAt,
+      restockQuantity: restockQuantity ?? this.restockQuantity,
+      statusReason: statusReason ?? this.statusReason,
     );
   }
 
@@ -136,6 +166,25 @@ class Product extends HiveObject {
       'createdAt': createdAt.toIso8601String(),
       'additionalPhotoPaths': additionalPhotoPaths,
       'aiEnhancedPhotoPath': aiEnhancedPhotoPath,
+      'statusUpdatedAt': statusUpdatedAt?.toIso8601String(),
+      'restockQuantity': restockQuantity,
+      'statusReason': statusReason,
+    };
+  }
+
+  Map<String, dynamic> toBackendJson({String? artisanId}) {
+    return {
+      if (id.isNotEmpty) 'id': id,
+      if (artisanId != null && artisanId.isNotEmpty) 'artisan_id': artisanId,
+      'title': title,
+      'title_hi': titleHi,
+      'description': description,
+      'description_hi': descriptionHi,
+      'price': price,
+      'image_url': displayPhotoPath,
+      'category': category,
+      'tags': tags,
+      'status': status.name,
     };
   }
 
@@ -143,25 +192,35 @@ class Product extends HiveObject {
     return Product(
       id: json['id'] as String? ?? '',
       title: json['title'] as String? ?? '',
-      titleHi: json['titleHi'] as String? ?? '',
+      titleHi: json['titleHi'] as String? ?? (json['title_hi'] as String? ?? ''),
       description: json['description'] as String? ?? '',
-      descriptionHi: json['descriptionHi'] as String? ?? '',
+      descriptionHi: json['descriptionHi'] as String? ?? (json['description_hi'] as String? ?? ''),
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
-      photoPath: json['photoPath'] as String? ?? (json['imageUrl'] as String? ?? ''),
+      photoPath: json['photoPath'] as String? ??
+          (json['image_url'] as String? ?? (json['imageUrl'] as String? ?? '')),
       category: json['category'] as String? ?? 'General',
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       status: ProductStatus.values.firstWhere(
         (e) => e.name == json['status'],
         orElse: () => ProductStatus.draft,
       ),
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'] as String)
-          : DateTime.now(),
+      createdAt: json['created_at'] != null
+          ? (DateTime.tryParse(json['created_at'] as String) ?? DateTime.now())
+          : (json['createdAt'] != null
+              ? (DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now())
+              : DateTime.now()),
       additionalPhotoPaths: (json['additionalPhotoPaths'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           [],
       aiEnhancedPhotoPath: json['aiEnhancedPhotoPath'] as String? ?? '',
+      statusUpdatedAt: json['statusUpdatedAt'] != null
+          ? DateTime.tryParse(json['statusUpdatedAt'] as String)
+          : (json['updated_at'] != null
+              ? DateTime.tryParse(json['updated_at'] as String)
+              : null),
+      restockQuantity: json['restockQuantity'] as int?,
+      statusReason: json['statusReason'] as String?,
     );
   }
 }

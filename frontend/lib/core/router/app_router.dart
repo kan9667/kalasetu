@@ -12,9 +12,17 @@ import '../../features/home/screens/home_shell.dart';
 import '../../features/catalogue/screens/catalogue_screen.dart';
 import '../../features/catalogue/screens/product_detail_screen.dart';
 import '../../features/add_product/screens/add_product_flow_screen.dart';
+import '../../features/social_media/providers/social_media_provider.dart';
+import '../../features/social_media/screens/social_media_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/language_settings_screen.dart';
 import '../../features/profile/screens/my_stats_screen.dart';
+import '../../features/tutorial/screens/tutorial_carousel_screen.dart';
+import '../../features/chatbot/screens/chatbot_sheet.dart';
+import '../../features/notifications/screens/notifications_screen.dart';
+import '../../features/orders/screens/my_orders_screen.dart';
+import '../../features/orders/screens/order_detail_screen.dart';
+import '../../features/orders/models/order.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../providers/app_providers.dart';
 
@@ -34,7 +42,7 @@ class RouterNotifier extends ChangeNotifier {
     );
     _ref.listen<bool>(
       hasSelectedLanguageProvider,
-      (_, __) => notifyListeners(),
+      (_, _) => notifyListeners(),
     );
   }
 }
@@ -120,7 +128,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         name: AppRouteConstants.otp,
         builder: (context, state) {
           final phoneNumber = state.uri.queryParameters['phone'] ?? '';
-          return OtpScreen(phoneNumber: phoneNumber);
+          final isNewUser = state.uri.queryParameters['isNewUser'] == 'true';
+          return OtpScreen(phoneNumber: phoneNumber, isNewUser: isNewUser);
         },
       ),
       GoRoute(
@@ -137,6 +146,19 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/add-product',
         name: AppRouteConstants.addProduct,
         builder: (context, state) => const AddProductFlowScreen(),
+      ),
+      GoRoute(
+        path: '/social-media-helper',
+        name: AppRouteConstants.socialMediaHelper,
+        builder: (context, state) {
+          final args = state.extra;
+          if (args is! SocialMediaArgs) {
+            return const Scaffold(
+              body: Center(child: Text('Social media helper arguments are missing.')),
+            );
+          }
+          return SocialMediaScreen(args: args);
+        },
       ),
       GoRoute(
         path: '/profile',
@@ -160,6 +182,41 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/my-stats',
         name: AppRouteConstants.myStats,
         builder: (context, state) => const MyStatsScreen(),
+      ),
+      GoRoute(
+        path: '/listing-tutorial',
+        name: AppRouteConstants.listingTutorial,
+        builder: (context, state) => const TutorialCarouselScreen(),
+      ),
+      GoRoute(
+        path: '/assistant',
+        name: AppRouteConstants.assistant,
+        builder: (context, state) => const Scaffold(
+          body: SafeArea(child: ChatbotSheet()),
+        ),
+      ),
+      GoRoute(
+        path: '/notifications',
+        name: AppRouteConstants.notifications,
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/my-orders',
+        name: AppRouteConstants.myOrders,
+        builder: (context, state) => const MyOrdersScreen(),
+      ),
+      GoRoute(
+        path: '/orders/:orderId',
+        name: AppRouteConstants.orderDetail,
+        builder: (context, state) {
+          final order = state.extra;
+          if (order is! Order) {
+            return const Scaffold(
+              body: Center(child: Text('Order not found.')),
+            );
+          }
+          return OrderDetailScreen(order: order);
+        },
       ),
     ],
   );

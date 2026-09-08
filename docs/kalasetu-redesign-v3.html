@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalasetu — v3 visual direction</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root{
+  --canvas:#1C1613;
+  --canvas-line:rgba(244,232,210,0.08);
+  --parchment:#F8F5F0;
+  --parchment-deep:#EFE6D8;
+  --card:#FFFDF9;
+  --ink:#201A18;
+  --ink-soft:#6E645F;
+  --ink-faint:#A79C93;
+  --dotted:#D6CCC2;
+
+  --terracotta:#B84A29;
+  --terracotta-press:#8C371A;
+  --terracotta-tint:#F3DBCC;
+
+  --gold:#E59A2C;
+  --gold-press:#B87A1E;
+  --gold-tint:#FBEACB;
+
+  --berry:#924C6C;
+  --berry-press:#743A54;
+  --berry-tint:#F0DEE6;
+
+  --blue:#265067;
+  --blue-press:#1B3A4C;
+  --blue-tint:#DCE6EB;
+
+  --success:#3B5E3C;
+  --success-tint:#DEE8DA;
+
+  --line:rgba(32,26,24,0.14);
+  --shadow-card:0 3px 10px rgba(32,26,24,0.08), 0 1px 2px rgba(32,26,24,0.06);
+  --shadow-card-lg:0 14px 30px -14px rgba(32,26,24,0.28), 0 3px 8px rgba(32,26,24,0.08);
+  --radius-lg:20px;
+  --radius-md:16px;
+  --radius-sm:12px;
+  --font-display:'Fraunces', Georgia, serif;
+  --font-body:'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:var(--font-body);
+  color:var(--ink);
+  background:var(--canvas);
+  background-image:
+    radial-gradient(ellipse 620px 420px at 50% 38%, rgba(184,74,41,0.14), transparent 70%),
+    repeating-linear-gradient(45deg, var(--canvas-line) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(-45deg, var(--canvas-line) 0 1px, transparent 1px 22px);
+  -webkit-font-smoothing:antialiased;
+}
+:focus-visible{outline:2px solid var(--blue); outline-offset:2px;}
+
+.page{max-width:1220px; margin:0 auto; padding:48px 24px 80px;}
+.intro{max-width:660px; margin:0 auto 40px; text-align:center;}
+.intro h1{font-family:var(--font-display); font-weight:600; font-size:clamp(28px,4vw,38px); line-height:1.15; margin:0 0 14px; color:#F7EEDE;}
+.intro p{font-size:15.5px; line-height:1.6; color:rgba(247,238,222,0.62); margin:0;}
+
+.swatches{display:flex; justify-content:center; gap:10px; margin:0 auto 36px; flex-wrap:wrap;}
+.swatch{display:flex; align-items:center; gap:7px; background:rgba(247,238,222,0.06); border:1px solid rgba(247,238,222,0.14); border-radius:999px; padding:6px 12px 6px 6px; font-size:11.5px; color:rgba(247,238,222,0.72); font-weight:600;}
+.swatch i{width:16px; height:16px; border-radius:50%; display:block; flex-shrink:0;}
+
+.tabs{display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin:0 auto 44px;}
+.tab{font-family:var(--font-body); font-weight:600; font-size:14px; color:rgba(247,238,222,0.7); background:rgba(247,238,222,0.06); border:1px solid rgba(247,238,222,0.16); padding:10px 18px; border-radius:999px; cursor:pointer; transition:background .25s ease, color .25s ease, border-color .25s ease, box-shadow .25s ease, transform .15s ease;}
+.tab:hover{border-color:var(--terracotta); color:#F7EEDE;}
+.tab:active{transform:scale(0.97);}
+.tab.active{background:var(--terracotta); border-color:var(--terracotta); color:#fff; box-shadow:0 6px 16px -4px rgba(0,0,0,0.4);}
+
+.stage{display:flex; justify-content:center;}
+.phone-frame{width:320px; background:#14100D; border-radius:44px; padding:14px; box-shadow:0 40px 70px -20px rgba(0,0,0,0.6), 0 0 0 1px rgba(247,238,222,0.06), 0 0 60px -10px rgba(184,74,41,0.22);}
+.phone-inner{background:var(--parchment); border-radius:32px; overflow:hidden; position:relative;}
+.notch{position:absolute; top:8px; left:50%; transform:translateX(-50%); width:70px; height:18px; background:#14100D; border-radius:0 0 14px 14px; z-index:20;}
+.status-bar{display:flex; align-items:center; justify-content:space-between; padding:16px 22px 4px; font-size:13px; font-weight:600; color:var(--ink-soft); position:relative; z-index:10;}
+.status-icons{display:flex; align-items:center; gap:5px;}
+.status-icons .bars{display:flex; align-items:flex-end; gap:2px; height:9px;}
+.status-icons .bars span{width:3px; background:var(--terracotta); border-radius:1px;}
+.status-icons .bars span:nth-child(1){height:4px;}
+.status-icons .bars span:nth-child(2){height:6px;}
+.status-icons .bars span:nth-child(3){height:8px;}
+.status-icons .bars span:nth-child(4){height:9px;}
+.status-icons .battery{width:20px; height:10px; border:1.4px solid var(--ink-soft); border-radius:2px; position:relative; padding:1.5px;}
+.status-icons .battery::after{content:''; position:absolute; right:-3px; top:3px; width:2px; height:4px; background:var(--ink-soft); border-radius:0 1px 1px 0;}
+.status-icons .battery i{display:block; width:75%; height:100%; background:var(--terracotta); border-radius:1px;}
+
+.screen-viewport{position:relative; height:610px; overflow:hidden;}
+.screen{position:absolute; inset:0; overflow-y:auto; overflow-x:hidden; opacity:0; transform:translateX(14px) scale(0.985); pointer-events:none; transition:opacity .38s cubic-bezier(.4,0,.2,1), transform .38s cubic-bezier(.4,0,.2,1); scrollbar-width:none;}
+.screen::-webkit-scrollbar{display:none;}
+.screen.active{opacity:1; transform:translateX(0) scale(1); pointer-events:auto;}
+
+.icon{width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; display:block;}
+.icon-fill{fill:currentColor; stroke:none;}
+.screen-pad{padding:6px 20px 24px; position:relative;}
+
+.header-row{display:flex; align-items:center; justify-content:space-between; padding:6px 0 16px;}
+.header-row .title{font-family:var(--font-display); font-weight:600; font-size:22px; color:var(--ink); display:flex; align-items:center; gap:10px;}
+.back-btn{color:var(--ink-soft); background:none; border:none; padding:4px; cursor:pointer; display:flex;}
+.header-actions{display:flex; align-items:center; gap:10px;}
+.bell-wrap{position:relative; color:var(--ink-soft);}
+.bell-dot{position:absolute; top:-3px; right:-3px; width:14px; height:14px; background:var(--terracotta); color:#fff; border-radius:50%; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; border:2px solid var(--parchment);}
+.online-pill{display:flex; align-items:center; gap:5px; background:var(--success-tint); color:var(--success); font-size:11.5px; font-weight:700; padding:5px 10px; border-radius:999px; box-shadow:0 0 0 3px rgba(59,94,60,0.10);}
+.online-pill .dot{width:6px; height:6px; background:var(--success); border-radius:50%;}
+
+.btn{font-family:var(--font-body); font-weight:700; font-size:15px; border-radius:999px; border:none; padding:14px 20px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; width:100%; transition:transform .15s ease, box-shadow .25s ease, filter .2s ease;}
+.btn:active{transform:scale(0.98);}
+.btn-primary{background:var(--terracotta); color:#fff; box-shadow:inset 0 -3px 0 rgba(0,0,0,0.16), 0 8px 18px -8px rgba(32,26,24,0.35);}
+.btn-primary:hover{background:var(--terracotta-press);}
+.btn-secondary{background:var(--gold); color:#fff; box-shadow:inset 0 -3px 0 rgba(0,0,0,0.18), 0 8px 18px -10px rgba(122,90,30,0.4);}
+.btn-secondary:hover{background:var(--gold-press);}
+.btn-outline{background:var(--card); color:var(--ink); border:1.5px solid var(--line);}
+.btn-outline:hover{border-color:var(--terracotta); color:var(--terracotta-press);}
+.btn-ghost{background:none; color:var(--ink-soft); font-weight:600; font-size:14px; padding:8px;}
+.btn-sm{padding:9px 14px; font-size:13px; width:auto;}
+
+.card{background:var(--card); border-radius:var(--radius-md); padding:16px; box-shadow:var(--shadow-card); border:1px solid rgba(32,26,24,0.05);}
+
+.field{display:flex; align-items:center; gap:10px; background:var(--card); border:1.5px solid var(--line); border-radius:var(--radius-sm); padding:13px 14px; margin-bottom:12px; transition:border-color .2s ease, box-shadow .2s ease;}
+.field:focus-within{border-color:var(--terracotta); box-shadow:0 0 0 4px var(--terracotta-tint);}
+.field input{border:none; outline:none; background:none; font-family:var(--font-body); font-size:15px; color:var(--ink); flex:1; min-width:0;}
+.field input::placeholder{color:var(--ink-faint);}
+.field-icon{color:var(--terracotta); opacity:0.8; flex-shrink:0;}
+.speak-btn{background:none; border:none; color:var(--terracotta); cursor:pointer; display:flex; padding:2px; flex-shrink:0; transition:transform .15s ease;}
+.speak-btn:hover{transform:scale(1.12);}
+
+.audio-tip{display:flex; align-items:center; gap:10px; background:var(--terracotta-tint); border-radius:var(--radius-sm); padding:11px 13px; margin-bottom:16px; font-size:13px; color:var(--terracotta-press); font-weight:600;}
+.audio-tip .speak-btn{color:var(--terracotta-press);}
+.audio-tip span{flex:1;}
+
+.divider-text{display:flex; align-items:center; gap:10px; color:var(--ink-faint); font-size:12.5px; font-weight:600; margin:18px 0;}
+.divider-text::before, .divider-text::after{content:''; flex:1; height:1px; background:var(--line);}
+
+/* Bindi / daane dotted divider motif */
+.dotted-rule{height:0; border-top:1.5px dotted var(--dotted); margin:18px 0;}
+.dotted-frame{border:1.5px dotted var(--dotted); border-radius:var(--radius-md);}
+
+@keyframes softGlow{0%,100%{box-shadow:0 0 0 0 rgba(184,74,41,0.26), var(--shadow-card-lg);} 50%{box-shadow:0 0 0 22px rgba(184,74,41,0), var(--shadow-card-lg);}}
+.splash-wrap{display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; padding:0 30px; gap:22px;}
+.splash-card{background:#fff; border-radius:var(--radius-lg); padding:34px 44px; animation:softGlow 3.2s ease-in-out infinite;}
+.splash-card .logo{font-family:var(--font-display); font-size:30px; font-weight:600; color:var(--ink);}
+.splash-ribbon{width:130px; height:8px; margin-top:-6px; background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="8"><path d="M6 1C10 1 12 3.5 11 6C10 7.8 6 8.2 3.5 7C6 6 7 4 5.5 2.2C4.8 1.3 5 1.1 6 1Z" fill="%238C371A"/></svg>'); background-repeat:repeat-x; background-size:26px 8px; opacity:0.55;}
+.splash-tagline{color:var(--ink-soft); font-size:14.5px; font-weight:500;}
+.splash-dots{display:flex; gap:6px;}
+.splash-dots span{width:6px; height:6px; border-radius:50%; background:var(--terracotta); opacity:0.35; animation:dotPulse 1.4s ease-in-out infinite;}
+.splash-dots span:nth-child(2){animation-delay:.2s;}
+.splash-dots span:nth-child(3){animation-delay:.4s;}
+@keyframes dotPulse{0%,80%,100%{opacity:0.3; transform:scale(1);} 40%{opacity:1; transform:scale(1.3);}}
+.motif-bg{position:absolute; inset:0; opacity:0.13; pointer-events:none;}
+
+.lang-pill{display:flex; align-items:center; gap:8px; background:var(--card); border:1.5px solid var(--line); border-radius:999px; padding:10px 14px; font-size:13.5px; font-weight:600; color:var(--ink); margin-bottom:18px;}
+.lang-pill svg{color:var(--terracotta);}
+.lang-pill .grow{flex:1;}
+.login-logo{display:flex; justify-content:center; margin:18px 0 10px;}
+.login-logo .logo{font-family:var(--font-display); font-size:24px; font-weight:600;}
+.login-sub{text-align:center; color:var(--ink-soft); font-size:14px; margin:0 0 22px;}
+
+.filter-row{display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:16px; scrollbar-width:none;}
+.filter-row::-webkit-scrollbar{display:none;}
+.filter-pill{flex-shrink:0; display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; padding:8px 15px; border-radius:999px; border:1.5px solid var(--line); background:var(--card); color:var(--ink-soft); white-space:nowrap; cursor:pointer;}
+.filter-pill .status-dot{width:7px; height:7px; border-radius:50%; flex-shrink:0;}
+.filter-pill.active{background:var(--terracotta); border:1.5px dashed rgba(255,255,255,0.65); color:#fff;}
+.filter-pill.active .status-dot{background:#fff !important;}
+
+/* Craft category badge — chalk white body, baked terracotta border, pictorial icon */
+.craft-badge{flex-shrink:0; display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; padding:6px 14px 6px 6px; border-radius:999px; border:1.5px solid var(--terracotta); background:#fff; color:var(--terracotta-press); white-space:nowrap; cursor:pointer;}
+.craft-badge.active{background:var(--terracotta); color:#fff;}
+.craft-badge .badge-icon{position:relative; width:26px; height:26px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.craft-badge .badge-icon .petal{position:absolute; inset:-6px; color:var(--gold); opacity:0.55;}
+.craft-badge.active .badge-icon .petal{color:rgba(255,255,255,0.55);}
+.craft-badge .badge-icon svg{width:15px; height:15px; position:relative;}
+
+@keyframes sparklePing{0%{box-shadow:0 0 0 0 rgba(184,74,41,0.45);} 70%{box-shadow:0 0 0 8px rgba(184,74,41,0);} 100%{box-shadow:0 0 0 0 rgba(184,74,41,0);}}
+.order-card{display:flex; gap:12px; background:var(--card); border-radius:var(--radius-md); padding:14px; margin-bottom:12px; box-shadow:var(--shadow-card); position:relative; cursor:pointer; transition:box-shadow .2s ease, transform .15s ease;}
+.order-card:hover{box-shadow:var(--shadow-card-lg); transform:translateY(-1px);}
+.order-card .thumb{width:46px; height:46px; border-radius:11px; flex-shrink:0; background:var(--parchment-deep); display:flex; align-items:center; justify-content:center; overflow:hidden;}
+.order-card .thumb svg{width:34px; height:34px;}
+.order-card .body{flex:1; min-width:0;}
+.order-card .row1{display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:4px;}
+.order-card .name{font-family:var(--font-display); font-weight:600; font-size:15.5px; color:var(--ink); line-height:1.3;}
+.status-flag{flex-shrink:0; display:flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:4px 8px; border-radius:999px;}
+.status-flag.flag-action{background:var(--terracotta-tint); color:var(--terracotta-press); animation:sparklePing 2.4s ease-in-out infinite;}
+.status-flag.flag-pending{background:var(--gold-tint); color:var(--gold-press);}
+.status-flag.flag-dispatched{background:var(--success-tint); color:var(--success);}
+.status-flag svg{width:11px; height:11px;}
+.order-card .meta{display:flex; align-items:center; gap:5px; color:var(--ink-soft); font-size:12.5px; margin-bottom:6px;}
+.order-card .meta + .meta{margin-left:10px;}
+.order-card .metarow{display:flex; flex-wrap:wrap; margin-bottom:6px;}
+.order-card .price-row{display:flex; align-items:center; justify-content:space-between;}
+.order-card .price{color:var(--terracotta-press); font-weight:700; font-size:14.5px;}
+.order-card .time{color:var(--ink-faint); font-size:12px;}
+
+/* Tanka stitch — dashed active states */
+.stepper{display:flex; align-items:center; margin-bottom:20px;}
+.step-icon{width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:var(--card); border:1.5px solid var(--line); color:var(--ink-faint); flex-shrink:0;}
+.step-icon.done{background:var(--success); border-color:var(--success); color:#fff;}
+.step-icon.current{background:var(--terracotta); border-color:var(--terracotta); color:#fff; box-shadow:0 0 0 5px var(--terracotta-tint);}
+.step-icon svg{width:16px; height:16px;}
+.step-line{flex:1; height:2px; background:var(--line); margin:0 2px;}
+.step-line.done{background-image:repeating-linear-gradient(90deg, var(--success) 0 5px, transparent 5px 9px); background-color:transparent; height:2px;}
+
+.screen-title{font-family:var(--font-display); font-weight:600; font-size:19px; margin:0 0 4px;}
+.screen-subtitle{color:var(--ink-soft); font-size:13.5px; margin:0 0 16px;}
+
+@keyframes framePulse{0%,100%{opacity:0.55; transform:scale(1);} 50%{opacity:1; transform:scale(1.04);}}
+.capture-box{position:relative; height:190px; background:var(--parchment-deep); border:1.5px dotted var(--dotted); border-radius:var(--radius-md); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; margin-bottom:18px; overflow:hidden;}
+.capture-box .corner{position:absolute; width:26px; height:26px; border-color:var(--terracotta); border-style:solid; border-width:0; animation:framePulse 2.2s ease-in-out infinite;}
+.capture-box .corner.tl{top:10px; left:10px; border-top-width:3px; border-left-width:3px; border-radius:6px 0 0 0;}
+.capture-box .corner.tr{top:10px; right:10px; border-top-width:3px; border-right-width:3px; border-radius:0 6px 0 0;}
+.capture-box .corner.bl{bottom:10px; left:10px; border-bottom-width:3px; border-left-width:3px; border-radius:0 0 0 6px;}
+.capture-box .corner.br{bottom:10px; right:10px; border-bottom-width:3px; border-right-width:3px; border-radius:0 0 6px 0;}
+.capture-box .ghost-illust{position:absolute; width:88px; height:88px; opacity:0.15;}
+.capture-box .cam-icon{color:var(--terracotta); position:relative;}
+.capture-box .cap-text{color:var(--ink-soft); font-size:12.5px; font-weight:600;}
+
+.bottom-nav{display:flex; justify-content:space-around; border-top:1px solid var(--line); background:var(--card); padding:10px 4px 14px; position:sticky; bottom:0; z-index:5;}
+.nav-item{display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--ink-faint); font-size:10.5px; font-weight:700;}
+.nav-item.active{color:var(--terracotta);}
+.nav-item.active::after{content:''; width:14px; height:0; border-top:2px dashed var(--terracotta); margin-top:1px;}
+.nav-item svg{width:19px; height:19px;}
+
+.segmented{display:flex; background:var(--parchment-deep); border-radius:999px; padding:4px; margin-bottom:18px;}
+.segmented .seg{flex:1; text-align:center; font-size:12.5px; font-weight:700; color:var(--ink-soft); padding:8px 4px; border-radius:999px;}
+.segmented .seg.active{background:var(--card); color:var(--ink); box-shadow:0 2px 6px rgba(32,26,24,0.1);}
+
+.hero-metric{background-color:var(--berry); background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72"><path d="M14 4 C22 4 27 12 24 20 C22 26 12 29 6 24 C12 21 15 15 12 10 C10 6 11 5 14 4 Z" fill="rgba(255,255,255,0.08)"/><path d="M50 38 C58 38 63 46 60 54 C58 60 48 63 42 58 C48 55 51 49 48 44 C46 40 47 39 50 38 Z" fill="rgba(255,255,255,0.06)"/></svg>'); border-radius:var(--radius-md); padding:18px; color:#fff; margin-bottom:14px; box-shadow:inset 0 -3px 0 rgba(0,0,0,0.15), 0 12px 24px -12px rgba(32,26,24,0.4);}
+.hero-metric .top-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+.hero-metric .label{display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; opacity:0.92;}
+.hero-metric .orders-pill{background:rgba(255,255,255,0.22); font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px;}
+.hero-metric .value{font-family:var(--font-display); font-size:34px; font-weight:600; margin:2px 0 4px;}
+.hero-metric .sub{font-size:12px; opacity:0.85; margin-bottom:12px;}
+.hero-metric .divider{height:1px; background:rgba(255,255,255,0.25); margin:10px 0;}
+.hero-metric .avg-row{display:flex; align-items:center; justify-content:space-between; font-size:12.5px; font-weight:600;}
+.hero-metric .avg-row .num{font-size:14.5px; font-weight:700;}
+
+.motif-strip{height:9px; margin:-16px -16px 12px; background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="9"><path d="M6 1C10 1 12 4 11 6.5C10 8.5 6 9 3.5 7.5C6 6.5 7 4.5 5.5 2.5C4.8 1.5 5 1.2 6 1Z" fill="%23B84A29"/></svg>'); background-repeat:repeat-x; background-size:30px 9px; opacity:0.85;}
+.wage-card{margin-bottom:14px;}
+.wage-card .wtitle{font-family:var(--font-display); font-weight:600; font-size:15px; margin-bottom:4px; display:flex; align-items:center; gap:8px;}
+.wage-card .wdesc{color:var(--ink-soft); font-size:12.5px; line-height:1.5; margin-bottom:12px;}
+.wage-bars{display:flex; flex-direction:column; gap:8px;}
+.wage-bar-row{display:flex; align-items:center; gap:8px;}
+.wage-bar-row .wlabel{font-size:11.5px; color:var(--ink-soft); width:64px; flex-shrink:0; font-weight:600;}
+.wage-bar-track{flex:1; height:22px; background:var(--parchment-deep); border-radius:999px; overflow:hidden; position:relative;}
+.wage-bar-fill{height:100%; border-radius:999px; width:0; transition:width 1s cubic-bezier(.22,1,.36,1); display:flex; align-items:center; justify-content:flex-end; padding-right:8px;}
+.wage-bar-fill span{color:#fff; font-size:10.5px; font-weight:700;}
+.fill-mid{background:var(--ink-faint);}
+.fill-blue{background:var(--blue);}
+
+.chart-card .ctitle{font-family:var(--font-display); font-weight:600; font-size:15px; margin-bottom:14px; display:flex; align-items:center; gap:8px;}
+.bar-chart{display:flex; align-items:flex-end; gap:8px; height:100px; padding:0 2px;}
+.bar-col{flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;}
+.bar-col .bval{font-size:10px; font-weight:700; color:var(--terracotta-press); opacity:0; transition:opacity .4s ease .6s;}
+.screen.active .bar-col .bval{opacity:1;}
+.bar-shape{width:100%; max-width:26px; border-radius:8px 8px 3px 3px; background:var(--terracotta-tint); height:0; transition:height 1s cubic-bezier(.22,1,.36,1);}
+.bar-col.highlight .bar-shape{background:var(--gold);}
+.bar-col .blabel{font-size:10.5px; color:var(--ink-faint); font-weight:600;}
+
+/* Empty state */
+.empty-state{display:flex; flex-direction:column; align-items:center; text-align:center; padding:44px 20px 20px; gap:6px;}
+.empty-state .empty-illust{width:88px; height:88px; color:var(--ink-faint); opacity:0.7; margin-bottom:6px;}
+.empty-state .empty-title{font-family:var(--font-display); font-weight:600; font-size:16px; color:var(--ink);}
+.empty-state .empty-sub{font-size:12.5px; color:var(--ink-soft); max-width:220px; line-height:1.5;}
+
+/* Mehrab arch bottom sheet */
+.sheet-scrim{position:absolute; inset:0; background:rgba(28,22,19,0.42); opacity:0; pointer-events:none; transition:opacity .3s ease; z-index:30;}
+.sheet-scrim.show{opacity:1; pointer-events:auto;}
+.sheet{position:absolute; left:0; right:0; bottom:0; background:var(--card); transform:translateY(100%); transition:transform .38s cubic-bezier(.32,.72,0,1); z-index:31; max-height:88%; display:flex; flex-direction:column;}
+.sheet.show{transform:translateY(0);}
+.mehrab-top{height:18px; flex-shrink:0; background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="18"><path d="M0 18 C0 7 7 0 15 0 C23 0 30 7 30 18 Z" fill="%23FFFDF9"/></svg>'); background-repeat:repeat-x; background-size:30px 18px;}
+.sheet-body{padding:2px 20px 22px; overflow-y:auto;}
+.sheet-handle{display:none;}
+.sheet-head{display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px;}
+.sheet-head .box-icon{width:36px; height:36px; border-radius:10px; background:var(--terracotta-tint); color:var(--terracotta-press); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.sheet-close{background:var(--parchment-deep); border:none; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--ink-soft); cursor:pointer; flex-shrink:0;}
+.sheet-title{font-family:var(--font-display); font-weight:600; font-size:17px; margin:0 0 2px;}
+.sheet-sub{font-size:12px; color:var(--ink-soft); margin:0;}
+.pstep{display:flex; gap:12px; margin-bottom:14px;}
+.pstep .num{width:24px; height:24px; border-radius:50%; background:var(--terracotta-tint); color:var(--terracotta-press); font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.pstep .ptitle{font-weight:700; font-size:13.5px; margin-bottom:2px;}
+.pstep .ptext{font-size:12.5px; color:var(--ink-soft); line-height:1.5;}
+
+.craft-story-card{margin-top:2px;}
+.reliability-row{display:flex; align-items:center; justify-content:space-between; margin-top:4px;}
+.reliability-row .rtitle{font-family:var(--font-display); font-weight:600; font-size:15px;}
+.reliability-pill{background:var(--success-tint); color:var(--success); font-size:11.5px; font-weight:700; padding:5px 10px; border-radius:999px;}
+
+.search-field{display:flex; align-items:center; gap:9px; background:var(--card); border:1.5px solid var(--line); border-radius:999px; padding:11px 16px; margin-bottom:14px; color:var(--ink-faint);}
+.search-field input{border:none; outline:none; background:none; font-family:var(--font-body); font-size:13.5px; color:var(--ink); flex:1;}
+
+.product-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+.product-card{background:var(--card); border-radius:var(--radius-md); overflow:hidden; box-shadow:var(--shadow-card); cursor:pointer; transition:box-shadow .2s ease, transform .15s ease;}
+.product-card:hover{box-shadow:var(--shadow-card-lg); transform:translateY(-1px);}
+.product-card .pthumb{height:96px; position:relative; overflow:hidden;}
+.product-card .pthumb svg{width:100%; height:100%;}
+.live-tag{position:absolute; top:7px; left:7px; background:rgba(255,253,249,0.92); color:var(--success); font-size:9.5px; font-weight:700; padding:3px 7px; border-radius:999px; display:flex; align-items:center; gap:3px;}
+.live-tag .dot{width:5px; height:5px; border-radius:50%; background:var(--success);}
+.product-card .pbody{padding:10px 11px 12px;}
+.product-card .pname{font-family:var(--font-display); font-weight:600; font-size:13px; line-height:1.3; margin-bottom:5px;}
+.product-card .pprice{color:var(--terracotta-press); font-weight:700; font-size:14px;}
+
+@media (max-width:480px){.phone-frame{width:290px;}}
+@media (prefers-reduced-motion: reduce){*{animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important;}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+<defs>
+<symbol id="i-sparkle" viewBox="0 0 24 24"><path class="icon-fill" d="M12 2 L13.8 9.2 L21 11 L13.8 12.8 L12 20 L10.2 12.8 L3 11 L10.2 9.2 Z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+<symbol id="i-camera" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.59 13.41L13.42 20.6a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></symbol>
+<symbol id="i-volume" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+<symbol id="i-chevron-left" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+<symbol id="i-trending" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></symbol>
+<symbol id="i-cloud-up" viewBox="0 0 24 24"><path d="M16 16l-4-4-4 4"/><path d="M12 12v9"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+<symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 2 1 21h22Z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17.4" r="0.6" fill="currentColor" stroke="none"/></symbol>
+
+<symbol id="i-cat-pottery" viewBox="0 0 24 24"><path d="M9 3h6v3H9z"/><path d="M8.2 6.2c-2.4 2.9-3.6 6.1-2.6 10c1 3.9 3 5.3 6.4 5.3s5.4-1.4 6.4-5.3c1-3.9-.2-7.1-2.6-10"/></symbol>
+<symbol id="i-cat-textile" viewBox="0 0 24 24"><path d="M2 12c4.4-6.4 15.6-6.4 20 0c-4.4 6.4-15.6 6.4-20 0Z"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-cat-jewelry" viewBox="0 0 24 24"><path d="M6.5 3h11l4 6-9.5 12L2.5 9Z"/><path d="M2.5 9h19M9 3l3 6-3 12M15 3l-3 6 3 12"/></symbol>
+<symbol id="i-cat-wood" viewBox="0 0 24 24"><path d="M14.5 2.5l7 7-3 3-7-7Z"/><path d="M11.5 5.5L2.5 14.5V21h6.5L18 12"/></symbol>
+
+<symbol id="i-petal-ring" viewBox="0 0 48 48">
+<g fill="none" stroke="currentColor" stroke-width="1.4">
+<ellipse cx="24" cy="8" rx="3.6" ry="6.5" transform="rotate(0 24 24)"/>
+<ellipse cx="24" cy="8" rx="3.6" ry="6.5" transform="rotate(45 24 24)"/>
+<ellipse cx="24" cy="8" rx="3.6" ry="6.5" transform="rotate(90 24 24)"/>
+<ellipse cx="24" cy="8" rx="3.6" ry="6.5" transform="rotate(135 24 24)"/>
+<ellipse cx="24" cy="8" rx="3.6" ry="6.5" transform="rotate(180 24 24)"/>
+<ellipse cx="24" cy="8" rx="3.6" ry="6.5" transform="rotate(225 24 24)"/>
+<ellipse cx="24" cy="8" rx="3.6" ry="6.5" transform="rotate(270 24 24)"/>
+<ellipse cx="24" cy="8" rx="3.6" ry="6.5" transform="rotate(315 24 24)"/>
+</g>
+</symbol>
+
+<symbol id="i-empty-craft" viewBox="0 0 96 96">
+<circle cx="48" cy="60" r="26" fill="none" stroke="currentColor" stroke-width="2.2"/>
+<circle cx="48" cy="60" r="4" fill="currentColor" stroke="none"/>
+<path d="M48 60 L48 36 M48 60 L68 48 M48 60 L28 74 M48 60 L70 72 M48 60 L26 46" stroke="currentColor" stroke-width="1.6"/>
+<path d="M38 30 C38 20 58 20 58 30 C58 36 52 36 52 30" fill="none" stroke="currentColor" stroke-width="2.2"/>
+</symbol>
+
+<symbol id="i-illust-pot" viewBox="0 0 64 64">
+  <path d="M22 10 h20 v6 h-20 z" fill="#8C371A" stroke="none"/>
+  <path d="M20 16 C14 22 12 30 14 40 C16 50 22 56 32 56 C42 56 48 50 50 40 C52 30 50 22 44 16 Z" fill="#B84A29" stroke="none"/>
+  <path d="M15 30 C21 33 43 33 49 30" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.6"/>
+  <path d="M17 40 C22 42.5 42 42.5 47 40" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.6"/>
+</symbol>
+
+<symbol id="i-illust-saree" viewBox="0 0 64 64">
+  <rect x="8" y="8" width="48" height="48" rx="4" fill="#924C6C" stroke="none"/>
+  <path d="M8 20 h48 M8 44 h48" stroke="#E59A2C" stroke-width="2.4" fill="none"/>
+  <path d="M18 26 C22 26 25.5 30 24.5 34 C24 37 20.5 38.5 17.5 37 C20.5 35.5 22 32.5 20 29.5 C19 28 19.5 27 18 26Z" fill="#FBEACB" stroke="none" transform="translate(0,0)"/>
+  <path d="M38 26 C42 26 45.5 30 44.5 34 C44 37 40.5 38.5 37.5 37 C40.5 35.5 42 32.5 40 29.5 C39 28 39.5 27 38 26Z" fill="#FBEACB" stroke="none"/>
+</symbol>
+
+<symbol id="i-illust-toy" viewBox="0 0 64 64">
+  <ellipse cx="32" cy="52" rx="20" ry="4" fill="rgba(32,26,24,0.1)" stroke="none"/>
+  <path d="M20 50 L20 34 C20 24 25 18 33 18 C40 18 45 23 45 30 L45 50 Z" fill="#E59A2C" stroke="none"/>
+  <circle cx="41" cy="24" r="6" fill="#B84A29" stroke="none"/>
+  <rect x="22" y="34" width="19" height="4" fill="#265067" stroke="none"/>
+  <rect x="22" y="42" width="19" height="4" fill="#924C6C" stroke="none"/>
+</symbol>
+
+<symbol id="i-illust-bowl" viewBox="0 0 64 64">
+  <rect width="64" height="64" fill="#3B5E3C" stroke="none"/>
+  <path d="M14 30 C14 27 18 25 32 25 C46 25 50 27 50 30 C50 40 42 46 32 46 C22 46 14 40 14 30Z" fill="#F8F5F0" stroke="none"/>
+  <path d="M18 30 C18 33 24 35 32 35 C40 35 46 33 46 30" fill="none" stroke="#DEE8DA" stroke-width="1.6"/>
+</symbol>
+</defs>
+</svg>
+
+<div class="page">
+
+  <div class="intro">
+    <h1>Kalasetu — v3</h1>
+    <p>Rebuilt around your palette: rusty-spice terracotta as the primary, gold as the secondary — now also carrying every secondary button — with berry and blue used only as sparing accents. Flat colour, real craft motifs, tactile shadows. Click a tab to compare.</p>
+  </div>
+
+  <div class="swatches">
+    <span class="swatch"><i style="background:#B84A29"></i>Terracotta · primary</span>
+    <span class="swatch"><i style="background:#E59A2C"></i>Gold · secondary</span>
+    <span class="swatch"><i style="background:#924C6C"></i>Berry · accent</span>
+    <span class="swatch"><i style="background:#265067"></i>Blue · accent</span>
+    <span class="swatch"><i style="background:#3B5E3C"></i>Green · dispatched</span>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-screen="splash">Splash</button>
+    <button class="tab" data-screen="login">Sign in</button>
+    <button class="tab" data-screen="orders">My orders</button>
+    <button class="tab" data-screen="catalogue">Catalogue</button>
+    <button class="tab" data-screen="addproduct">Add product</button>
+    <button class="tab" data-screen="analytics">Analytics</button>
+  </div>
+
+  <div class="stage">
+    <div class="phone-frame">
+      <div class="phone-inner">
+        <div class="notch"></div>
+        <div class="status-bar">
+          <span>9:41</span>
+          <div class="status-icons">
+            <div class="bars"><span></span><span></span><span></span><span></span></div>
+            <div class="battery"><i></i></div>
+          </div>
+        </div>
+
+        <div class="screen-viewport">
+
+          <div class="screen active" id="screen-splash">
+            <svg class="motif-bg" viewBox="0 0 320 610" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#8C371A" stroke-width="1.4" stroke-linecap="round">
+              <defs><pattern id="motif1" width="54" height="54" patternUnits="userSpaceOnUse">
+                <circle cx="27" cy="16" r="3.4"/>
+                <path d="M27 19.4 L27 29 M27 22 L21 19 M27 22 L33 19 M27 29 L21 37 M27 29 L33 37"/>
+              </pattern></defs>
+              <rect width="320" height="610" fill="url(#motif1)" stroke="none"/>
+            </svg>
+            <div class="splash-wrap">
+              <div class="splash-card">
+                <div class="logo">Kala<span>सेतु</span></div>
+              </div>
+              <div class="splash-ribbon"></div>
+              <div class="splash-tagline">Connecting artisans to markets</div>
+              <div class="splash-dots"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+
+          <div class="screen" id="screen-login">
+            <div class="screen-pad">
+              <div class="login-logo"><div class="logo">Kala<span>सेतु</span></div></div>
+              <p class="login-sub">Sign in to continue to your artisan portal</p>
+              <div class="lang-pill"><svg class="icon"><use href="#i-globe"/></svg><span class="grow">English (English)</span><svg class="icon" style="width:14px;height:14px;color:var(--ink-faint)"><use href="#i-chevron-right"/></svg></div>
+              <div class="field">
+                <span class="field-icon"><svg class="icon" style="width:16px;height:16px"><use href="#i-phone"/></svg></span>
+                <input type="tel" placeholder="Phone number">
+                <button class="speak-btn" aria-label="Hear this field read aloud"><svg class="icon" style="width:16px;height:16px"><use href="#i-volume"/></svg></button>
+              </div>
+              <button class="btn btn-primary" style="margin-bottom:6px;">Continue <svg class="icon" style="width:15px;height:15px"><use href="#i-chevron-right"/></svg></button>
+              <div class="divider-text">New to Kalasetu?</div>
+              <button class="btn btn-secondary" style="margin-bottom:10px;"><svg class="icon" style="width:15px;height:15px"><use href="#i-user"/></svg> Register as new artisan</button>
+              <button class="btn btn-ghost" style="margin:0 auto; display:flex;"><svg class="icon" style="width:15px;height:15px;color:var(--blue)"><use href="#i-shield"/></svg> Sign in with NGO assist</button>
+            </div>
+          </div>
+
+          <div class="screen" id="screen-orders">
+            <div class="screen-pad">
+              <div class="header-row">
+                <span class="title">My orders</span>
+                <div class="header-actions">
+                  <span class="bell-wrap"><svg class="icon"><use href="#i-bell"/></svg><span class="bell-dot">3</span></span>
+                  <span class="online-pill"><span class="dot"></span>Online</span>
+                </div>
+              </div>
+              <div class="filter-row">
+                <span class="filter-pill active" data-filter="all">All orders</span>
+                <span class="filter-pill" data-filter="new"><span class="status-dot" style="background:var(--terracotta)"></span>New</span>
+                <span class="filter-pill" data-filter="packed"><span class="status-dot" style="background:var(--gold)"></span>Packed</span>
+                <span class="filter-pill" data-filter="shipped"><span class="status-dot" style="background:var(--success)"></span>Shipped</span>
+                <span class="filter-pill" data-filter="delivered"><span class="status-dot" style="background:var(--success)"></span>Delivered</span>
+              </div>
+
+              <div id="orders-list">
+              <div class="order-card" onclick="openSheet()">
+                <div class="thumb"><svg><use href="#i-illust-pot"/></svg></div>
+                <div class="body">
+                  <div class="row1">
+                    <span class="name">Terracotta water pot (matka)</span>
+                    <span class="status-flag flag-action"><svg><use href="#i-sparkle"/></svg>New</span>
+                  </div>
+                  <div class="metarow">
+                    <span class="meta"><svg class="icon" style="width:12px;height:12px"><use href="#i-user"/></svg>Priya Sharma</span>
+                    <span class="meta" style="margin-left:10px">Delhi</span>
+                  </div>
+                  <div class="price-row">
+                    <span class="price">₹850 × 2</span>
+                    <span class="time">3h ago</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="order-card" onclick="openSheet()">
+                <div class="thumb"><svg><use href="#i-illust-toy"/></svg></div>
+                <div class="body">
+                  <div class="row1">
+                    <span class="name">Channapatna wooden toy set</span>
+                    <span class="status-flag flag-action"><svg><use href="#i-sparkle"/></svg>New</span>
+                  </div>
+                  <div class="metarow">
+                    <span class="meta"><svg class="icon" style="width:12px;height:12px"><use href="#i-user"/></svg>Suresh Nair</span>
+                    <span class="meta" style="margin-left:10px">Kochi</span>
+                  </div>
+                  <div class="price-row">
+                    <span class="price">₹680 × 3</span>
+                    <span class="time">8h ago</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="order-card" onclick="openSheet()">
+                <div class="thumb"><svg><use href="#i-illust-saree"/></svg></div>
+                <div class="body">
+                  <div class="row1">
+                    <span class="name">Hand-woven Chanderi dupatta</span>
+                    <span class="status-flag flag-pending"><svg><use href="#i-box"/></svg>Packed</span>
+                  </div>
+                  <div class="metarow">
+                    <span class="meta"><svg class="icon" style="width:12px;height:12px"><use href="#i-user"/></svg>Meena Devi</span>
+                    <span class="meta" style="margin-left:10px">Jaipur</span>
+                  </div>
+                  <div class="price-row">
+                    <span class="price">₹1,850 × 1</span>
+                    <span class="time">1d ago</span>
+                  </div>
+                </div>
+              </div>
+              </div>
+            </div>
+
+            <div class="sheet-scrim" id="orders-scrim" onclick="closeSheet()"></div>
+            <div class="sheet" id="orders-sheet">
+              <div class="mehrab-top"></div>
+              <div class="sheet-body">
+                <div class="sheet-head">
+                  <div style="display:flex; gap:11px;">
+                    <span class="box-icon"><svg class="icon" style="width:18px;height:18px"><use href="#i-box"/></svg></span>
+                    <div>
+                      <p class="sheet-title">Packaging guide</p>
+                      <p class="sheet-sub">Pottery · Terracotta water pot</p>
+                    </div>
+                  </div>
+                  <button class="sheet-close" onclick="closeSheet()"><svg class="icon" style="width:14px;height:14px"><use href="#i-close"/></svg></button>
+                </div>
+                <div class="pstep"><span class="num">1</span><div><div class="ptitle">Wrap in tissue paper</div><div class="ptext">Use 2–3 layers of acid-free tissue to protect the glaze.</div></div></div>
+                <div class="pstep"><span class="num">2</span><div><div class="ptitle">Bubble wrap (5cm)</div><div class="ptext">Apply at least two layers of small-cell bubble wrap secured with tape.</div></div></div>
+                <div class="pstep"><span class="num">3</span><div><div class="ptitle">Double-box method</div><div class="ptext">Place in a snug inner box, then a larger outer box with 5cm foam padding on all sides.</div></div></div>
+                <div class="pstep" style="margin-bottom:6px;"><span class="num" style="background:var(--gold-tint); color:var(--gold-press);"><svg class="icon" style="width:12px;height:12px"><use href="#i-warn"/></svg></span><div><div class="ptitle">Mark "fragile"</div><div class="ptext">Add fragile stickers on all six faces of the outer box.</div></div></div>
+                <button class="btn btn-primary" style="margin-top:8px;">Update status: packed</button>
+              </div>
+            </div>
+
+            <div class="bottom-nav">
+              <div class="nav-item"><svg><use href="#i-camera"/></svg>Add product</div>
+              <div class="nav-item"><svg><use href="#i-grid"/></svg>Catalogue</div>
+              <div class="nav-item active"><svg><use href="#i-file"/></svg>My orders</div>
+              <div class="nav-item"><svg><use href="#i-user"/></svg>Profile</div>
+            </div>
+          </div>
+
+          <div class="screen" id="screen-catalogue">
+            <div class="screen-pad">
+              <div class="header-row">
+                <span class="title">My catalogue</span>
+                <div class="header-actions">
+                  <span class="bell-wrap"><svg class="icon"><use href="#i-bell"/></svg><span class="bell-dot">5</span></span>
+                  <span class="online-pill"><span class="dot"></span>Online</span>
+                </div>
+              </div>
+              <div class="search-field"><svg class="icon" style="width:15px;height:15px"><use href="#i-search"/></svg><input placeholder="Search your crafts by title or category"></div>
+
+              <div class="filter-row">
+                <span class="craft-badge active" data-cat="all">All crafts</span>
+                <span class="craft-badge" data-cat="pottery"><span class="badge-icon"><svg class="petal"><use href="#i-petal-ring"/></svg><svg><use href="#i-cat-pottery"/></svg></span>Pottery</span>
+                <span class="craft-badge" data-cat="textiles"><span class="badge-icon"><svg class="petal"><use href="#i-petal-ring"/></svg><svg><use href="#i-cat-textile"/></svg></span>Textiles</span>
+                <span class="craft-badge" data-cat="jewelry"><span class="badge-icon"><svg class="petal"><use href="#i-petal-ring"/></svg><svg><use href="#i-cat-jewelry"/></svg></span>Jewelry</span>
+                <span class="craft-badge" data-cat="woodwork"><span class="badge-icon"><svg class="petal"><use href="#i-petal-ring"/></svg><svg><use href="#i-cat-wood"/></svg></span>Woodwork</span>
+              </div>
+
+              <div class="product-grid" id="catalogue-grid">
+                <div class="product-card" data-cat="textiles">
+                  <div class="pthumb"><svg viewBox="0 0 64 64"><use href="#i-illust-saree"/></svg><span class="live-tag"><span class="dot"></span>Live</span></div>
+                  <div class="pbody"><div class="pname">Hand-woven Chanderi silk dupatta</div><div class="pprice">₹1,850</div></div>
+                </div>
+                <div class="product-card" data-cat="pottery">
+                  <div class="pthumb"><svg viewBox="0 0 64 64"><use href="#i-illust-bowl"/></svg><span class="live-tag"><span class="dot"></span>Live</span></div>
+                  <div class="pbody"><div class="pname">Terracotta chai kulhad set</div><div class="pprice">₹450</div></div>
+                </div>
+              </div>
+
+              <div class="empty-state" id="catalogue-empty" style="display:none;">
+                <svg class="empty-illust"><use href="#i-empty-craft"/></svg>
+                <div class="empty-title">Nothing here yet</div>
+                <div class="empty-sub" id="empty-sub-text">Add a piece from this category and it'll show up here for buyers to find.</div>
+              </div>
+            </div>
+            <div class="bottom-nav">
+              <div class="nav-item"><svg><use href="#i-camera"/></svg>Add product</div>
+              <div class="nav-item active"><svg><use href="#i-grid"/></svg>Catalogue</div>
+              <div class="nav-item"><svg><use href="#i-file"/></svg>My orders</div>
+              <div class="nav-item"><svg><use href="#i-user"/></svg>Profile</div>
+            </div>
+          </div>
+
+          <div class="screen" id="screen-addproduct">
+            <div class="screen-pad">
+              <div class="header-row">
+                <span class="title"><button class="back-btn"><svg class="icon"><use href="#i-chevron-left"/></svg></button>Add product</span>
+                <div class="header-actions">
+                  <span class="bell-wrap"><svg class="icon"><use href="#i-bell"/></svg></span>
+                  <span class="online-pill"><span class="dot"></span>Online</span>
+                </div>
+              </div>
+
+              <div class="stepper">
+                <div class="step-icon current"><svg><use href="#i-camera"/></svg></div>
+                <div class="step-line"></div>
+                <div class="step-icon"><svg><use href="#i-mic"/></svg></div>
+                <div class="step-line"></div>
+                <div class="step-icon"><svg><use href="#i-sparkle"/></svg></div>
+                <div class="step-line"></div>
+                <div class="step-icon"><svg><use href="#i-tag"/></svg></div>
+                <div class="step-line"></div>
+                <div class="step-icon"><svg><use href="#i-cloud-up"/></svg></div>
+              </div>
+
+              <h2 class="screen-title">Capture your craft</h2>
+              <p class="screen-subtitle">Take a photo or choose from your gallery</p>
+
+              <div class="audio-tip">
+                <button class="speak-btn" aria-label="Hear this tip read aloud"><svg class="icon" style="width:15px;height:15px"><use href="#i-volume"/></svg></button>
+                <span>Show the full item in frame</span>
+              </div>
+
+              <div class="capture-box">
+                <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+                <svg class="ghost-illust" viewBox="0 0 64 64"><use href="#i-illust-pot"/></svg>
+                <svg class="icon cam-icon" style="width:34px;height:34px"><use href="#i-camera"/></svg>
+                <span class="cap-text">Center your craft in good lighting</span>
+              </div>
+
+              <button class="btn btn-primary" style="margin-bottom:10px;"><svg class="icon" style="width:15px;height:15px"><use href="#i-camera"/></svg> Take photo</button>
+              <button class="btn btn-outline"><svg class="icon" style="width:15px;height:15px"><use href="#i-cloud-up"/></svg> Upload from gallery</button>
+            </div>
+            <div class="bottom-nav">
+              <div class="nav-item active"><svg><use href="#i-camera"/></svg>Add product</div>
+              <div class="nav-item"><svg><use href="#i-grid"/></svg>Catalogue</div>
+              <div class="nav-item"><svg><use href="#i-file"/></svg>My orders</div>
+              <div class="nav-item"><svg><use href="#i-user"/></svg>Profile</div>
+            </div>
+          </div>
+
+          <div class="screen" id="screen-analytics">
+            <div class="screen-pad">
+              <div class="header-row">
+                <span class="title"><button class="back-btn"><svg class="icon"><use href="#i-chevron-left"/></svg></button>Performance</span>
+                <div class="header-actions">
+                  <span class="bell-wrap"><svg class="icon"><use href="#i-bell"/></svg><span class="bell-dot">5</span></span>
+                  <span class="online-pill"><span class="dot"></span>Online</span>
+                </div>
+              </div>
+
+              <div class="segmented">
+                <span class="seg active">This month</span>
+                <span class="seg">Last 3 months</span>
+                <span class="seg">All time</span>
+              </div>
+
+              <div class="hero-metric">
+                <div class="top-row">
+                  <span class="label"><svg class="icon" style="width:14px;height:14px"><use href="#i-trending"/></svg>Total sales revenue</span>
+                  <span class="orders-pill">6 orders</span>
+                </div>
+                <div class="value" id="revenue-value">₹0</div>
+                <div class="sub">Estimated additional earnings</div>
+                <div class="divider"></div>
+                <div class="avg-row"><span>Avg. order value</span><span class="num">₹2,140</span></div>
+              </div>
+
+              <div class="card wage-card">
+                <div class="motif-strip"></div>
+                <div class="wtitle"><svg class="icon" style="width:16px;height:16px;color:var(--gold-press)"><use href="#i-shield"/></svg>Fair wage vs middleman rate</div>
+                <div class="wdesc">You earned ₹7,961 more than typical middleman rates — 163% extra kept for your household.</div>
+                <div class="wage-bars">
+                  <div class="wage-bar-row">
+                    <span class="wlabel">Middleman</span>
+                    <div class="wage-bar-track"><div class="wage-bar-fill fill-mid" data-target="38" style="width:0"><span>₹4,879</span></div></div>
+                  </div>
+                  <div class="wage-bar-row">
+                    <span class="wlabel">Kalasetu</span>
+                    <div class="wage-bar-track"><div class="wage-bar-fill fill-blue" data-target="100" style="width:0"><span>₹12,840</span></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dotted-rule"></div>
+
+              <div class="card chart-card">
+                <div class="ctitle"><svg class="icon" style="width:16px;height:16px;color:var(--terracotta)"><use href="#i-trending"/></svg>Recent revenue trajectory</div>
+                <div class="bar-chart">
+                  <div class="bar-col"><span class="bval">₹6.1k</span><div class="bar-shape" data-h="38"></div><span class="blabel">Apr</span></div>
+                  <div class="bar-col"><span class="bval">₹6.8k</span><div class="bar-shape" data-h="45"></div><span class="blabel">May</span></div>
+                  <div class="bar-col"><span class="bval">₹7.5k</span><div class="bar-shape" data-h="52"></div><span class="blabel">Jun</span></div>
+                  <div class="bar-col"><span class="bval">₹7.9k</span><div class="bar-shape" data-h="56"></div><span class="blabel">Jul</span></div>
+                  <div class="bar-col"><span class="bval">₹9.2k</span><div class="bar-shape" data-h="68"></div><span class="blabel">Aug</span></div>
+                  <div class="bar-col highlight"><span class="bval">₹11.7k</span><div class="bar-shape" data-h="100"></div><span class="blabel">Sep</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="bottom-nav">
+              <div class="nav-item"><svg><use href="#i-camera"/></svg>Add product</div>
+              <div class="nav-item"><svg><use href="#i-grid"/></svg>Catalogue</div>
+              <div class="nav-item"><svg><use href="#i-file"/></svg>My orders</div>
+              <div class="nav-item active"><svg><use href="#i-user"/></svg>Profile</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var tabs = document.querySelectorAll('.tab');
+var screens = document.querySelectorAll('.screen');
+
+function activate(name){
+  tabs.forEach(function(t){ t.classList.toggle('active', t.dataset.screen === name); });
+  screens.forEach(function(s){ s.classList.toggle('active', s.id === 'screen-' + name); });
+  if(name === 'analytics'){ runAnalyticsAnimation(); }
+  closeSheet();
+}
+tabs.forEach(function(t){ t.addEventListener('click', function(){ activate(t.dataset.screen); }); });
+
+function openSheet(){ document.getElementById('orders-scrim').classList.add('show'); document.getElementById('orders-sheet').classList.add('show'); }
+function closeSheet(){ document.getElementById('orders-scrim').classList.remove('show'); document.getElementById('orders-sheet').classList.remove('show'); }
+
+var orderFilters = document.querySelectorAll('#screen-orders .filter-pill');
+orderFilters.forEach(function(p){
+  p.addEventListener('click', function(){
+    orderFilters.forEach(function(o){ o.classList.remove('active'); });
+    p.classList.add('active');
+  });
+});
+
+var craftBadges = document.querySelectorAll('.craft-badge');
+var productCards = document.querySelectorAll('.product-card');
+var catEmpty = document.getElementById('catalogue-empty');
+var catGrid = document.getElementById('catalogue-grid');
+var catNames = {pottery:'pottery', textiles:'textiles', jewelry:'jewelry', woodwork:'woodwork'};
+craftBadges.forEach(function(b){
+  b.addEventListener('click', function(){
+    craftBadges.forEach(function(o){ o.classList.remove('active'); });
+    b.classList.add('active');
+    var cat = b.dataset.cat;
+    var anyVisible = false;
+    productCards.forEach(function(c){
+      var show = (cat === 'all' || c.dataset.cat === cat);
+      c.style.display = show ? '' : 'none';
+      if(show) anyVisible = true;
+    });
+    catGrid.style.display = anyVisible ? '' : 'none';
+    catEmpty.style.display = anyVisible ? 'none' : 'flex';
+    if(!anyVisible){
+      document.getElementById('empty-sub-text').textContent = 'No ' + (catNames[cat] || 'items') + ' listed yet. Add one from "Add product" and it will show up here.';
+    }
+  });
+});
+
+function runAnalyticsAnimation(){
+  var bars = document.querySelectorAll('#screen-analytics .bar-shape');
+  var fills = document.querySelectorAll('#screen-analytics .wage-bar-fill');
+  bars.forEach(function(b){ b.style.height = '0px'; });
+  fills.forEach(function(f){ f.style.width = '0%'; });
+
+  var rev = document.getElementById('revenue-value');
+  var start = null;
+  var target = 12840;
+  function step(ts){
+    if(!start) start = ts;
+    var progress = Math.min((ts - start) / 900, 1);
+    var eased = 1 - Math.pow(1 - progress, 3);
+    var val = Math.round(target * eased);
+    rev.textContent = '₹' + val.toLocaleString('en-IN');
+    if(progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      bars.forEach(function(b){ b.style.height = b.dataset.h + 'px'; });
+      fills.forEach(function(f){ f.style.width = f.dataset.target + '%'; });
+    });
+  });
+}
+runAnalyticsAnimation();
+</script>
+
+</body>
+</html>

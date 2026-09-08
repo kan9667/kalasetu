@@ -22,6 +22,11 @@ from google.genai import types
 from ..config import get_settings
 from ..models import CostInputs, PricingResult, SimilarProduct
 
+try:
+    from backend.services.groq_client import GroqClient
+except ImportError:
+    GroqClient = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -91,6 +96,7 @@ class LLMPricer:
 
     def __init__(self):
         settings = get_settings()
+        self.groq_client = GroqClient() if GroqClient else None
         self.client = genai.Client(api_key=settings.gemini_api_key) if settings.gemini_api_key else None
         self.model = settings.llm_model
 
@@ -103,14 +109,15 @@ class LLMPricer:
         category: Optional[str] = None,
     ) -> PricingResult:
         """
-        Calculate a price recommendation using the LLM.
+        Calculate a price recommendation using Groq or Gemini LLM.
         """
         # Calculate cost floor
         cost_floor = 0.0
         if cost_inputs:
             cost_floor = cost_inputs.cost_floor
 
-        if not self.client:
+        has_groq = bool(self.groq_client and self.groq_client.is_available())
+        if not self.client and not has_groq:
             return self._fallback_pricing(
                 comparables=comparables,
                 cost_floor=cost_floor,
@@ -177,63 +184,81 @@ class LLMPricer:
             quality_warning=quality_warning,
         )
 
-        # Build content parts (multimodal if image is available)
-        contents = []
-
-        if image_path and Path(image_path).exists():
-            image_bytes = Path(image_path).read_bytes()
-            mime_type = self._get_mime_type(image_path)
-            contents.append(
-                types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
-            )
-
-        contents.append(types.Part.from_text(text=user_prompt))
-
-        # Call Gemini with structured output
-        candidate_models = [self.model]
-        for fallback_m in ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.7-flash"]:
-            if fallback_m not in candidate_models:
-                candidate_models.append(fallback_m)
-
         raw_json = None
         last_exception = None
 
-        for model_name in candidate_models:
+        # ── 1. Try Groq Cloud first ─────────────────────────────────────────
+        if has_groq:
             try:
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=types.Content(parts=contents),
-                    config=types.GenerateContentConfig(
-                        system_instruction=PRICING_SYSTEM_PROMPT,
-                        temperature=0.3,  # Low temp for consistent pricing
-                        response_mime_type="application/json",
-                        response_schema={
-                            "type": "object",
-                            "properties": {
-                                "suggested_price": {"type": "number"},
-                                "price_range_low": {"type": "number"},
-                                "price_range_high": {"type": "number"},
-                                "confidence_score": {"type": "number"},
-                                "reasoning": {"type": "string"},
-                                "market_position": {"type": "string"},
-                            },
-                            "required": [
-                                "suggested_price",
-                                "price_range_low",
-                                "price_range_high",
-                                "confidence_score",
-                                "reasoning",
-                                "market_position",
-                            ],
-                        },
-                    ),
+                groq_prompt = (
+                    f"{user_prompt}\n\n"
+                    "Respond with ONLY a valid JSON object matching keys: "
+                    "suggested_price, price_range_low, price_range_high, confidence_score, reasoning, market_position."
                 )
-                raw_json = json.loads(response.text)
-                logger.info("LLM pricing response from %s: %s", model_name, raw_json)
-                break
+                groq_messages = [
+                    {"role": "system", "content": PRICING_SYSTEM_PROMPT},
+                    {"role": "user", "content": groq_prompt},
+                ]
+                raw_json = self.groq_client.chat_json_sync(groq_messages)
+                logger.info("[LLMPricer] Groq pricing recommendation generated: %s", raw_json)
             except Exception as e:
-                last_exception = e
-                logger.warning("Pricing attempt with model %s failed: %s", model_name, e)
+                logger.warning("[LLMPricer] Groq pricing attempt failed, trying Gemini: %s", e)
+
+        # ── 2. Fallback to Gemini if Groq did not provide raw_json ──────────
+        if not raw_json and self.client:
+            # Build content parts (multimodal if image is available)
+            contents = []
+
+            if image_path and Path(image_path).exists():
+                image_bytes = Path(image_path).read_bytes()
+                mime_type = self._get_mime_type(image_path)
+                contents.append(
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+                )
+
+            contents.append(types.Part.from_text(text=user_prompt))
+
+            candidate_models = [self.model]
+            for fallback_m in ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.7-flash"]:
+                if fallback_m not in candidate_models:
+                    candidate_models.append(fallback_m)
+
+            for model_name in candidate_models:
+                try:
+                    response = self.client.models.generate_content(
+                        model=model_name,
+                        contents=types.Content(parts=contents),
+                        config=types.GenerateContentConfig(
+                            system_instruction=PRICING_SYSTEM_PROMPT,
+                            temperature=0.3,  # Low temp for consistent pricing
+                            response_mime_type="application/json",
+                            response_schema={
+                                "type": "object",
+                                "properties": {
+                                    "suggested_price": {"type": "number"},
+                                    "price_range_low": {"type": "number"},
+                                    "price_range_high": {"type": "number"},
+                                    "confidence_score": {"type": "number"},
+                                    "reasoning": {"type": "string"},
+                                    "market_position": {"type": "string"},
+                                },
+                                "required": [
+                                    "suggested_price",
+                                    "price_range_low",
+                                    "price_range_high",
+                                    "confidence_score",
+                                    "reasoning",
+                                    "market_position",
+                                ],
+                            },
+                        ),
+                    )
+                    raw_json = json.loads(response.text)
+                    logger.info("LLM pricing response from %s: %s", model_name, raw_json)
+                    break
+                except Exception as e:
+                    last_exception = e
+                    logger.warning("Pricing attempt with model %s failed: %s", model_name, e)
 
         if not raw_json:
             logger.error("All LLM pricing attempts failed. Last error: %s", last_exception)

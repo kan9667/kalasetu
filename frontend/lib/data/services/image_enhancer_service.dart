@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../core/offline_sync/offline_sync_service.dart';
 import '../../core/utils/image_compressor.dart';
+
+import '../../core/config/api_config.dart';
 
 abstract class ImageEnhancerService {
   Future<String> enhanceImage(String inputPathOrUrl, {String? draftId});
@@ -18,12 +21,12 @@ class HttpImageEnhancerService implements ImageEnhancerService {
     Dio? dio,
     this.maxRetries = 1,
     this.onFallbackQueue,
-  }) : baseUrl = baseUrl ?? _defaultBaseUrl(),
+  }) : baseUrl = baseUrl ?? ApiConfig.baseUrl,
        _dio =
            dio ??
            Dio(
              BaseOptions(
-               baseUrl: baseUrl ?? _defaultBaseUrl(),
+               baseUrl: baseUrl ?? ApiConfig.baseUrl,
                connectTimeout: const Duration(seconds: 20),
                sendTimeout: const Duration(
                  minutes: 2,
@@ -37,14 +40,6 @@ class HttpImageEnhancerService implements ImageEnhancerService {
   final Dio _dio;
   final int maxRetries;
   final Future<void> Function(File file, String? draftId)? onFallbackQueue;
-
-  static String _defaultBaseUrl() {
-    const configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
-    if (configuredBaseUrl.isNotEmpty) return configuredBaseUrl;
-
-    if (Platform.isAndroid) return 'http://10.0.2.2:8000';
-    return 'http://127.0.0.1:8000';
-  }
 
   static const List<String> _sampleCrafts = [
     'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=800&q=80',
@@ -78,8 +73,11 @@ class HttpImageEnhancerService implements ImageEnhancerService {
     while (attempts <= maxRetries) {
       try {
         attempts++;
+        final activeUrl = baseUrl.isNotEmpty ? baseUrl : ApiConfig.baseUrl;
+        _dio.options.baseUrl = activeUrl;
+
         debugPrint(
-          '[ImageEnhancer] Attempt $attempts: POST $baseUrl/api/v1/catalog/enhance-image (${compressedFile.path})',
+          '[ImageEnhancer] Attempt $attempts: POST $activeUrl/api/v1/catalog/enhance-image (${compressedFile.path})',
         );
         final formData = FormData.fromMap({
           'image': await MultipartFile.fromFile(
@@ -103,15 +101,29 @@ class HttpImageEnhancerService implements ImageEnhancerService {
                 enhancedPath.startsWith('https://')) {
               fullUrl = enhancedPath;
             } else {
-              final cleanPrefix = baseUrl.endsWith('/')
-                  ? baseUrl.substring(0, baseUrl.length - 1)
-                  : baseUrl;
+              final cleanPrefix = activeUrl.endsWith('/')
+                  ? activeUrl.substring(0, activeUrl.length - 1)
+                  : activeUrl;
               final cleanPath = enhancedPath.startsWith('/')
                   ? enhancedPath
                   : '/$enhancedPath';
               fullUrl = '$cleanPrefix$cleanPath';
             }
             debugPrint('[ImageEnhancer] Success: $fullUrl');
+            try {
+              final appDir = await getApplicationDocumentsDirectory();
+              final localEnhancedDir = Directory('${appDir.path}/enhanced_photos');
+              await localEnhancedDir.create(recursive: true);
+              final filename = fullUrl.split('/').last;
+              final localFile = File('${localEnhancedDir.path}/$filename');
+              await _dio.download(fullUrl, localFile.path);
+              if (await localFile.exists() && await localFile.length() > 0) {
+                debugPrint('[ImageEnhancer] Downloaded locally: ${localFile.path}');
+                return localFile.path;
+              }
+            } catch (dlErr) {
+              debugPrint('[ImageEnhancer] Local download fallback: $dlErr');
+            }
             return fullUrl;
           }
         }
