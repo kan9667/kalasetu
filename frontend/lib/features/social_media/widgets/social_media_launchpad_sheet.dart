@@ -7,6 +7,9 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/services/social_sharing_service.dart';
+import '../../../core/services/app_tts_service.dart';
+import '../../../core/services/tts_page_guides.dart';
+import '../../../core/widgets/speaker_affordance.dart';
 import '../providers/social_media_provider.dart';
 
 /// Shows the 2-step Social Media Launchpad bottom sheet.
@@ -36,15 +39,55 @@ class _SocialMediaLaunchpadSheetState
     extends ConsumerState<SocialMediaLaunchpadSheet> {
   int _step = 1; // 1: Channel selection, 2: Channel view & share
   final _captionController = TextEditingController();
+  final AppTtsService _tts = AppTtsService();
+  
   String? _lastLoadedDraftId;
   String? _lastLoadedChannel;
   String? _lastLoadedCaption;
   bool _isActionInProgress = false;
+  bool _voiceUnavailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tts.onStateChanged = () {
+      if (mounted) setState(() {});
+    };
+  }
 
   @override
   void dispose() {
     _captionController.dispose();
+    _tts.dispose();
     super.dispose();
+  }
+
+  Future<void> _speakCaption() async {
+    if (_tts.isSpeaking) {
+      await _tts.stop();
+      return;
+    }
+    final languageCode = context.locale.languageCode;
+    final guide = TtsPageGuides.socialMedia.forLanguage(languageCode);
+
+    final result = await _tts.speak(
+      guide + _captionController.text,
+      languageCode: languageCode,
+    );
+    if (mounted) {
+      setState(() => _voiceUnavailable = result == TtsResult.voiceUnavailable);
+    }
+  }
+
+  Future<void> _handleVoiceDownload() async {
+    final opened = await _tts.openVoiceDownloadScreen();
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please download the voice from phone settings'),
+        ),
+      );
+    }
   }
 
   void _syncCaptionFromState(SocialMediaState state) {
@@ -163,7 +206,10 @@ class _SocialMediaLaunchpadSheetState
           if (_step == 2)
             IconButton(
               icon: const Icon(Icons.arrow_back_rounded, color: AppColors.ink),
-              onPressed: () => setState(() => _step = 1),
+              onPressed: () {
+                _tts.stop();
+                setState(() => _step = 1);
+              },
               tooltip: 'back'.tr(),
             ),
           Expanded(
@@ -376,7 +422,7 @@ class _SocialMediaLaunchpadSheetState
               ),
             ),
             const SizedBox(width: AppSpacing.xs),
-            Icon(
+            const Icon(
               Icons.arrow_forward_ios_rounded,
               size: 14,
               color: AppColors.inkFaint,
@@ -463,43 +509,13 @@ class _SocialMediaLaunchpadSheetState
           ),
           const SizedBox(height: 36),
         ] else if (state.errorMessage != null) ...[
-          // Error State
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.cardSurface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-            ),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.error_outline,
-                  color: AppColors.error,
-                  size: 32,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  state.errorMessage!,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.ink,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                TextButton.icon(
-                  onPressed: () {
-                    _lastLoadedCaption = null;
-                    notifier.regenerate();
-                  },
-                  icon: const Icon(Icons.refresh, color: AppColors.terracotta),
-                  label: const Text(
-                    'Try Again',
-                    style: TextStyle(color: AppColors.terracotta),
-                  ),
-                ),
-              ],
-            ),
+          // Extracted Error Panel from main
+          _ErrorPanel(
+            message: state.errorMessage!,
+            onRetry: () {
+              _lastLoadedCaption = null;
+              notifier.regenerate();
+            },
           ),
         ] else if (state.draft != null) ...[
           // Caption Editor Header Row
@@ -559,6 +575,34 @@ class _SocialMediaLaunchpadSheetState
               ),
             ),
           ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // ── TTS Listen Button & Notice ───────────────────────────────────
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _speakCaption,
+                icon: Icon(
+                  _tts.isSpeaking
+                      ? Icons.stop_circle_outlined
+                      : Icons.volume_up_rounded,
+                  size: 18,
+                ),
+                label: Text(_tts.isSpeaking ? 'Stop Reading' : 'Listen to Caption'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.ink,
+                  side: const BorderSide(color: AppColors.line),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_voiceUnavailable) ...[
+            const SizedBox(height: AppSpacing.sm),
+            VoiceUnavailableNotice(onDownload: _handleVoiceDownload),
+          ],
           const SizedBox(height: AppSpacing.md),
 
           // ── Platform-Specific Action Buttons ───────────────────────────────
@@ -760,6 +804,51 @@ class _SocialMediaLaunchpadSheetState
           ],
         ],
       ],
+    );
+  }
+}
+
+class _ErrorPanel extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorPanel({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: AppColors.error,
+            size: 32,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, color: AppColors.terracotta),
+            label: const Text(
+              'Try Again',
+              style: TextStyle(color: AppColors.terracotta),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
