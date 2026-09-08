@@ -6,6 +6,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/router/app_route_constants.dart';
+import '../../../core/services/app_tts_service.dart';
+import '../../../core/services/tts_page_guides.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/language_picker.dart';
@@ -70,6 +72,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     'Other',
   ];
 
+  final AppTtsService _tts = AppTtsService();
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -77,6 +81,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _clusterController.dispose();
     _experienceController.dispose();
     _pehchanController.dispose();
+    _tts.dispose();
     super.dispose();
   }
 
@@ -270,24 +275,49 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ),
                         ),
                         const SizedBox(width: AppSpacing.xs),
-                        // TTS affordance button
+                        // TTS affordance button — the help text is already
+                        // translated in 4 languages; this was only ever
+                        // showing it back as a snackbar, never actually
+                        // speaking it.
                         IconButton(
-                          icon: const Icon(
-                            Icons.volume_up_outlined,
+                          icon: Icon(
+                            _tts.isSpeaking
+                                ? Icons.stop_circle_outlined
+                                : Icons.volume_up_outlined,
                             size: 20,
                             color: AppColors.terracotta,
                           ),
-                          tooltip: 'Tap to hear this',
+                          tooltip: _tts.isSpeaking ? 'Stop' : 'Tap to hear this',
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                          onPressed: () {
+                          onPressed: () async {
+                            if (_tts.isSpeaking) {
+                              await _tts.stop();
+                              if (mounted) setState(() {});
+                              return;
+                            }
+                            // The on-screen cue only says "ask someone to help
+                            // you". Spoken, that is a dead end — so the read-
+                            // back walks through which fields are required and
+                            // which can be skipped, and keeps the ask-for-help
+                            // line as the closing fallback.
+                            final helpText = 'registration_help_cue_body'.tr();
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('registration_help_cue_body'.tr()),
+                                content: Text(helpText),
                                 duration: const Duration(seconds: 2),
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
+                            final result = await _tts.speak(
+                              TtsPageGuides.register
+                                  .forLanguage(context.locale.languageCode),
+                              languageCode: context.locale.languageCode,
+                            );
+                            if (mounted) setState(() {});
+                            if (result == TtsResult.voiceUnavailable && mounted) {
+                              await _tts.openVoiceDownloadScreen();
+                            }
                           },
                         ),
                         // Dismiss button

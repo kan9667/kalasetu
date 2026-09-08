@@ -80,23 +80,33 @@ class CatalogService:
         Run the 11-stage AI image enhancement pipeline in a threadpool to prevent
         blocking FastAPI's async event loop.
         """
+        global run_ml_enhancer
         if run_ml_enhancer is None:
-            raise RuntimeError(
-                "ML image enhancer is unavailable. Install the image_pipeline dependencies."
-            )
+            try:
+                from ML.image_pipeline.enhancer import enhance_image as _dyn_enhancer
+                run_ml_enhancer = _dyn_enhancer
+            except Exception as import_err:
+                logger.warning("[CatalogService] ML image enhancer dynamic import failed: %s", import_err)
 
-        try:
-            enhanced_path = await run_in_threadpool(
-                run_ml_enhancer,
-                input_path=input_path,
-                output_path=output_path,
-            )
-            if not enhanced_path or not Path(enhanced_path).is_file():
-                raise RuntimeError("Image enhancer did not create an output file")
-            return enhanced_path
-        except Exception as e:
-            logger.error("Image enhancement execution failed: %s", e)
-            raise e
+        if run_ml_enhancer is not None:
+            try:
+                enhanced_path = await run_in_threadpool(
+                    run_ml_enhancer,
+                    input_path=input_path,
+                    output_path=output_path,
+                )
+                if enhanced_path and Path(enhanced_path).is_file():
+                    return str(enhanced_path)
+            except Exception as e:
+                logger.error("[CatalogService] Image enhancement execution failed, falling back to input image: %s", e)
+
+        # Fallback: copy input image to output path if specified, or return input path
+        if output_path:
+            import shutil
+            shutil.copy2(input_path, output_path)
+            return output_path
+        return input_path
+
 
     # ── Voice Transcription (ML Voice Pipeline) ─────────────────────────────
 

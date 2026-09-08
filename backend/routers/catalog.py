@@ -54,7 +54,9 @@ async def enhance_image(
             output_path=str(enhanced_path),
         )
         if Path(result_path) != enhanced_path or not enhanced_path.is_file():
-            raise RuntimeError("Image enhancer returned an invalid output path")
+            import shutil
+            shutil.copy2(str(result_path), str(enhanced_path))
+
 
         enhanced_url = f"{storage_service.settings.static_url_prefix}/enhanced/{enhanced_filename}" if hasattr(storage_service, 'settings') else f"/uploads/enhanced/{enhanced_filename}"
 

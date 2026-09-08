@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import '../../../core/services/app_tts_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/speaker_affordance.dart';
 import '../../../data/models/chat_message.dart';
 import '../providers/chat_provider.dart';
 
@@ -41,6 +43,15 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
   int _recordDuration = 0;
   Timer? _recordTimer;
 
+  // Repeats a KalaMitra reply on tap. One shared engine for the whole
+  // conversation — only one message plays at a time — tracked by message id
+  // so the correct bubble's icon reflects playback state.
+  final AppTtsService _tts = AppTtsService();
+  String? _speakingMessageId;
+
+  /// Any Devanagari character marks the reply as Hindi for voice selection.
+  static final RegExp _devanagari = RegExp(r'[ऀ-ॿ]');
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +59,44 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
+    _tts.onStateChanged = () {
+      if (!_tts.isSpeaking && mounted) setState(() => _speakingMessageId = null);
+    };
+  }
+
+  Future<void> _speakMessage(ChatMessageModel msg) async {
+    if (_speakingMessageId == msg.id) {
+      await _tts.stop();
+      setState(() => _speakingMessageId = null);
+      return;
+    }
+
+    final text = msg.text.replaceAll('*', '');
+
+    // KalaMitra answers in the language of the *question*, not the app
+    // language — ask in Hindi inside an English-locale app and the reply comes
+    // back in Hindi. Picking the voice from the app locale would then read
+    // Devanagari with the English voice and produce nothing intelligible, so
+    // the script of the reply itself decides.
+    final result = await _tts.speak(
+      text,
+      languageCode: _devanagari.hasMatch(text)
+          ? 'hi'
+          : context.locale.languageCode,
+    );
+
+    if (result == TtsResult.spoke) {
+      setState(() => _speakingMessageId = msg.id);
+    } else if (result == TtsResult.voiceUnavailable && mounted) {
+      final opened = await _tts.openVoiceDownloadScreen();
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please download the voice from phone settings'),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -55,6 +104,7 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
     _recordTimer?.cancel();
     _pulseController.dispose();
     _recorder.dispose();
+    _tts.dispose();
     _textController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -727,6 +777,14 @@ class _ChatbotSheetState extends ConsumerState<ChatbotSheet>
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.normal,
                           height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: SpeakerAffordance.compact(
+                          isSpeaking: _speakingMessageId == msg.id,
+                          onTap: () => _speakMessage(msg),
                         ),
                       ),
                       // ── Action Card ───────────────────────────────────────

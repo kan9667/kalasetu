@@ -106,6 +106,16 @@ class Settings(BaseSettings):
         default=5,
         description="Number of similar benchmark products to retrieve for pricing.",
     )
+    pricing_similarity_threshold: float = Field(
+        default=0.55,
+        description=(
+            "Minimum cosine similarity (0–1) a comparable product must score to be "
+            "included in the LLM prompt. Products below this threshold are too "
+            "semantically distant to be useful price references and are dropped. "
+            "Raise to 0.65–0.70 for stricter matching; lower to 0.45 if the DB is "
+            "sparse. Set via PRICING_SIMILARITY_THRESHOLD in .env."
+        ),
+    )
 
     model_config = {
         "env_file": str(PRICING_ROOT.parents[1] / ".env"),

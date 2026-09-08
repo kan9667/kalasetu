@@ -125,26 +125,36 @@ class VectorStore:
         query_vector: list[float],
         top_k: int = 5,
         category_filter: Optional[str] = None,
+        similarity_threshold: float = 0.55,
     ) -> list[SimilarProduct]:
         """
         Find the most similar benchmark products using cosine similarity.
 
         Args:
             query_vector: The query embedding vector (from artisan's product).
-            top_k: Number of results to return.
+            top_k: Number of results to return (after threshold filtering).
             category_filter: Optional category to restrict search to.
+            similarity_threshold: Minimum cosine similarity (0–1) a comparable
+                must exceed to be included. Products below this cutoff are
+                semantically too distant to be useful price references and are
+                dropped entirely. Default 0.55 strikes a balance between
+                recall and precision for handicraft categories.
 
         Returns:
-            List of SimilarProduct instances sorted by similarity (highest first).
+            List of SimilarProduct instances sorted by similarity (highest first),
+            containing only results above the similarity threshold.
         """
         where_filter = None
         if category_filter:
             where_filter = {"category": category_filter}
 
+        # Over-fetch so we still get top_k results after threshold filtering.
+        fetch_k = max(top_k * 2, top_k + 5)
+
         try:
             results = self.collection.query(
                 query_embeddings=[query_vector],
-                n_results=top_k,
+                n_results=fetch_k,
                 where=where_filter,
                 include=["metadatas", "distances", "documents"],
             )
@@ -165,6 +175,15 @@ class VectorStore:
             distance = results["distances"][0][i]
             similarity = 1.0 - distance
 
+            if similarity < similarity_threshold:
+                logger.debug(
+                    "Dropping comparable '%s' — similarity %.4f below threshold %.2f",
+                    metadata.get("title", "?"),
+                    similarity,
+                    similarity_threshold,
+                )
+                continue
+
             similar_products.append(
                 SimilarProduct(
                     id=product_id,
@@ -178,9 +197,13 @@ class VectorStore:
                 )
             )
 
+            if len(similar_products) >= top_k:
+                break
+
         logger.info(
-            "Found %d similar products (top similarity: %.4f)",
+            "Found %d similar products above threshold %.2f (top similarity: %.4f)",
             len(similar_products),
+            similarity_threshold,
             similar_products[0].similarity_score if similar_products else 0,
         )
         return similar_products

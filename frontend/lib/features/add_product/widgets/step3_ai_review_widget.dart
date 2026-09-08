@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/services/app_tts_service.dart';
+import '../../../core/services/tts_page_guides.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/widgets/motifs/mehrab_clipper.dart';
+import '../../../core/widgets/speaker_affordance.dart';
 import '../../../core/providers/app_providers.dart';
 
 class Step3AiReviewWidget extends ConsumerStatefulWidget {
@@ -25,6 +28,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
   final TextEditingController _descController = TextEditingController();
   int _selectedLanguageIndex = 0; // 0 for EN, 1 for HI
   String? _processingDraftId;
+  final AppTtsService _tts = AppTtsService();
 
   @override
   void initState() {
@@ -37,6 +41,43 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initiateProcessing();
     });
+    _tts.onStateChanged = () {
+      if (mounted) setState(() {});
+    };
+  }
+
+  // Reads back the title and description in whichever language is currently
+  // selected. This is the app's core correctness gate: the listing text is
+  // AI-generated from the artisan's voice note, and many artisans cannot
+  // read it to check the AI understood them correctly — hearing it is the
+  // only way they can verify it before it goes live.
+  //
+  // The guide comes first so the artisan knows they are allowed to correct
+  // the text and which button moves them on; hearing the listing alone does
+  // not tell them either.
+  Future<void> _speakListing() async {
+    if (_tts.isSpeaking) {
+      await _tts.stop();
+      return;
+    }
+    // The language toggle on this screen, not the app locale, decides which
+    // version is on screen — so it decides what is spoken, guide included.
+    final languageCode = _selectedLanguageIndex == 0 ? 'en' : 'hi';
+    final guide = TtsPageGuides.aiListingReview.forLanguage(languageCode);
+    final text = '$guide${_titleController.text}. ${_descController.text}';
+
+    final result = await _tts.speak(text, languageCode: languageCode);
+
+    if (result == TtsResult.voiceUnavailable && mounted) {
+      final opened = await _tts.openVoiceDownloadScreen();
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please download the voice from phone settings'),
+          ),
+        );
+      }
+    }
   }
 
   void _initiateProcessing() {
@@ -64,6 +105,7 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
     _customTagController.dispose();
     _titleController.dispose();
     _descController.dispose();
+    _tts.dispose();
     super.dispose();
   }
 
@@ -292,6 +334,10 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
                       'ai_review_title'.tr(),
                       style: AppTextStyles.headlineLarge,
                     ),
+                  ),
+                  SpeakerAffordance(
+                    isSpeaking: _tts.isSpeaking,
+                    onTap: _speakListing,
                   ),
                 ],
               ),

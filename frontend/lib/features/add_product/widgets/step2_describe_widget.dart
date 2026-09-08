@@ -156,6 +156,10 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
 
   static const List<GuidanceCue> _describeCues = [
     GuidanceCue(
+      text: 'Tap the microphone to record your voice, or type your description directly',
+      icon: Icons.mic_none_outlined,
+    ),
+    GuidanceCue(
       text: 'Mention the material (e.g. Pure Clay, Silk, Brass)',
       icon: Icons.texture_rounded,
     ),
@@ -400,6 +404,18 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
           CyclingGuidanceCue(
             headerTitle: 'WHAT TO MENTION',
             headerIcon: Icons.lightbulb_outline,
+            spokenIntro:
+                'This is the second step. Here you describe your craft in your '
+                'own words, and the app writes the listing for you. Tap the big '
+                'round microphone button once to start recording, and speak '
+                'normally in your own language. The button turns red while it '
+                'is listening — tap it a second time to stop. After that the '
+                'same button plays your recording back, so you can check it, '
+                'and the button below it, Re-record voice description, lets you '
+                'start over. If you would rather write than speak, use the '
+                'Voice Transcript box below instead. When you are finished, '
+                'tap the Looks and Sounds Right button at the bottom. Mention '
+                'these things while you speak.',
             cues: _describeCues,
             isPaused: _isRecording || _isPlayingAudio || _textFocusNode.hasFocus,
             onCueChanged: (cue) {},
