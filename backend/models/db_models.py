@@ -93,6 +93,8 @@ class SocialDraftDB(Base):
     image_url = Column(String(512), nullable=False)
     caption = Column(Text, default="")
     hashtags = Column(Text, default="[]")  # JSON-encoded list of strings
+    # Target channel: 'whatsapp', 'instagram', or 'facebook'
+    channel = Column(String(32), default="instagram", index=True)
     # Source of the generation: 'add_flow' or 'catalogue'
     source = Column(String(32), default="catalogue")
     # True once the user has manually edited caption / hashtags after generation

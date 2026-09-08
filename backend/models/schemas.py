@@ -244,11 +244,13 @@ class VoiceGlossaryResponse(BaseModel):
 
 class SocialDraftRequest(BaseModel):
     """
-    Request body for generating a social-media caption + hashtags for a
-    persisted listing.  The listing_id is provided in the URL path.
+    Unified request body for generating a social-media caption + hashtags.
+    Accepts either listing_id (persisted catalogue item) or draft_key (unsaved add-flow item).
     """
 
     image_url: str = Field(..., description="URL of the product image to use for the caption")
+    listing_id: Optional[str] = Field(default=None, description="Listing ID (for saved catalog items)")
+    draft_key: Optional[str] = Field(default=None, description="Draft key (for unsaved add-flow items)")
     title: Optional[str] = Field(default="", description="Listing title (English)")
     category: Optional[str] = Field(default="", description="Craft category")
     materials: Optional[List[str]] = Field(default_factory=list, description="Materials used")
@@ -256,16 +258,12 @@ class SocialDraftRequest(BaseModel):
     tone: Optional[str] = Field(default="warm and authentic", description="Caption tone (warm | playful | minimal)")
     locale: Optional[str] = Field(default="en-US", description="BCP-47 locale code for caption language")
     source: str = Field(default="catalogue", description="Entry-point source: add_flow | catalogue")
+    channel: Optional[str] = Field(default="instagram", description="Target channel: whatsapp | instagram | facebook")
 
 
 class SocialDraftUnsavedRequest(SocialDraftRequest):
-    """
-    Same as SocialDraftRequest but for an add-flow listing that hasn't been
-    saved to the DB yet.  The draft_key matches AddProductDraft.draftId on
-    the Flutter side and acts as the upsert key instead of listing_id.
-    """
-
-    draft_key: str = Field(..., description="Client-side draft ID from the add-product flow")
+    """Backward-compatible alias for unsaved add-flow requests."""
+    pass
 
 
 class SocialDraftSaveRequest(BaseModel):
