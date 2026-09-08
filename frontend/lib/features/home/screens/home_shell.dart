@@ -10,12 +10,46 @@ import '../../orders/screens/my_orders_screen.dart';
 import '../../profile/screens/profile_screen.dart';
 import '../../chatbot/widgets/kalamitra_fab.dart';
 
+import 'package:go_router/go_router.dart';
+import '../../../core/router/app_route_constants.dart';
+import '../../auth/providers/auth_provider.dart';
+
 final homeTabIndexProvider = StateProvider<int>((ref) => 1); // Default: Catalogue
 
-class HomeShell extends ConsumerWidget {
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
-  Future<void> _handleTabTap(int index, BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends ConsumerState<HomeShell> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndLaunchTutorialIfFirstTime();
+    });
+  }
+
+  Future<void> _checkAndLaunchTutorialIfFirstTime() async {
+    if (!mounted) return;
+    final currentTab = ref.read(homeTabIndexProvider);
+    if (currentTab != 1) return; // Only trigger for Catalogue tab
+
+    final authState = ref.read(authStateProvider);
+    final userId = authState.userId ?? authState.phoneNumber ?? 'default_artisan';
+
+    final shouldLaunch = await ref
+        .read(listingTutorialProvider.notifier)
+        .checkAndMarkTutorialSeen(userId);
+
+    if (shouldLaunch && mounted) {
+      context.pushNamed(AppRouteConstants.listingTutorial);
+    }
+  }
+
+  Future<void> _handleTabTap(int index) async {
     if (index == 0) {
       final draft = ref.read(addProductFlowProvider);
       if (draft.hasExistingDraft && !draft.resumePromptHandled) {
@@ -48,10 +82,13 @@ class HomeShell extends ConsumerWidget {
     }
 
     ref.read(homeTabIndexProvider.notifier).state = index;
+    if (index == 1) {
+      _checkAndLaunchTutorialIfFirstTime();
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final currentIndex = ref.watch(homeTabIndexProvider);
 
     const screens = [
@@ -92,25 +129,25 @@ class HomeShell extends ConsumerWidget {
                   icon: Icons.add_photo_alternate_outlined,
                   label: 'tab_add_product'.tr(),
                   isActive: currentIndex == 0,
-                  onTap: () => _handleTabTap(0, context, ref),
+                  onTap: () => _handleTabTap(0),
                 ),
                 _NavItem(
                   icon: Icons.grid_view_outlined,
                   label: 'tab_catalogue'.tr(),
                   isActive: currentIndex == 1,
-                  onTap: () => _handleTabTap(1, context, ref),
+                  onTap: () => _handleTabTap(1),
                 ),
                 _NavItem(
                   icon: Icons.receipt_long_outlined,
                   label: 'tab_my_orders'.tr(),
                   isActive: currentIndex == 2,
-                  onTap: () => _handleTabTap(2, context, ref),
+                  onTap: () => _handleTabTap(2),
                 ),
                 _NavItem(
                   icon: Icons.person_outline,
                   label: 'tab_profile'.tr(),
                   isActive: currentIndex == 3,
-                  onTap: () => _handleTabTap(3, context, ref),
+                  onTap: () => _handleTabTap(3),
                 ),
               ],
             ),
