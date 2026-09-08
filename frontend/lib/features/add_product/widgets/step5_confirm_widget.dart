@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/services/app_tts_service.dart';
 import '../../../core/services/tts_page_guides.dart';
@@ -11,10 +10,10 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/widgets/speaker_affordance.dart';
 import '../../../core/providers/app_providers.dart';
-import '../../../core/router/app_route_constants.dart';
 import '../../../data/models/product.dart';
 import '../../../data/services/social_media_service.dart';
 import '../../social_media/providers/social_media_provider.dart';
+import '../../social_media/widgets/social_media_launchpad_sheet.dart';
 import '../../home/screens/home_shell.dart';
 
 class Step5ConfirmWidget extends ConsumerStatefulWidget {
@@ -405,9 +404,9 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                   ...draft.additionalImagePaths,
                 ].where((path) => path.isNotEmpty).toList();
 
-                context.pushNamed(
-                  AppRouteConstants.socialMediaHelper,
-                  extra: SocialMediaArgs(
+                showSocialMediaLaunchpadSheet(
+                  context,
+                  SocialMediaArgs(
                     draftKey: draft.draftId,
                     source: 'add_flow',
                     allImages: images,

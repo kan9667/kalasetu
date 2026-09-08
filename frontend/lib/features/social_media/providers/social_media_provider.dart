@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/social_draft.dart';
 import '../../../data/services/social_media_service.dart';
+import '../../../core/services/social_sharing_service.dart';
 
 class SocialMediaArgs {
   final String? listingId;
@@ -30,6 +31,7 @@ class SocialMediaState {
   final String selectedImageUrl;
   final SocialDraft? draft;
   final List<String> hashtags;
+  final String currentChannel; // 'whatsapp' | 'instagram' | 'facebook'
   final bool isLoading;
   final bool isSaving;
   final bool isEdited;
@@ -39,6 +41,7 @@ class SocialMediaState {
     this.selectedImageUrl = '',
     this.draft,
     this.hashtags = const [],
+    this.currentChannel = 'whatsapp',
     this.isLoading = false,
     this.isSaving = false,
     this.isEdited = false,
@@ -49,6 +52,7 @@ class SocialMediaState {
     String? selectedImageUrl,
     SocialDraft? draft,
     List<String>? hashtags,
+    String? currentChannel,
     bool? isLoading,
     bool? isSaving,
     bool? isEdited,
@@ -59,6 +63,7 @@ class SocialMediaState {
       selectedImageUrl: selectedImageUrl ?? this.selectedImageUrl,
       draft: draft ?? this.draft,
       hashtags: hashtags ?? this.hashtags,
+      currentChannel: currentChannel ?? this.currentChannel,
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
       isEdited: isEdited ?? this.isEdited,
@@ -69,6 +74,10 @@ class SocialMediaState {
 
 final socialMediaServiceProvider = Provider<SocialMediaService>((ref) {
   return HttpSocialMediaService();
+});
+
+final socialSharingServiceProvider = Provider<SocialSharingService>((ref) {
+  return SocialSharingService();
 });
 
 final socialMediaProvider = StateNotifierProvider.family<
@@ -89,8 +98,9 @@ class SocialMediaNotifier extends StateNotifier<SocialMediaState> {
     }
   }
 
-  Future<void> _loadOrGenerate(String imageUrl) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+  Future<void> _loadOrGenerate(String imageUrl, {String? channel}) async {
+    final targetChannel = channel ?? state.currentChannel;
+    state = state.copyWith(isLoading: true, clearError: true, currentChannel: targetChannel);
     try {
       final normalizedImageUrl = await _normalizeImage(imageUrl);
       try {
@@ -98,10 +108,12 @@ class SocialMediaNotifier extends StateNotifier<SocialMediaState> {
           listingId: args.listingId,
           draftKey: args.draftKey,
           imageUrl: normalizedImageUrl,
+          channel: targetChannel,
         );
         if (saved != null) {
           state = state.copyWith(
             selectedImageUrl: normalizedImageUrl,
+            currentChannel: targetChannel,
             draft: saved,
             hashtags: saved.hashtags,
             isLoading: false,
@@ -113,7 +125,7 @@ class SocialMediaNotifier extends StateNotifier<SocialMediaState> {
       } catch (_) {
         // A lookup failure should not prevent first-time generation.
       }
-      await generateForImage(normalizedImageUrl);
+      await generateForImage(normalizedImageUrl, channel: targetChannel);
     } catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: _messageFor(error));
     }
@@ -129,10 +141,25 @@ class SocialMediaNotifier extends StateNotifier<SocialMediaState> {
     return imageUrl;
   }
 
-  Future<void> generateForImage(String imageUrl) async {
+  Future<void> selectChannel(String channel) async {
+    final prevChannel = state.currentChannel;
+    if (prevChannel == channel && state.draft != null) {
+      return;
+    }
+    await _loadOrGenerate(state.selectedImageUrl, channel: channel);
+  }
+
+  Future<void> generateForImage(String imageUrl, {String? channel}) async {
     if (imageUrl.isEmpty) return;
+    final targetChannel = (channel ?? state.currentChannel).toLowerCase();
+
     final normalizedImageUrl = await _normalizeImage(imageUrl);
-    state = state.copyWith(selectedImageUrl: normalizedImageUrl, isLoading: true, clearError: true);
+    state = state.copyWith(
+      selectedImageUrl: normalizedImageUrl,
+      currentChannel: targetChannel,
+      isLoading: true,
+      clearError: true,
+    );
     try {
       final draft = args.listingId != null
           ? await _service.generateForListing(
@@ -143,6 +170,7 @@ class SocialMediaNotifier extends StateNotifier<SocialMediaState> {
               materials: args.materials,
               description: args.description,
               source: args.source,
+              channel: targetChannel,
             )
           : await _service.generateForDraft(
               draftKey: args.draftKey ?? '',
@@ -151,6 +179,7 @@ class SocialMediaNotifier extends StateNotifier<SocialMediaState> {
               category: args.category,
               materials: args.materials,
               description: args.description,
+              channel: targetChannel,
             );
       state = state.copyWith(
         draft: draft,
@@ -185,7 +214,7 @@ class SocialMediaNotifier extends StateNotifier<SocialMediaState> {
     state = state.copyWith(hashtags: hashtags, isEdited: true);
   }
 
-  Future<void> regenerate() => generateForImage(state.selectedImageUrl);
+  Future<void> regenerate() => generateForImage(state.selectedImageUrl, channel: state.currentChannel);
 
   Future<bool> save() async {
     final draft = state.draft;

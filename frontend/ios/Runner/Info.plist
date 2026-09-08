@@ -72,5 +72,13 @@
 	<string>KalaSetu needs access to your photo library to upload craft product images.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>KalaSetu needs microphone access to record product descriptions.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>KalaSetu needs permission to save product photos to your photo library for social media sharing.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>whatsapp</string>
+		<string>instagram</string>
+		<string>fb</string>
+	</array>
 </dict>
 </plist>

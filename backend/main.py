@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
     print(f"  🎙️ Voice Pipeline:  http://localhost:{settings.port}/api/v1/voice/process")
     print(f"  💰 Pricing Endpoint: http://localhost:{settings.port}/api/v1/pricing/suggest")
     print(f"  📦 Products API:    http://localhost:{settings.port}/api/v1/products")
-    print(f"  📱 Social Helper:   http://localhost:{settings.port}/api/v1/listings/{{id}}/social-draft")
+    print(f"  📱 Social Helper:   http://localhost:{settings.port}/api/v1/social-drafts/generate")
     print("=" * 60 + "\n")
 
     yield
