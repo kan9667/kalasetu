@@ -72,12 +72,13 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
       // Verify hero icon is rendered
       expect(find.byIcon(sampleSlide.icon), findsAtLeastNWidgets(1));
 
-      // Verify audio speaker icon is rendered
+      // Verify audio speaker icon is rendered on hero
       expect(find.byIcon(Icons.volume_down_rounded), findsOneWidget);
     });
   });
@@ -97,16 +98,17 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
       // Verify PageView is present
       expect(find.byType(PageView), findsOneWidget);
 
-      // Verify Close icon exists
-      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+      // Verify Close icon is removed from header
+      expect(find.byIcon(Icons.close_rounded), findsNothing);
 
-      // Verify Audio speaker buttons exist (header and card hero)
-      expect(find.byIcon(Icons.volume_down_rounded), findsAtLeastNWidgets(1));
+      // Verify Audio speaker button exists only on card hero, not in header
+      expect(find.byIcon(Icons.volume_down_rounded), findsOneWidget);
     });
   });
 }

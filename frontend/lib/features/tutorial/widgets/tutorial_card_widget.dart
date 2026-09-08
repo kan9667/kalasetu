@@ -32,8 +32,13 @@ class TutorialCardWidget extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // --- Visual Hero Graphic ---
-              _buildVisualHero(context),
+              // --- Visual Hero Graphic with Animated Glowing Aura ---
+              _AnimatedGlowHero(
+                accentColor: slide.accentColor,
+                icon: slide.icon,
+                isSpeaking: isSpeaking,
+                onToggleSpeak: onToggleSpeak,
+              ),
 
               const SizedBox(height: AppSpacing.lg),
 
@@ -59,10 +64,9 @@ class TutorialCardWidget extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       slide.badgeKey.tr(),
-                      style: AppTextStyles.labelMedium.copyWith(
+                      style: AppTextStyles.labelSmall.copyWith(
                         color: slide.accentColor,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
+                        letterSpacing: 0.4,
                       ),
                     ),
                   ],
@@ -76,21 +80,19 @@ class TutorialCardWidget extends StatelessWidget {
                 slide.titleKey.tr(),
                 textAlign: TextAlign.center,
                 style: AppTextStyles.displaySmall.copyWith(
-                  color: AppColors.charcoal,
-                  fontWeight: FontWeight.w700,
-                  height: 1.25,
+                  color: AppColors.textPrimary,
                 ),
               ),
 
               const SizedBox(height: AppSpacing.sm),
 
-              // --- Explanatory Subtitle (Inter) ---
+              // --- Explanatory Subtitle (Manrope Body) ---
               Text(
                 slide.descKey.tr(),
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodyLarge.copyWith(
-                  color: AppColors.charcoalSoft,
-                  height: 1.45,
+                  color: AppColors.textSecondary,
+                  height: 1.5,
                 ),
               ),
 
@@ -101,95 +103,166 @@ class TutorialCardWidget extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildVisualHero(BuildContext context) {
+/// Visual hero icon surrounded by an animated breathing glow aura and pulsing shadows.
+class _AnimatedGlowHero extends StatefulWidget {
+  final Color accentColor;
+  final IconData icon;
+  final bool isSpeaking;
+  final VoidCallback onToggleSpeak;
+
+  const _AnimatedGlowHero({
+    required this.accentColor,
+    required this.icon,
+    required this.isSpeaking,
+    required this.onToggleSpeak,
+  });
+
+  @override
+  State<_AnimatedGlowHero> createState() => _AnimatedGlowHeroState();
+}
+
+class _AnimatedGlowHeroState extends State<_AnimatedGlowHero>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _glowAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _glowAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return SizedBox(
-      height: 160,
-      width: 160,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Outer subtle decorative pulse ring
-          Container(
-            width: 154,
-            height: 154,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: slide.accentColor.withValues(alpha: 0.08),
-            ),
-          ),
-          // Middle soft glow ring
-          Container(
-            width: 128,
-            height: 128,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: slide.accentColor.withValues(alpha: 0.16),
-            ),
-          ),
-          // Inner core surface
-          Container(
-            width: 98,
-            height: 98,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.surface,
-              boxShadow: [
-                BoxShadow(
-                  color: slide.accentColor.withValues(alpha: 0.25),
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-              border: Border.all(
-                color: slide.accentColor.withValues(alpha: 0.4),
-                width: 2,
-              ),
-            ),
-            child: Center(
-              child: Icon(
-                slide.icon,
-                size: 48,
-                color: slide.accentColor,
-              ),
-            ),
-          ),
-          // Audio Speaker Narration button overlay
-          Positioned(
-            right: 4,
-            bottom: 4,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onToggleSpeak,
-                borderRadius: BorderRadius.circular(AppRadii.full),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isSpeaking ? AppColors.terracotta : AppColors.surface,
-                    shape: BoxShape.circle,
-                    boxShadow: const [
-                      BoxShadow(
-                        color: AppColors.shadow,
-                        blurRadius: 6,
-                        offset: Offset(0, 2),
-                      ),
+      height: 170,
+      width: 170,
+      child: AnimatedBuilder(
+        animation: _glowAnimation,
+        builder: (context, child) {
+          final t = _glowAnimation.value;
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              // Radial gradient continuous breathing aura (replaces static rings)
+              Container(
+                width: 140 + 26 * t,
+                height: 140 + 26 * t,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      widget.accentColor.withValues(alpha: 0.28 * t + 0.12),
+                      widget.accentColor.withValues(alpha: 0.10 * t + 0.04),
+                      widget.accentColor.withValues(alpha: 0.0),
                     ],
-                    border: Border.all(
-                      color: isSpeaking ? AppColors.terracottaDark : AppColors.border,
-                      width: 1.2,
+                    stops: const [0.0, 0.55, 1.0],
+                  ),
+                ),
+              ),
+
+              // Inner core surface with pulsing glowing shadows
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.cardSurface,
+                  boxShadow: [
+                    // Blooming radiant glow
+                    BoxShadow(
+                      color: widget.accentColor.withValues(alpha: 0.25 + 0.25 * t),
+                      blurRadius: 20.0 + 16.0 * t,
+                      spreadRadius: 2.0 + 6.0 * t,
+                    ),
+                    // Inner luminous warmth
+                    BoxShadow(
+                      color: widget.accentColor.withValues(alpha: 0.15 + 0.15 * t),
+                      blurRadius: 8.0 + 6.0 * t,
+                      spreadRadius: 0,
+                    ),
+                    // Grounding subtle shadow
+                    const BoxShadow(
+                      color: AppColors.shadow,
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: widget.accentColor.withValues(alpha: 0.35 + 0.20 * t),
+                    width: 2,
+                  ),
+                ),
+                child: Center(
+                  child: Icon(
+                    widget.icon,
+                    size: 48,
+                    color: widget.accentColor,
+                  ),
+                ),
+              ),
+
+              // Audio Speaker Narration button overlay
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: widget.onToggleSpeak,
+                    borderRadius: BorderRadius.circular(AppRadii.full),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: widget.isSpeaking ? AppColors.terracotta : AppColors.cardSurface,
+                        shape: BoxShape.circle,
+                        boxShadow: const [
+                          BoxShadow(
+                            color: AppColors.shadow,
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                        border: Border.all(
+                          color: widget.isSpeaking
+                              ? AppColors.terracottaDark
+                              : AppColors.border,
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Icon(
+                        widget.isSpeaking
+                            ? Icons.volume_up_rounded
+                            : Icons.volume_down_rounded,
+                        size: 18,
+                        color: widget.isSpeaking
+                            ? AppColors.textOnPrimary
+                            : AppColors.textPrimary,
+                      ),
                     ),
                   ),
-                  child: Icon(
-                    isSpeaking ? Icons.volume_up_rounded : Icons.volume_down_rounded,
-                    size: 18,
-                    color: isSpeaking ? AppColors.textOnPrimary : AppColors.charcoal,
-                  ),
                 ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
