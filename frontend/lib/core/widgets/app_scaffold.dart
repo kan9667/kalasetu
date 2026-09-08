@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../router/app_route_constants.dart';
 import '../theme/app_colors.dart';
 import 'app_header.dart';
+import 'app_background_pattern.dart';
 
 /// Shared scaffold for main screens.
 ///
@@ -13,6 +14,8 @@ import 'app_header.dart';
 /// screens that should not show the bell.
 ///
 /// Set [rawAppBar] as an escape hatch when a fully custom AppBar is needed.
+///
+/// Displays [AppBackgroundPattern] behind the screen body by default.
 class AppScaffold extends StatelessWidget {
   final String? title;
   final Widget? titleWidget;
@@ -25,6 +28,8 @@ class AppScaffold extends StatelessWidget {
   final Widget? floatingActionButton;
   final bool showConnectivityPill;
   final bool showNotificationBell;
+  final bool showBackgroundPattern;
+  final double backgroundPatternOpacity;
   final Color? backgroundColor;
   final EdgeInsetsGeometry? padding;
 
@@ -41,6 +46,8 @@ class AppScaffold extends StatelessWidget {
     this.floatingActionButton,
     this.showConnectivityPill = true,
     this.showNotificationBell = true,
+    this.showBackgroundPattern = true,
+    this.backgroundPatternOpacity = 0.06,
     this.backgroundColor,
     this.padding,
   });
@@ -64,12 +71,28 @@ class AppScaffold extends StatelessWidget {
       );
     }
 
+    Widget bodyContent = SafeArea(
+      child: padding != null ? Padding(padding: padding!, child: body) : body,
+    );
+
+    if (showBackgroundPattern) {
+      bodyContent = Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: AppBackgroundPattern(
+              opacity: backgroundPatternOpacity,
+            ),
+          ),
+          bodyContent,
+        ],
+      );
+    }
+
     return Scaffold(
       backgroundColor: backgroundColor ?? AppColors.background,
       appBar: builtAppBar,
-      body: SafeArea(
-        child: padding != null ? Padding(padding: padding!, child: body) : body,
-      ),
+      body: bodyContent,
       bottomNavigationBar: bottomNavigationBar,
       floatingActionButton: floatingActionButton,
     );

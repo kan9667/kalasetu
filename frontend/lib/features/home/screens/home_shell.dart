@@ -12,6 +12,7 @@ import '../../chatbot/widgets/kalamitra_fab.dart';
 
 import 'package:go_router/go_router.dart';
 import '../../../core/router/app_route_constants.dart';
+import '../../../core/services/app_sound_service.dart';
 import '../../auth/providers/auth_provider.dart';
 
 final homeTabIndexProvider = StateProvider<int>((ref) => 1); // Default: Catalogue
@@ -50,6 +51,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   }
 
   Future<void> _handleTabTap(int index) async {
+    AppSoundService.instance.playTapSound();
     if (index == 0) {
       final draft = ref.read(addProductFlowProvider);
       if (draft.hasExistingDraft && !draft.resumePromptHandled) {

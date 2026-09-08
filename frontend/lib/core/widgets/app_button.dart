@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/app_spacing.dart';
+import '../services/app_sound_service.dart';
 
 enum AppButtonType { primary, secondary, outlined, text }
 
@@ -38,6 +39,7 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveOnPressed = AppSoundFeedback.wrap(onPressed);
     final minButtonHeight = height ?? AppSpacing.minTouchTarget;
 
     if (isLoading) {
@@ -103,7 +105,7 @@ class AppButton extends StatelessWidget {
         final Color bgColor = customColor ?? AppColors.terracotta;
         final Color fgColor = AppColors.textOnPrimary;
         button = ElevatedButton(
-          onPressed: onPressed,
+          onPressed: effectiveOnPressed,
           style: ElevatedButton.styleFrom(
             backgroundColor: bgColor,
             foregroundColor: fgColor,
@@ -127,7 +129,7 @@ class AppButton extends StatelessWidget {
         final Color bgColor = customColor ?? AppColors.gold;
         final Color fgColor = AppColors.textOnPrimary;
         button = ElevatedButton(
-          onPressed: onPressed,
+          onPressed: effectiveOnPressed,
           style: ElevatedButton.styleFrom(
             backgroundColor: bgColor,
             foregroundColor: fgColor,
@@ -149,7 +151,7 @@ class AppButton extends StatelessWidget {
         // Card bg + line border + ink text — de-emphasised action
         final Color fgColor = customColor ?? AppColors.ink;
         button = OutlinedButton(
-          onPressed: onPressed,
+          onPressed: effectiveOnPressed,
           style: OutlinedButton.styleFrom(
             backgroundColor: AppColors.cardSurface,
             foregroundColor: fgColor,
@@ -167,7 +169,7 @@ class AppButton extends StatelessWidget {
         // Ghost / link style
         final Color fgColor = customColor ?? AppColors.inkSoft;
         button = TextButton(
-          onPressed: onPressed,
+          onPressed: effectiveOnPressed,
           style: TextButton.styleFrom(
             foregroundColor: fgColor,
             padding: padding,
