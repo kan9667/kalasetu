@@ -1,6 +1,10 @@
 <div align="center">
 
+<img width="255" height="394" alt="KalaSetu logo" src="https://github.com/user-attachments/assets/f1a4c9de-6260-4b11-9b0b-9082505c8232" />
+
 # 🪔 KalaSetu
+
+</div>
 ### AI-Driven Market Linkage & Smart Cataloging for Marginalized Artisans
 
 docs: https://docs.google.com/document/d/11JJ13SqLMxHMm4TntohtAeoQhq9FtmR79HMz0T-F4cY/edit?usp=sharing
