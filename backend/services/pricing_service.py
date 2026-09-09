@@ -22,6 +22,7 @@ from ML.pricing.embeddings.vector_store import VectorStore
 from ML.pricing.models import PricingResult
 
 from ..config import get_settings
+from ..utils.cost_extraction import regex_extract_cost_cues
 from ..models.schemas import (
     PriceSuggestRequest,
     PriceSuggestResponse,
@@ -74,6 +75,14 @@ class PricingService:
         4. Structured LLM reasoning
         """
         cost_inputs = request.to_cost_inputs().model_dump()
+
+        # Defensive fallback: If no costs were explicitly provided, extract from description using shared util
+        if cost_inputs["materials"] == 0.0 and cost_inputs["labor_hours"] == 0.0 and request.description:
+            cues = regex_extract_cost_cues(request.description)
+            if cues["materials"] > 0 or cues["labor_hours"] > 0:
+                cost_inputs["materials"] = cues["materials"]
+                cost_inputs["labor_hours"] = cues["labor_hours"]
+                cost_inputs["hourly_rate"] = cues["hourly_rate"]
         
         # Resolve image path
         image_path = ""

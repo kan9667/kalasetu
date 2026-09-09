@@ -273,13 +273,17 @@ class _Step4PricingWidgetState extends ConsumerState<Step4PricingWidget> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '${'calculated_floor_price'.tr()}: ₹${draft.floorPrice.toStringAsFixed(0)}',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: currentPrice < draft.floorPrice ? AppColors.error : AppColors.inkSoft,
+                Flexible(
+                  child: Text(
+                    '${'calculated_floor_price'.tr()}: ₹${draft.floorPrice.toStringAsFixed(0)}',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: currentPrice < draft.floorPrice ? AppColors.error : AppColors.inkSoft,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   'Max: ₹${maxBound.toStringAsFixed(0)}',
                   style: AppTextStyles.labelSmall.copyWith(color: AppColors.inkSoft),
@@ -668,7 +672,14 @@ class _CostItem extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft)),
+        Flexible(
+          child: Text(
+            label,
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.inkSoft),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
         Text(value, style: AppTextStyles.headlineSmall.copyWith(color: AppColors.ink)),
       ],
     );

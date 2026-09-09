@@ -1232,6 +1232,18 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         descriptionHi: suggestion.descriptionHi,
         category: suggestion.category,
         tags: suggestion.tags,
+        rawMaterialCost: (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0)
+            ? suggestion.rawMaterialCost!
+            : state.rawMaterialCost,
+        laborHours: (suggestion.laborHours != null && suggestion.laborHours! > 0)
+            ? suggestion.laborHours!
+            : state.laborHours,
+        hourlyRate: (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0)
+            ? suggestion.hourlyRate!
+            : state.hourlyRate,
+        floorPrice: (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
+            ? suggestion.floorPrice!
+            : state.floorPrice,
       );
       _recomputeAiProcessing();
       _persistDraft();
@@ -1420,6 +1432,18 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         descriptionHi: suggestion.descriptionHi,
         category: suggestion.category,
         tags: suggestion.tags,
+        rawMaterialCost: (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0)
+            ? suggestion.rawMaterialCost!
+            : state.rawMaterialCost,
+        laborHours: (suggestion.laborHours != null && suggestion.laborHours! > 0)
+            ? suggestion.laborHours!
+            : state.laborHours,
+        hourlyRate: (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0)
+            ? suggestion.hourlyRate!
+            : state.hourlyRate,
+        floorPrice: (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
+            ? suggestion.floorPrice!
+            : state.floorPrice,
       );
       _recomputeAiProcessing();
       _persistDraft();
@@ -1562,6 +1586,18 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         descriptionHi: suggestion.descriptionHi,
         category: suggestion.category.isNotEmpty ? suggestion.category : state.category,
         tags: suggestion.tags.isNotEmpty ? suggestion.tags : state.tags,
+        rawMaterialCost: (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0)
+            ? suggestion.rawMaterialCost!
+            : state.rawMaterialCost,
+        laborHours: (suggestion.laborHours != null && suggestion.laborHours! > 0)
+            ? suggestion.laborHours!
+            : state.laborHours,
+        hourlyRate: (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0)
+            ? suggestion.hourlyRate!
+            : state.hourlyRate,
+        floorPrice: (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
+            ? suggestion.floorPrice!
+            : state.floorPrice,
         isAiProcessing: false,
       );
       _persistDraft();

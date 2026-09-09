@@ -19,6 +19,10 @@ class AiListingSuggestion {
   final String descriptionHi;
   final String category;
   final List<String> tags;
+  final double? rawMaterialCost;
+  final double? laborHours;
+  final double? hourlyRate;
+  final double? floorPrice;
 
   const AiListingSuggestion({
     required this.titleEn,
@@ -27,6 +31,10 @@ class AiListingSuggestion {
     required this.descriptionHi,
     required this.category,
     required this.tags,
+    this.rawMaterialCost,
+    this.laborHours,
+    this.hourlyRate,
+    this.floorPrice,
   });
 }
 
@@ -301,6 +309,23 @@ class HttpSpeechService implements SpeechService {
           ' title="${data['title_en']}" category="${data['category']}" tags=$tags',
         );
 
+        final costInputs = data['cost_inputs'] as Map<String, dynamic>?;
+        final rawMat = (costInputs?['materials'] as num?)?.toDouble() ??
+            (data['raw_material_cost'] as num?)?.toDouble() ??
+            (data['base_cost'] as num?)?.toDouble();
+        final laborHrs = (costInputs?['labor_hours'] as num?)?.toDouble() ??
+            (data['labor_hours'] as num?)?.toDouble();
+        final hourlyRate = (costInputs?['hourly_rate'] as num?)?.toDouble() ??
+            (data['hourly_wage'] as num?)?.toDouble();
+
+        double? floor;
+        if (rawMat != null || laborHrs != null) {
+          final m = rawMat ?? 0.0;
+          final h = laborHrs ?? 0.0;
+          final r = hourlyRate ?? (h > 0 ? 50.0 : 0.0);
+          floor = m + (h * r);
+        }
+
         return AiListingSuggestion(
           titleEn: (data['title_en'] as String?)?.trim().isNotEmpty == true
               ? data['title_en'] as String
@@ -317,6 +342,10 @@ class HttpSpeechService implements SpeechService {
               ? data['category'] as String
               : (categoryHint ?? 'Handicrafts'),
           tags: tags,
+          rawMaterialCost: rawMat,
+          laborHours: laborHrs,
+          hourlyRate: hourlyRate,
+          floorPrice: floor,
         );
       }
     } catch (e) {

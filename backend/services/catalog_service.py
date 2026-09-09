@@ -45,6 +45,7 @@ except ImportError:
 
 from .groq_client import GroqClient
 from ..config import get_settings
+from ..utils.cost_extraction import regex_extract_cost_cues, DEFAULT_HOURLY_RATE
 from ..models.schemas import (
     AudioTranscribeResponse,
     ListingGenerateRequest,
@@ -177,8 +178,9 @@ class CatalogService:
         if not path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
 
-        # Check for silent audio before running heavy Whisper processing
-        if self._is_audio_silent(path):
+        # Check for silent audio before running heavy Whisper processing (non-blocking threadpool)
+        is_silent = await run_in_threadpool(self._is_audio_silent, path)
+        if is_silent:
             logger.warning("Audio file %s is silent (volume < -40dB). Aborting transcription.", path.name)
             raise ValueError("No audible speech detected. Please speak closer to the microphone.")
 
@@ -210,7 +212,71 @@ class CatalogService:
             status=result.status.value,
         )
 
-    # ── Bilingual Listing Generation ────────────────────────────────────────
+    # ── Bilingual Listing Sanitizers & Rules ────────────────────────────────
+
+    @staticmethod
+    def _sanitize_customer_facing_text(text: str) -> str:
+        """
+        Purge internal manufacturing costs, raw material costs, hourly rates,
+        and wage figures from customer-facing e-commerce titles/descriptions.
+        """
+        if not text:
+            return ""
+
+        # Split text into sentences/phrases (handles English and Hindi punctuation)
+        sentences = re.split(r"(?<=[.!?।\n])\s+", text)
+        cleaned_sentences = []
+
+        cost_trigger = re.compile(
+            r"(?i)(?:"
+            r"₹\s*\d+|"
+            r"\b(?:rs\.?|inr)\s*\d+|"
+            r"\b\d+\s*(?:rupees|rs\.?|inr|रुपये|रुपया|रु)\b|"
+            r"cost\s+of\s+making|making\s+cost|base\s+cost|raw\s+material\s+cost|production\s+cost|"
+            r"manufacturing\s+cost|labor\s+cost|material\s+cost|cost\s+price|hourly\s+rate|artisan\s+wage|"
+            r"took\s+\d+\s*(?:hours?|hrs?|days?)|takes\s+\d+\s*(?:hours?|hrs?|days?)|"
+            r"लागत|खर्च|मजदूरी|कच्चा\s*माल|घंटे\s*लगे|दिन\s*लगे"
+            r")"
+        )
+
+        for s in sentences:
+            s_clean = s.strip()
+            if not s_clean:
+                continue
+            # If the sentence contains a cost/production cue, check if it can be split or dropped
+            if cost_trigger.search(s_clean):
+                sub_clauses = re.split(r"(?<=;)\s+|(?<=[,])\s+(?=[A-Z\u0900-\u097F])", s_clean)
+                surviving = [c.strip() for c in sub_clauses if not cost_trigger.search(c) and len(c.strip()) > 5]
+                if surviving:
+                    cleaned_sentences.append("; ".join(surviving))
+                continue
+            cleaned_sentences.append(s_clean)
+
+        result = " ".join(cleaned_sentences)
+        # Final sweep for any standalone price/currency mentions
+        result = re.sub(r"(?i)(?:₹|rs\.?|inr)\s*\d+(?:,\d+)*(?:\.\d+)?", "", result)
+        result = re.sub(r"(?i)\b\d+(?:,\d+)*(?:\.\d+)?\s*(?:rupees|rs\.?|inr|रुपये|रुपया|रु)\b", "", result)
+        result = re.sub(r"\s+([,.;:?!।])", r"\1", result)
+        result = re.sub(r"[,;]\s*[,;]+", ", ", result)
+        result = re.sub(r"\.\s*\.+", ". ", result)
+        result = re.sub(r"\s{2,}", " ", result)
+        return result.strip(" ,.-;")
+
+    @staticmethod
+    def _sanitize_tags(tags: List[str]) -> List[str]:
+        """Remove any tags containing costs, digits, or price-related terms."""
+        clean_tags = []
+        bad_substrings = ["cost", "price", "rupee", "rs", "inr", "making", "wage", "labor", "labour", "hour"]
+        for tag in tags:
+            t = str(tag).strip().lower()
+            if not t or len(t) < 2 or len(t) > 35:
+                continue
+            if any(char.isdigit() for char in t):
+                continue
+            if any(bad in t for bad in bad_substrings):
+                continue
+            clean_tags.append(t)
+        return clean_tags or ["handcrafted", "artisan", "traditional", "indian-handicrafts"]
 
     async def generate_listing(
         self,
@@ -219,7 +285,8 @@ class CatalogService:
         """
         Generate SEO-friendly, bilingual e-commerce product titles, descriptions,
         category, and search tags from an artisan's voice transcript.
-        Enriches the prompt with domain craft glossary terms.
+        Enriches the prompt with domain craft glossary terms and enforces strict
+        privacy quarantine on internal production costs.
         """
         # Detect category dynamically from transcript to prevent false terracotta biasing
         lower_transcript = request.transcript.lower()
@@ -246,26 +313,83 @@ class CatalogService:
             language_code=request.language_code,
         )
 
-        system_prompt = f"""You are an expert handicraft cataloger and market specialist for Indian artisans (KalaSetu).
-Transform raw spoken voice descriptions into professional, engaging, bilingual e-commerce product listings.
+        system_prompt = f"""You are KalaSetu's Master Artisan Cataloger & E-Commerce Merchandising Specialist for authentic Indian handicrafts.
+Your mission is to transform spoken regional voice descriptions into elite, culturally resonant, high-converting, bilingual e-commerce catalog listings.
 
 Domain Handicraft Vocabulary Reference:
 [{glossary_prompt}]
 
-Rules:
-1. Generate title_en (Engaging English e-commerce title) and title_hi (Hindi title in Devanagari script).
-2. Generate description_en (capturing craft heritage, materials, technique, and artisan value) and description_hi.
-3. Identify the accurate craft category (e.g., Pottery, Textiles, Woodwork, Jewelry, Paintings, Bamboo Craft, Brass, Leather, Stone Craft).
-4. CRITICAL ANTI-BIAS RULE: NEVER use or add "Terracotta", "Clay", or "Pottery" unless the transcript explicitly describes clay, terracotta, or pottery! Accurately identify the true materials (wood, silk, brass, etc.) mentioned in the transcript.
-5. Generate 5-8 relevant SEO tags in English (lowercase, hyphenated).
-6. Output ONLY valid JSON matching the schema."""
+================================================================================
+CRITICAL DIRECTIVES & COMPREHENSIVE RULES:
+================================================================================
+
+1. STRICT CONFIDENTIALITY & COST QUARANTINE (ZERO PRODUCTION COST LEAKAGE):
+   - You MUST ABSOLUTELY NEVER mention, include, hint at, or expose internal manufacturing economics in the customer-facing title, description, or tags.
+   - BANNED FROM PUBLIC LISTING:
+      * Raw material expenses, total cost of making, base cost, cost price, financial production investment, transportation cost. (Note: Customer marketing phrasing like "a worthy investment for your home" or "timeless investment" is allowed).
+      * Labor hours spent (e.g., "took 5 hours to make", "2 days of work"), hourly wage rates, or artisan pay.
+      * Specific monetary cost amounts (e.g., "₹400", "500 rupees", "लागत", "खर्च", "मजदूरी", "कच्चा माल इतने का").
+   - WHY: Internal costs are strictly private operational data used solely by the backend dynamic pricing algorithm. Disclosing production costs or maker hours to buyers cheapens the perception of art, damages artisan profit margins, and violates e-commerce marketplace standards.
+   - WHAT TO DO INSTEAD: Convert statements about cost or effort into statements of premium craft quality, meticulous dedication, and material excellence. For example:
+     * If the artisan says: "I spent 400 rupees on fine wood and worked 6 hours on this elephant"
+     * Write: "Masterfully hand-carved from seasoned, premium-grade hardwood with exquisite artisanal dedication and intricate detailing." (NO mention of ₹400 or 6 hours).
+
+2. E-COMMERCE TITLE ARCHITECTURE:
+   - title_en: Professional, engaging, and SEO-optimized title (50-80 characters).
+     Format: [Key Material / Finish] + [Craft Technique / Art Heritage] + [Product Type / Object]
+     Example: "Hand-Carved Sheesham Wood Elephant Figurine with Fine Brass Inlay" or "Handwoven Pure Chanderi Silk Saree with Zari Border".
+   - title_hi: Culturally authentic, grammatically natural Hindi title in Devanagari script.
+     Example: "बारीक पीतल नक्काशी के साथ हाथ से तराशी गई शीशम की लकड़ी की हाथी की मूर्ति".
+   - NEVER put prices, discounts, cost words, or marketing hyperbole ("Best", "Cheap", "Only ₹500") in titles.
+
+3. RICH BILINGUAL E-COMMERCE STORYTELLING DESCRIPTIONS:
+   - description_en: 2-3 engaging, cohesive paragraphs covering:
+     * Paragraph 1 - Art Heritage & Identity: The cultural story, regional tradition, and distinctive personality of the handcrafted piece.
+     * Paragraph 2 - Materials & Artisanal Craftsmanship: Specific materials (e.g., seasoned Indian rosewood, pure mulberry silk, organic natural dyes, hand-hammered brass) and master techniques employed.
+     * Paragraph 3 - Utility, Decor & Styling: Practical dimensions, styling ideas for contemporary home decor, gifting occasions, and care instructions.
+   - description_hi: Expressive, dignified, warm Hindi in Devanagari script honoring the artisan's skill (शिल्प कौशल), traditional heritage (पारंपरिक धरोहर), and natural materials (प्राकृतिक सामग्री). Do NOT use literal robotic translations.
+
+4. PRECISE CATEGORY CLASSIFICATION & ANTI-BIAS ENFORCEMENT:
+   - Identify the exact craft category from standard Indian crafts:
+     * Textiles (handloom, silk, cotton, embroidery, saree, dupatta, fabric)
+     * Woodwork (carved wood, sheesham, teak, sandalwood, wooden toys)
+     * Brass (brass, copper, bronze, bell metal, dhokra, metal casting)
+     * Pottery (terracotta, river clay, ceramic, pottery, earthen pots)
+     * Jewelry (silver, beaded, tribal, brass jewelry, bangles, necklaces)
+     * Paintings (Madhubani, Warli, Pattachitra, miniature, canvas art)
+     * Bamboo Craft (cane, bamboo, wicker, baskets)
+     * Leather Craft, Stone Craft, or Handicrafts (general)
+   - CRITICAL ANTI-BIAS RULE: NEVER categorize as or hallucinate "Terracotta", "Clay", or "Pottery" unless the transcript explicitly mentions clay, mitti, or terracotta.
+
+5. HIGH-INTENT SEO SEARCH TAGS:
+   - tags: Provide 6-8 relevant, lowercase, hyphenated search tags.
+   - Target buyer search queries: craft name, material, decor aesthetic, gift intent, Indian art heritage.
+   - Example: ["hand-carved", "sheesham-wood", "indian-handicrafts", "elephant-figurine", "home-decor", "traditional-artisan", "wooden-craft"].
+   - STRICTLY FORBIDDEN in tags: Any numbers, monetary amounts, or terms like "cost", "price", "rupee", "cheap".
+
+6. VOCAL CONVERSATIONAL NOISE & FILLER REMOVAL:
+   - Strip vocal disfluencies, mic tests, and conversational chatter from speech (e.g., "namaste", "aap dekh sakte hain", "bhaiya", "um", "ah", "matlab", "video me"). Focus solely on the craft and product attributes.
+
+7. STRICT OUTPUT FORMAT:
+   - Return ONLY a valid JSON object matching the schema:
+     {{
+       "title_en": string,
+       "title_hi": string,
+       "description_en": string,
+       "description_hi": string,
+       "category": string,
+       "tags": [string]
+     }}"""
 
         user_prompt = f"""Raw Artisan Voice Transcript:
 "{request.transcript}"
 
 Category Hint (if provided): {effective_category or 'Auto-detect from transcript'}
 
-Please generate the structured bilingual catalog listing."""
+Please generate the structured bilingual catalog listing, strictly observing the cost confidentiality and quality rules."""
+
+        # Extract cost cues in parallel / baseline
+        extracted_costs = await self.extract_cost_cues(request.transcript)
 
         # ── 1. Try Groq Cloud if configured (primary or fallback) ──────────
         if self.groq_client.is_available() and self.settings.llm_provider == "groq":
@@ -284,12 +408,13 @@ Please generate the structured bilingual catalog listing."""
                 ]
                 data = await self.groq_client.chat_json(groq_messages)
                 return ListingGenerateResponse(
-                    title_en=data.get("title_en", "Handcrafted Artisan Product"),
-                    title_hi=data.get("title_hi", "हस्तनिर्मित उत्पाद"),
-                    description_en=data.get("description_en", request.transcript),
-                    description_hi=data.get("description_hi", ""),
+                    title_en=self._sanitize_customer_facing_text(data.get("title_en", "Handcrafted Artisan Product")),
+                    title_hi=self._sanitize_customer_facing_text(data.get("title_hi", "हस्तनिर्मित उत्पाद")),
+                    description_en=self._sanitize_customer_facing_text(data.get("description_en", "")),
+                    description_hi=self._sanitize_customer_facing_text(data.get("description_hi", "")),
                     category=data.get("category", request.category_hint or "General"),
-                    tags=data.get("tags", ["handmade", "handicraft", "artisan"]),
+                    tags=self._sanitize_tags(data.get("tags", ["handmade", "handicraft", "artisan"])),
+                    cost_inputs=extracted_costs,
                 )
             except Exception as e:
                 logger.warning("[CatalogService] Groq listing generation failed, trying fallback: %s", e)
@@ -332,18 +457,19 @@ Please generate the structured bilingual catalog listing."""
 
                 data = json.loads(response.text)
                 return ListingGenerateResponse(
-                    title_en=data.get("title_en", "Handcrafted Artisan Product"),
-                    title_hi=data.get("title_hi", "हस्तनिर्मित उत्पाद"),
-                    description_en=data.get("description_en", request.transcript),
-                    description_hi=data.get("description_hi", ""),
+                    title_en=self._sanitize_customer_facing_text(data.get("title_en", "Handcrafted Artisan Product")),
+                    title_hi=self._sanitize_customer_facing_text(data.get("title_hi", "हस्तनिर्मित उत्पाद")),
+                    description_en=self._sanitize_customer_facing_text(data.get("description_en", "")),
+                    description_hi=self._sanitize_customer_facing_text(data.get("description_hi", "")),
                     category=data.get("category", request.category_hint or "General"),
-                    tags=data.get("tags", ["handmade", "handicraft", "artisan"]),
+                    tags=self._sanitize_tags(data.get("tags", ["handmade", "handicraft", "artisan"])),
+                    cost_inputs=extracted_costs,
                 )
             except Exception as e:
                 logger.error("[CatalogService] Gemini listing generation failed: %s", e)
 
         # ── 3. Offline / Mock Fallback ──────────────────────────────────────
-        clean_text = (request.transcript or "").strip()
+        clean_text = self._sanitize_customer_facing_text((request.transcript or "").strip())
         detected_cat = effective_category or request.category_hint or "Handicrafts"
         title_snippet = (clean_text[:50] + "...") if len(clean_text) > 50 else clean_text
         return ListingGenerateResponse(
@@ -352,70 +478,114 @@ Please generate the structured bilingual catalog listing."""
             description_en=clean_text or "Authentic handcrafted artisanal creation with traditional craft value.",
             description_hi="पारंपरिक कला व कारीगरी से बना प्रामाणिक हस्तशिल्प उत्पाद।",
             category=detected_cat,
-            tags=["handcrafted", "artisan", detected_cat.lower().replace(" ", "-"), "made-in-india"],
+            tags=self._sanitize_tags(["handcrafted", "artisan", detected_cat.lower().replace(" ", "-"), "made-in-india"]),
+            cost_inputs=extracted_costs,
         )
 
     # ── Voice Cost Cue Extractor ────────────────────────────────────────────
 
     async def extract_cost_cues(self, transcript: str) -> CostInputsSchema:
         """
-        Extract cost cues (raw materials cost, labor hours, wages) spoken by the artisan
-        in their natural voice note description.
+        Extract cost cues (raw materials / base making cost, labor hours, wages)
+        spoken or written by the artisan in their natural description.
+        Chains: Deterministic Regex baseline -> Groq LLM -> Gemini LLM -> Regex fallback.
         """
-        default_costs = CostInputsSchema(
-            materials=0.0,
-            labor_hours=0.0,
-            hourly_rate=50.0,
-            transport=0.0,
-            overhead=0.0,
+        if not transcript:
+            return CostInputsSchema(
+                materials=0.0,
+                labor_hours=0.0,
+                hourly_rate=DEFAULT_HOURLY_RATE,
+                transport=0.0,
+                overhead=0.0,
+            )
+
+        # 1. Deterministic baseline extraction using shared regex
+        regex_result = regex_extract_cost_cues(transcript)
+        base_costs = CostInputsSchema(
+            materials=regex_result["materials"],
+            labor_hours=regex_result["labor_hours"],
+            hourly_rate=regex_result["hourly_rate"],
+            transport=regex_result["transport"],
+            overhead=regex_result["overhead"],
         )
 
-        if not self.client or not transcript:
-            return default_costs
-
-        prompt = f"""Analyze the following artisan voice transcript and extract any mentioned cost, labor, or time details:
+        cost_prompt = f"""Analyze the following artisan voice/text transcript and extract any mentioned cost, labor, or time details:
 "{transcript}"
 
 Extract:
-- materials: Cost of raw materials in INR (number, default 0 if not mentioned)
-- labor_hours: Hours spent crafting the product (number, default 0 if not mentioned, e.g. 2 days = 16 hours)
+- materials: Cost of raw materials, base cost, or total making cost in INR (number, default 0 if not mentioned)
+- labor_hours: Hours spent crafting the product (number, default 0 if not mentioned, e.g. 2 days = 16 hours, 4 hours = 4)
 - hourly_rate: Hourly wage rate in INR (default 50.0 if not mentioned)
 - transport: Transport/shipping cost in INR (default 0 if not mentioned)
 - overhead: Additional overhead cost in INR (default 0 if not mentioned)
 
-Return ONLY JSON matching the schema."""
+Return ONLY a valid JSON object matching keys: materials, labor_hours, hourly_rate, transport, overhead."""
 
-        try:
-            response = await run_in_threadpool(
-                self.client.models.generate_content,
-                model=self.settings.llm_model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.0,
-                    response_mime_type="application/json",
-                    response_schema={
-                        "type": "object",
-                        "properties": {
-                            "materials": {"type": "number"},
-                            "labor_hours": {"type": "number"},
-                            "hourly_rate": {"type": "number"},
-                            "transport": {"type": "number"},
-                            "overhead": {"type": "number"},
+        # 2. Try Groq Cloud if configured
+        if self.groq_client.is_available() and self.settings.llm_provider == "groq":
+            try:
+                groq_messages = [
+                    {"role": "system", "content": "You are a cost extraction assistant. Return ONLY valid JSON with keys: materials, labor_hours, hourly_rate, transport, overhead."},
+                    {"role": "user", "content": cost_prompt},
+                ]
+                data = await self.groq_client.chat_json(groq_messages)
+                mat = float(data.get("materials", 0.0) or 0.0)
+                hrs = float(data.get("labor_hours", 0.0) or 0.0)
+                rate = float(data.get("hourly_rate", 50.0) or 50.0)
+                final_mat = mat if mat > 0 else base_costs.materials
+                final_hrs = hrs if hrs > 0 else base_costs.labor_hours
+                final_rate = rate if rate > 0 else (base_costs.hourly_rate if final_hrs > 0 else DEFAULT_HOURLY_RATE)
+                return CostInputsSchema(
+                    materials=final_mat,
+                    labor_hours=final_hrs,
+                    hourly_rate=final_rate,
+                    transport=float(data.get("transport", 0.0) or 0.0),
+                    overhead=float(data.get("overhead", 0.0) or 0.0),
+                )
+            except Exception as e:
+                logger.warning("[CatalogService] Groq cost extraction failed, falling back: %s", e)
+
+        # 3. Try Google Gemini if available
+        if self.client:
+            try:
+                response = await run_in_threadpool(
+                    self.client.models.generate_content,
+                    model=self.settings.llm_model,
+                    contents=cost_prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.0,
+                        response_mime_type="application/json",
+                        response_schema={
+                            "type": "object",
+                            "properties": {
+                                "materials": {"type": "number"},
+                                "labor_hours": {"type": "number"},
+                                "hourly_rate": {"type": "number"},
+                                "transport": {"type": "number"},
+                                "overhead": {"type": "number"},
+                            },
                         },
-                    },
-                ),
-            )
-            data = json.loads(response.text)
-            return CostInputsSchema(
-                materials=float(data.get("materials", 0.0) or 0.0),
-                labor_hours=float(data.get("labor_hours", 0.0) or 0.0),
-                hourly_rate=float(data.get("hourly_rate", 50.0) or 50.0),
-                transport=float(data.get("transport", 0.0) or 0.0),
-                overhead=float(data.get("overhead", 0.0) or 0.0),
-            )
-        except Exception as e:
-            logger.warning("Could not extract cost cues from transcript: %s", e)
-            return default_costs
+                    ),
+                )
+                data = json.loads(response.text)
+                mat = float(data.get("materials", 0.0) or 0.0)
+                hrs = float(data.get("labor_hours", 0.0) or 0.0)
+                rate = float(data.get("hourly_rate", 50.0) or 50.0)
+                final_mat = mat if mat > 0 else base_costs.materials
+                final_hrs = hrs if hrs > 0 else base_costs.labor_hours
+                final_rate = rate if rate > 0 else (base_costs.hourly_rate if final_hrs > 0 else DEFAULT_HOURLY_RATE)
+                return CostInputsSchema(
+                    materials=final_mat,
+                    labor_hours=final_hrs,
+                    hourly_rate=final_rate,
+                    transport=float(data.get("transport", 0.0) or 0.0),
+                    overhead=float(data.get("overhead", 0.0) or 0.0),
+                )
+            except Exception as e:
+                logger.warning("[CatalogService] Gemini cost extraction failed: %s", e)
+
+        # 4. Fall back to deterministic regex extraction
+        return base_costs
 
     # ── Voice-to-Product Pipeline Orchestrator ──────────────────────────────
 

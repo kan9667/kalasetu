@@ -126,6 +126,8 @@ class PriceSuggestRequest(BaseModel):
     # Cost Breakdown
     raw_material_cost: Optional[float] = Field(default=None, ge=0)
     materials: Optional[float] = Field(default=None, ge=0)
+    base_cost: Optional[float] = Field(default=None, ge=0, description="Artisan base cost / total cost of making in INR")
+    making_cost: Optional[float] = Field(default=None, ge=0, description="Vernacular alias for cost of making in INR")
     
     labor_hours: Optional[float] = Field(default=None, ge=0)
     
@@ -138,14 +140,23 @@ class PriceSuggestRequest(BaseModel):
     tags: Optional[List[str]] = Field(default_factory=list)
 
     def to_cost_inputs(self) -> CostInputsSchema:
-        """Normalize cost inputs from various field aliases."""
-        raw_mat = self.materials if self.materials is not None else self.raw_material_cost
-        mat = float(raw_mat) if (raw_mat is not None and raw_mat > 0) else 0.0
+        """
+        Normalize cost inputs from various field aliases.
+        Precedence:
+          1. materials (canonical internal)
+          2. raw_material_cost (standard API)
+          3. base_cost (artisan speech/override)
+          4. making_cost (vernacular alias)
+        """
+        candidates = [self.materials, self.raw_material_cost, self.base_cost, self.making_cost]
+        raw_mat = next((c for c in candidates if c is not None and c > 0), 0.0)
+        mat = float(raw_mat)
 
         raw_hours = self.labor_hours
         hours = float(raw_hours) if (raw_hours is not None and raw_hours > 0) else 0.0
 
         raw_rate = self.hourly_rate if self.hourly_rate is not None else self.hourly_wage
+        # If labor hours are invested but hourly rate is missing or 0, default to fair wage standard (₹50.0/hr)
         rate = float(raw_rate) if (raw_rate is not None and raw_rate > 0) else (50.0 if hours > 0 else 0.0)
 
         raw_transport = self.transport
@@ -215,6 +226,7 @@ class ListingGenerateResponse(BaseModel):
     description_hi: str
     category: str
     tags: List[str]
+    cost_inputs: Optional[CostInputsSchema] = None
 
 
 class ImageEnhanceResponse(BaseModel):
