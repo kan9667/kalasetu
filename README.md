@@ -3,11 +3,11 @@
 <img width="180" height="279" alt="KalaSetu logo" src="https://github.com/user-attachments/assets/f1a4c9de-6260-4b11-9b0b-9082505c8232" />
 
 # KalaSetu
-### कलासेतु — "Bridge of Art"
+### कलासेतु — "Causeway of Craft"
 
-**AI-driven market linkage & smart cataloging for marginalized Indian artisans**
+**Bridging looms to livelihoods: an offline-first emissary that speaks an artisan's own tongue and safeguards the worth of their hands.**
 
-*Offline-first virtual business manager · Built for Smart India Hackathon 2026 · Problem Statement PS-90*
+ Built for Smart India Hackathon 2026 · Problem Statement PS-90
 
 [![Flutter](https://img.shields.io/badge/Client-Flutter-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -25,9 +25,9 @@
 
 ## What is KalaSetu?
 
-KalaSetu turns a phone photo and a voice note into a professional, fairly-priced, bilingual product listing — no typing, no English, no middlemen. An artisan photographs their product and describes it out loud in their own language; the app removes the background and corrects the lighting, transcribes and translates the description into a structured English + Hindi listing, and suggests a fair price backed by a hard cost floor and live market comparables — reading everything back aloud before anything goes live.
+KalaSetu compresses an entire digitization pipeline into a photograph and a spoken sentence. An artisan simply points a camera and narrates, unprompted, in their own tongue: no typing, no transliteration, no middleman. A computer vision layer renders the shot studio-grade; a speech recognition model transcribes the narration; a bilingual generation engine turns it into a structured English–Hindi listing; and a pricing engine, anchored to an inviolable cost floor and calibrated against live market comparables, computes a valuation no algorithm is permitted to undercut. Every result is read back aloud before it goes live, so approval stays a human judgment, not a default.
 
-It's built for artisans who already get seasonal exposure at government fairs (Shilp Samagam, Surajkund Mela, Dilli Haat) but have no way to keep selling once the fair ends, because year-round digital commerce demands things most artisans have never had access to: studio-quality photos, English SEO copywriting, and a sense of fair market pricing.
+The need is structural. Government fairs like Shilp Samagam, Surajkund Mela, and Dilli Haat give artisans brief seasonal visibility that evaporates the moment each fair ends. Sustaining a year-round storefront demands three things most artisans have never had: e-commerce-grade photography, fluent English SEO copy, and a real sense of fair market value. KalaSetu replaces that absence with infrastructure, turning one photo and one sentence into continuous, dignified market access.
 
 ## Key Features
 
