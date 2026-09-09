@@ -1,183 +1,182 @@
 <div align="center">
 
-<img width="255" height="394" alt="KalaSetu logo" src="https://github.com/user-attachments/assets/f1a4c9de-6260-4b11-9b0b-9082505c8232" />
+<img width="180" height="279" alt="KalaSetu logo" src="https://github.com/user-attachments/assets/f1a4c9de-6260-4b11-9b0b-9082505c8232" />
 
 # 🪔 KalaSetu
+### कलासेतु — "Bridge of Art"
 
-</div>
-### AI-Driven Market Linkage & Smart Cataloging for Marginalized Artisans
+**AI-driven market linkage & smart cataloging for marginalized Indian artisans**
 
-docs: https://docs.google.com/document/d/11JJ13SqLMxHMm4TntohtAeoQhq9FtmR79HMz0T-F4cY/edit?usp=sharing
+*Offline-first virtual business manager · Built for Smart India Hackathon 2026 · Problem Statement PS-90*
 
-**An offline-first mobile "virtual business manager" that turns a phone photo and a voice note into a professional, fairly-priced, bilingual product listing — no typing, no English, no middlemen.**
-
-*Built for Smart India Hackathon 2026 · Problem Statement PS-90*
-
-[![Flutter](https://img.shields.io/badge/Mobile-Flutter-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Flutter](https://img.shields.io/badge/Client-Flutter-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Supabase](https://img.shields.io/badge/Data-Supabase-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com)
-[![ChromaDB](https://img.shields.io/badge/Vector%20Store-ChromaDB-purple)](https://www.trychroma.com)
+[![Groq](https://img.shields.io/badge/Primary%20LLM-Groq%20Cloud-F55036)](https://groq.com)
+[![Gemini](https://img.shields.io/badge/Fallback%20LLM-Google%20Gemini-4285F4)](https://ai.google.dev)
 [![Offline First](https://img.shields.io/badge/Design-Offline--First-orange)]()
-[![SIH](https://img.shields.io/badge/SIH%202026-PS--90-brightgreen)]()
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
+[![SIH 2026](https://img.shields.io/badge/SIH%202026-PS--90-brightgreen)]()
+
+[Architecture Docs](docs/ARCHITECTURE.md) · [Report an Issue](https://github.com/kan9667/kalasetu/issues)
 
 </div>
 
 ---
 
-## 📌 The Problem
+## What is KalaSetu?
 
-Government programs already fund thousands of artisans and weavers, and give them market exposure through periodic fairs like **Shilp Samagam**, **Surajkund Mela**, and **Dilli Haat**. But that exposure is seasonal.
+KalaSetu turns a phone photo and a voice note into a professional, fairly-priced, bilingual product listing — no typing, no English, no middlemen. An artisan photographs their product and describes it out loud in their own language; the app removes the background and corrects the lighting, transcribes and translates the description into a structured English + Hindi listing, and suggests a fair price backed by a hard cost floor and live market comparables — reading everything back aloud before anything goes live.
 
-The moment the fair ends, the sales stop — because moving to year-round digital commerce requires things most artisans have never had access to: a decent camera setup, the ability to write an SEO-friendly product description in English, and a sense of what a "fair market price" even looks like. Low digital literacy and language barriers turn a straightforward listing task into an impossible one.
+It's built for artisans who already get seasonal exposure at government fairs (Shilp Samagam, Surajkund Mela, Dilli Haat) but have no way to keep selling once the fair ends, because year-round digital commerce demands things most artisans have never had access to: studio-quality photos, English SEO copywriting, and a sense of fair market pricing.
 
-**Karigar Setu closes that gap.** It's a cross-platform mobile app that acts as a virtual business manager — the artisan just points a phone camera and talks in their own language; the AI handles the rest.
+## ✨ Key Features
 
-## 🎯 Core Features
+- 📸 **AI Image Studio** — a 10-stage computer vision pipeline (rembg background removal, CLAHE lighting correction, auto-crop) turns a cluttered phone photo into an e-commerce-ready 1080×1080 shot.
+- 🎙️ **Multilingual Voice Auto-Cataloger** — the artisan speaks in their regional language; Whisper transcribes with craft-vocabulary biasing and an LLM produces a structured English + Hindi listing.
+- 💰 **Dynamic Pricing Engine** — blends a non-negotiable cost floor (materials + labour + transport) with a ChromaDB RAG index of real handicraft market comparables (Amazon Karigar, FabIndia, Etsy, Okhai), so an AI-suggested price can never undercut the artisan.
+- 📦 **Offline-First Sync** — Hive + Drift + WorkManager queue photos, voice notes, and product edits locally and drain the queue automatically the moment connectivity returns.
+- 🗂️ **Product Catalogue & Inventory** — full CRUD product management with batch offline sync.
+- 📱 **Social Media Launchpad** — one-tap caption generation for WhatsApp, Instagram, and Facebook, with per-channel prompt templates.
+- 🤖 **KalaMitra AI Chatbot** — a Groq-powered conversational agent that can navigate the app and execute in-app actions on the artisan's behalf.
+- 🧾 **Orders & Packaging Advisory** — AI packaging suggestions plus on-device PDF shipping labels with an ONDC profile QR code.
+- 📊 **Performance Analytics** — revenue and fair-wage-premium tracking for artisans.
+- 🔊 **On-Device Bilingual TTS** — every screen can be read aloud in English or Hindi for non-literate users, backed by a guided onboarding tutorial.
 
-### 1. 📸 AI Image Enhancer & Studio
-A built-in camera module that turns a cluttered, low-light phone photo into an e-commerce-ready product shot — background removed, cropped, lighting corrected, compressed — with a before/after slider so the artisan can accept or redo the shot.
-
-### 2. 🎙️ Multilingual Auto-Cataloger
-The artisan describes their product by **speaking in their regional language or dialect**. The app transcribes it, translates and cleans it up, and generates a structured, SEO-friendly product listing in **English and Hindi** — then reads the result back out loud in the artisan's own language for confirmation before anything goes live.
-
-### 3. 💰 Dynamic Pricing Assistant
-A pricing engine that blends a **cost-based floor** (raw materials + labour + transport, so the AI can never suggest a price that undercuts the artisan) with a **market-reference model** trained on real handicraft listing data, returning a suggested price range with reasoning the artisan can accept, adjust, or override.
-
-All three features are stitched together by one guiding principle: **the artisan reviews and approves every AI decision — image, listing, and price — before it ever goes live.**
-
-## 🧭 How It Works
-
-```mermaid
-flowchart LR
-    A["📷🎙️ Artisan captures photo\n& voice note (Flutter app)"] --> B{Connectivity?}
-    B -- "Offline" --> C[("Local queue\nDrift")]
-    C -- "on reconnect" --> D[FastAPI backend]
-    B -- "Online" --> D
-
-    D --> E["🖼️ Image Enhancer\nrembg → OpenCV → Pillow"]
-    D --> F["🗣️ Auto-Cataloger\nWhisper/Bhashini → IndicTrans2 → LLM"]
-
-    E --> G["💰 Pricing Assistant\ncost floor + regression model"]
-    F --> G
-
-    G --> H["🔊 Read-back + editable preview\n(human-in-the-loop)"]
-    H --> I[("Product Catalog DB\nSupabase + ChromaDB")]
-    I --> J["🛒 B2B Buyers · GeM · ONDC"]
-```
-
-Every step is designed to survive a bad or absent internet connection: photos and voice notes are captured and queued **locally first**, then synced automatically the moment connectivity returns — nothing is ever lost waiting for a signal.
+Every AI decision — image, listing, or price — is reviewed and approved by the artisan before it ever goes live.
 
 ## 🏗️ Tech Stack
 
-| Layer | Technology | Why |
-|---|---|---|
-| **Mobile app** | Flutter | Single codebase for Android/iOS, offline-capable local storage for the capture queue |
-| **Backend API** | FastAPI | Async, lightweight, fast to iterate on `/enhance`, `/catalog`, `/price-suggest` endpoints |
-| **Database & Storage** | Supabase | Postgres for structured catalog data + auth + object storage for images, with a generous free tier |
-| **Vector store** | ChromaDB | Embedding-based similarity search for category/material matching in the pricing engine |
-| **Background removal** | [rembg](https://github.com/danielgatis/rembg) (U²-Net) | Open-source, self-hostable, no per-call API cost at scale |
-| **Image processing** | OpenCV + Pillow | Auto-crop, white-balance correction, compression/format conversion |
-| **Speech-to-text** | Whisper / AI4Bharat IndicWhisper / Bhashini ASR | Regional-language and code-mixed speech, with confidence-based fallback |
-| **Translation** | [IndicTrans2](https://github.com/AI4Bharat/IndicTrans2) / Bhashini | Open-source MT across all 22 scheduled Indian languages |
-| **Listing generation** | LLM (structured JSON output) | Produces title, EN + HI description, tags, and category from cleaned transcript |
+| Layer | Technology |
+|---|---|
+| **Mobile client** | Flutter/Dart, Riverpod, GoRouter, Drift (offline queue), Hive (cache/auth), WorkManager (background sync), Dio |
+| **Backend API** | FastAPI, SQLAlchemy 2.0 + SQLite, Pydantic v2 |
+| **Computer vision** | rembg (U²-Net), OpenCV, Pillow |
+| **Speech-to-text** | Whisper Large v3 (via Groq / OpenAI-compatible endpoint) |
+| **LLM** | Groq Cloud (primary — KalaMitra chat, cataloging, social captions), Google Gemini (fallback for cataloging/captions; sole engine for pricing reasoning + ChromaDB embeddings) |
+| **Vector store** | ChromaDB (pricing RAG over handicraft market benchmarks) |
 
-## 🔌 Offline-First by Design
-
-Connectivity, not intent, is the biggest blocker for rural artisan clusters. Every pipeline is built around this:
-
-| Area | Challenge | Solution |
-|---|---|---|
-| **Input quality** | Blurry/poorly lit photos from budget phones | On-screen capture guide flags blur/low light *before* upload |
-| **Language** | Regional dialects, Hindi-English code-mixing | Confidence-scored transcription with automatic fallback to Bhashini ASR or a re-record prompt |
-| **Connectivity** | Poor/no internet in rural clusters | Offline-first capture — photos and voice notes queue locally, sync automatically on reconnect |
-| **Trust in AI** | Low-literacy users can't read/verify AI output | Text-to-speech read-back in the artisan's own language + human-in-the-loop sign-off before anything publishes |
-| **Onboarding** | Artisans unlikely to self-onboard | On-site digitization kiosks at existing fairs, staffed by NGO/cluster development officers |
-| **Cost at scale** | AI inference cost across thousands of artisans | Self-hosted open-source models (rembg, Whisper) for the core pipeline; paid APIs reserved for edge cases |
-
-## 🌍 Impact
-
-- **Continuous income, not seasonal spikes** — converts a few weeks of fair-season sales into a year-round digital storefront.
-- **Fair, data-backed pricing** — protects artisans from the information asymmetry that lets middlemen underpay them.
-- **Financial inclusion** — consistent, timestamped sales history becomes an alternative credit signal for artisans invisible to formal banking.
-- **Disproportionate benefit to women artisans**, many of whom face mobility restrictions that limit access to physical fairs.
-- **Built on India's own Digital Public Infrastructure** — designed to plug into **ONDC**, **GeM**, and **Bhashini** rather than compete with them.
-
-## 💸 Revenue Model (guiding principle)
-
-> Free for artisans to list and sell. Revenue comes from **buyers, institutions, and optional premium add-ons** — never a commission carved out of a marginalized seller's basic livelihood.
-
-| Phase | Primary revenue | Rationale |
-|---|---|---|
-| **Pilot** | Government grants/tenders, CSR sponsorship, NABARD/SIDBI funding | No paying user base yet — impact-first funding builds credibility |
-| **Growth** | B2B transaction commission (buyer-side, 2–5%), buyer subscriptions, loan/insurance referral fees | Monetization sits on the buyer side, not the artisan |
-| **Maturity** | State government white-labeling, export-documentation services, anonymized data insights, opt-in premium artisan tier | Platform becomes infrastructure with diversified, stable revenue |
-
-## 🗺️ Roadmap
-
-**✅ In current architecture (MVP):** offline-first capture & queuing, ONDC/GeM export connector, feedback loop for retraining the pricing model.
-
-**Phase 2:** WhatsApp/SMS-based listing via a Business API chatbot · sentiment-aware review analysis · voice-narrated analytics dashboard for artisans.
-
-**Phase 3:** Bulk B2B order aggregation across clusters · counterfeit/duplicate-listing detection (perceptual hashing) · CLIP-style image search for buyers · 15–30s artisan-story video with auto-subtitling · credit-score & microfinance loan matching.
-
-**Exploring:** demand forecasting around festival calendars, auto-matching artisans to eligible government schemes, cluster inventory pooling, blockchain provenance certificates, and export documentation automation (HS codes, invoices, certificates of origin).
-
-## 📚 Research Grounding
-
-This isn't guesswork on voice-first UX for low-literacy users — it builds on established ICTD (ICT for Development) research:
-
-- Patel et al., *["Experiences Designing a Voice Interface for Rural India" (Avaaj Otalo)](https://dl.acm.org/doi/10.1145/1998249.1998258)* — informs pairing voice input with confirmation buttons rather than voice-only interaction.
-- Medhi et al., *"Designing Mobile Interfaces for Novice and Low-Literacy Users" (VideoKheti)* — supports the human-in-the-loop review safeguard.
-- Gala, Chitale et al., *["IndicTrans2," TMLR 2023](https://github.com/AI4Bharat/IndicTrans2)* — the translation layer this project builds on.
-- Qin et al., *"U²-Net: Going Deeper with Nested U-Structure for Salient Object Detection," Pattern Recognition 2020* — the model underlying the background-removal pipeline.
-
-## 🏁 Competitive Landscape
-
-| Platform | Vendors | Where they fall short for our users |
-|---|---|---|
-| Amazon Karigar | 1.6M+ | Treats handicrafts like any mass-produced SKU — artisans in Kutch report lackluster sales because generic cataloging doesn't capture craft value |
-| Flipkart Samarth | 1.5M+ (by 2023) | Strong NGO partnerships, but still requires manual, English-first cataloging |
-| GoCoop | 275+ cooperatives, 10 states | Free cataloging support, but **human-powered**, not automated — the manual version of what this project automates |
-| ListIQ | 30K+ sellers | Closest AI-cataloging competitor, but general e-commerce focused, not built for marginalized/artisan sellers |
-
-## 🚀 Getting Started
-
-> This section will evolve as implementation lands. Current scaffold:
-
-```bash
-# Backend (FastAPI)
-cd backend
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload
-
-# Mobile app (Flutter)
-cd mobile
-flutter pub get
-flutter run
-```
-
-Environment variables you'll need (see `.env.example`): Supabase URL/key, ChromaDB connection, Bhashini/Whisper API credentials, and object storage credentials for enhanced images.
+For the full 5-tier system diagram, per-feature data models, and API contracts, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the project's living technical specification.
 
 ## 📁 Project Structure
 
 ```
-karigar-setu/
-├── mobile/              # Flutter app — camera, voice capture, offline queue, review UI
-├── backend/             # FastAPI service — /enhance, /catalog, /price-suggest
-│   ├── image_pipeline/  # rembg, OpenCV, Pillow
-│   ├── catalog_pipeline/# STT, translation, LLM structuring
-│   └── pricing_engine/  # cost floor + regression model
-├── docs/                # Problem statement, architecture notes, research references
-└── README.md
+kalasetu/
+├── backend/          # FastAPI service — auth, catalog, voice, pricing, products, social, chat
+│   ├── routers/        # REST endpoints (/api/v1/...)
+│   ├── services/       # Business logic (CatalogService, PricingService, ChatService, ...)
+│   ├── models/          # SQLAlchemy ORM + Pydantic schemas
+│   └── tests/            # pytest integration suites
+├── ML/               # Standalone AI/ML pipelines
+│   ├── image_pipeline/   # Background removal + enhancement
+│   ├── voice_pipeline/   # Transcription + craft-term glossary
+│   └── pricing/           # Cost floor + embeddings + ChromaDB RAG
+├── frontend/         # Flutter mobile client
+│   └── lib/
+│       ├── core/           # Config, offline sync engine, router, theme, TTS
+│       ├── data/            # Models, repositories, API services
+│       └── features/      # Screens by feature (auth, add_product, catalogue, chatbot, orders, ...)
+└── docs/             # Architecture spec & product notes
 ```
 
+## 🚀 Getting Started
 
+### Prerequisites
+
+- Python 3.11+
+- Flutter 3.x / Dart 3.12+ ([install guide](https://docs.flutter.dev/get-started/install))
+- A [Groq Cloud](https://console.groq.com) API key and a [Google Gemini](https://ai.google.dev) API key
+- Android Studio / Xcode (or a physical device) to run the Flutter client
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/kan9667/kalasetu.git
+cd kalasetu
+```
+
+### 2. Backend setup
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
+pip install -r backend/requirements.txt
+
+cp .env.example .env             # then fill in GEMINI_API_KEY and GROQ_API_KEY
+
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+The API is now live — interactive Swagger docs at `http://localhost:8000/docs`, health check at:
+
+```bash
+curl http://localhost:8000/api/v1/health
+```
+
+### 3. Frontend setup
+
+```bash
+cd frontend
+flutter pub get
+flutter run
+```
+
+By default the app auto-discovers the backend on your LAN. To point at a specific host, or to run the UI with no backend at all, use:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://192.168.1.X:8000
+flutter run --dart-define=MOCK_AI_BACKEND=true   # fakes AI responses, no backend needed
+```
+
+## ⚙️ Configuration
+
+Required environment variables (set in `.env`, copied from [`.env.example`](.env.example)):
+
+| Variable | Purpose |
+|---|---|
+| `GROQ_API_KEY` | Primary LLM for KalaMitra chat, cataloging, and social captions |
+| `GEMINI_API_KEY` | Fallback for cataloging/captions if Groq fails; sole engine for pricing (embeddings + price reasoning) |
+| `WHISPER_API_KEY` | Speech-to-text (can reuse `GROQ_API_KEY` if using Groq's Whisper endpoint) |
+
+At least one of `GROQ_API_KEY` / `WHISPER_API_KEY` must be set. See [§24 of the architecture doc](docs/ARCHITECTURE.md#24-environment-variables--configuration) for the full list, including optional overrides and Flutter build flags.
+
+## 🧪 Running Tests
+
+```bash
+# Backend (from repo root)
+pip install pytest
+pytest backend/tests/
+
+# Frontend
+cd frontend
+flutter test
+```
+
+## 🗺️ Roadmap
+
+The core capture → catalog → price → list loop works end-to-end. Known gaps, tracked in [§26 of the architecture doc](docs/ARCHITECTURE.md#26-known-gaps-mocked-components--future-roadmap):
+
+- Orders are currently in-memory mock data — no backend table or endpoint yet
+- NGO coordinator sign-in has no server-side credential verification
+- No Alembic migrations yet — schema changes need manual SQL
+- Media is stored on the local filesystem, not object storage
+- SMS OTP is a hardcoded demo value (no SMS gateway integrated)
+
+## 📚 Documentation
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — full system architecture, per-feature specs, data models, and API contracts
+- Interactive API reference — `/docs` (Swagger) and `/redoc` on a running backend instance
+
+## 🙋 Getting Help
+
+Run into an issue or have a question? [Open a GitHub issue](https://github.com/kan9667/kalasetu/issues) describing what you were doing and what you expected to happen. For "why does X work this way" questions, check [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) first — most design decisions are documented there.
+
+## 👥 Team & Contributing
+
+KalaSetu is built by a 6-person team for Smart India Hackathon 2026, Problem Statement PS-90. Contributions happen via feature branches and pull requests into `main` — for a change of any size, please open an issue first to discuss the approach.
 
 ## 📄 License
 
-Licensed under the [MIT License](LICENSE).
+No license has been published for this repository yet. Until a `LICENSE` file is added, treat the code as all-rights-reserved and check with the maintainers before reuse.
 
 ---
 
