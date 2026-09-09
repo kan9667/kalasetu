@@ -2,7 +2,7 @@
 
 <img width="180" height="279" alt="KalaSetu logo" src="https://github.com/user-attachments/assets/f1a4c9de-6260-4b11-9b0b-9082505c8232" />
 
-# 🪔 KalaSetu
+# KalaSetu
 ### कलासेतु — "Bridge of Art"
 
 **AI-driven market linkage & smart cataloging for marginalized Indian artisans**
@@ -15,6 +15,7 @@
 [![Gemini](https://img.shields.io/badge/Fallback%20LLM-Google%20Gemini-4285F4)](https://ai.google.dev)
 [![Offline First](https://img.shields.io/badge/Design-Offline--First-orange)]()
 [![SIH 2026](https://img.shields.io/badge/SIH%202026-PS--90-brightgreen)]()
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [Architecture Docs](docs/ARCHITECTURE.md) · [Report an Issue](https://github.com/kan9667/kalasetu/issues)
 
@@ -28,22 +29,22 @@ KalaSetu turns a phone photo and a voice note into a professional, fairly-priced
 
 It's built for artisans who already get seasonal exposure at government fairs (Shilp Samagam, Surajkund Mela, Dilli Haat) but have no way to keep selling once the fair ends, because year-round digital commerce demands things most artisans have never had access to: studio-quality photos, English SEO copywriting, and a sense of fair market pricing.
 
-## ✨ Key Features
+## Key Features
 
-- 📸 **AI Image Studio** — a 10-stage computer vision pipeline (rembg background removal, CLAHE lighting correction, auto-crop) turns a cluttered phone photo into an e-commerce-ready 1080×1080 shot.
-- 🎙️ **Multilingual Voice Auto-Cataloger** — the artisan speaks in their regional language; Whisper transcribes with craft-vocabulary biasing and an LLM produces a structured English + Hindi listing.
-- 💰 **Dynamic Pricing Engine** — blends a non-negotiable cost floor (materials + labour + transport) with a ChromaDB RAG index of real handicraft market comparables (Amazon Karigar, FabIndia, Etsy, Okhai), so an AI-suggested price can never undercut the artisan.
-- 📦 **Offline-First Sync** — Hive + Drift + WorkManager queue photos, voice notes, and product edits locally and drain the queue automatically the moment connectivity returns.
-- 🗂️ **Product Catalogue & Inventory** — full CRUD product management with batch offline sync.
-- 📱 **Social Media Launchpad** — one-tap caption generation for WhatsApp, Instagram, and Facebook, with per-channel prompt templates.
-- 🤖 **KalaMitra AI Chatbot** — a Groq-powered conversational agent that can navigate the app and execute in-app actions on the artisan's behalf.
-- 🧾 **Orders & Packaging Advisory** — AI packaging suggestions plus on-device PDF shipping labels with an ONDC profile QR code.
-- 📊 **Performance Analytics** — revenue and fair-wage-premium tracking for artisans.
-- 🔊 **On-Device Bilingual TTS** — every screen can be read aloud in English or Hindi for non-literate users, backed by a guided onboarding tutorial.
+- **AI Image Studio** — a 10-stage computer vision pipeline (rembg background removal, CLAHE lighting correction, auto-crop) turns a cluttered phone photo into an e-commerce-ready 1080×1080 shot.
+- **Multilingual Voice Auto-Cataloger** — the artisan speaks in their regional language; Whisper transcribes with craft-vocabulary biasing and an LLM produces a structured English + Hindi listing.
+- **Dynamic Pricing Engine** — blends a non-negotiable cost floor (materials + labour + transport) with a ChromaDB RAG index of real handicraft market comparables (Amazon Karigar, FabIndia, Etsy, Okhai), so an AI-suggested price can never undercut the artisan.
+- **Offline-First Sync** — Hive + Drift + WorkManager queue photos, voice notes, and product edits locally and drain the queue automatically the moment connectivity returns.
+- **Product Catalogue & Inventory** — full CRUD product management with batch offline sync.
+- **Social Media Launchpad** — one-tap caption generation for WhatsApp, Instagram, and Facebook, with per-channel prompt templates.
+- **KalaMitra AI Chatbot** — a Groq-powered conversational agent that can navigate the app and execute in-app actions on the artisan's behalf.
+- **Orders & Packaging Advisory** — AI packaging suggestions plus on-device PDF shipping labels with an ONDC profile QR code.
+- **Performance Analytics** — revenue and fair-wage-premium tracking for artisans.
+- **On-Device Bilingual TTS** — every screen can be read aloud in English or Hindi for non-literate users, backed by a guided onboarding tutorial.
 
 Every AI decision — image, listing, or price — is reviewed and approved by the artisan before it ever goes live.
 
-## 🏗️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -56,7 +57,7 @@ Every AI decision — image, listing, or price — is reviewed and approved by t
 
 For the full 5-tier system diagram, per-feature data models, and API contracts, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the project's living technical specification.
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 kalasetu/
@@ -77,7 +78,7 @@ kalasetu/
 └── docs/             # Architecture spec & product notes
 ```
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -127,7 +128,7 @@ flutter run --dart-define=API_BASE_URL=http://192.168.1.X:8000
 flutter run --dart-define=MOCK_AI_BACKEND=true   # fakes AI responses, no backend needed
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 Required environment variables (set in `.env`, copied from [`.env.example`](.env.example)):
 
@@ -139,7 +140,7 @@ Required environment variables (set in `.env`, copied from [`.env.example`](.env
 
 At least one of `GROQ_API_KEY` / `WHISPER_API_KEY` must be set. See [§24 of the architecture doc](docs/ARCHITECTURE.md#24-environment-variables--configuration) for the full list, including optional overrides and Flutter build flags.
 
-## 🧪 Running Tests
+## Running Tests
 
 ```bash
 # Backend (from repo root)
@@ -151,7 +152,7 @@ cd frontend
 flutter test
 ```
 
-## 🗺️ Roadmap
+## Roadmap
 
 The core capture → catalog → price → list loop works end-to-end. Known gaps, tracked in [§26 of the architecture doc](docs/ARCHITECTURE.md#26-known-gaps-mocked-components--future-roadmap):
 
@@ -161,22 +162,22 @@ The core capture → catalog → price → list loop works end-to-end. Known gap
 - Media is stored on the local filesystem, not object storage
 - SMS OTP is a hardcoded demo value (no SMS gateway integrated)
 
-## 📚 Documentation
+## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — full system architecture, per-feature specs, data models, and API contracts
 - Interactive API reference — `/docs` (Swagger) and `/redoc` on a running backend instance
 
-## 🙋 Getting Help
+## Getting Help
 
 Run into an issue or have a question? [Open a GitHub issue](https://github.com/kan9667/kalasetu/issues) describing what you were doing and what you expected to happen. For "why does X work this way" questions, check [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) first — most design decisions are documented there.
 
-## 👥 Team & Contributing
+## Team & Contributing
 
 KalaSetu is built by a 6-person team for Smart India Hackathon 2026, Problem Statement PS-90. Contributions happen via feature branches and pull requests into `main` — for a change of any size, please open an issue first to discuss the approach.
 
-## 📄 License
+## License
 
-No license has been published for this repository yet. Until a `LICENSE` file is added, treat the code as all-rights-reserved and check with the maintainers before reuse.
+Licensed under the [MIT License](LICENSE).
 
 ---
 
