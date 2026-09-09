@@ -1,0 +1,6 @@
+# KalaSetu Root Dependencies (FastAPI Backend + ML Pipelines)
+# Usage: pip install -r requirements.txt
+
+-r backend/requirements.txt
+-r ML/image_pipeline/requirements.txt
+-r ML/pricing/requirements.txt
