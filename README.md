@@ -173,7 +173,16 @@ Run into an issue or have a question? [Open a GitHub issue](https://github.com/k
 
 ## Team & Contributing
 
-KalaSetu is built by a 6-person team for Smart India Hackathon 2026, Problem Statement PS-90. Contributions happen via feature branches and pull requests into `main` — for a change of any size, please open an issue first to discuss the approach.
+KalaSetu is built by a 6-person team for Smart India Hackathon 2026, Problem Statement PS-90:
+
+- [**Aanya Varshney**](https://github.com/aanyavarshneyav) — frontend UI
+- [**Rudraksh Saini**](https://github.com/Rudrakssh) — offline pipeline
+- [**Dhruv Makkar**](https://github.com/dhruvsded1) — image enhancement ML pipeline
+- [**Triman Singh Chadha**](https://github.com/Triman01) — voice pipeline
+- [**Aadi Jain**](https://github.com/DeltaData0) — pricing pipeline & backend
+- [**Kanishka Pandey**](https://github.com/kan9667)— integration & backend
+
+Contributions happen via feature branches and pull requests into `main` — for a change of any size, please open an issue first to discuss the approach.
 
 ## License
 
