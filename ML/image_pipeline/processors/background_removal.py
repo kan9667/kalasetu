@@ -6,6 +6,7 @@
 # and only the product remains visible.
 # ============================================================
 
+import gc
 from PIL import Image
 from rembg import remove, new_session
 
@@ -42,11 +43,11 @@ def remove_background(image):
     if image.mode != "RGB":
         image = image.convert("RGB")
     
-    # Downscale for fast rembg processing if image is huge (e.g. 50MP phone camera)
-    # 1024px provides crisp edge detection while running 4x faster with minimal RAM.
+    # Downscale for fast rembg processing if image is large
+    # 768px provides crisp edge detection while using minimal RAM on cloud containers.
     max_dim = max(image.size)
-    if max_dim > 1024:
-        ratio = 1024.0 / max_dim
+    if max_dim > 768:
+        ratio = 768.0 / max_dim
         new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
         process_img = image.resize(new_size, Image.Resampling.BILINEAR)
     else:
@@ -58,5 +59,8 @@ def remove_background(image):
     # Make sure the result is in RGBA mode
     if result.mode != "RGBA":
         result = result.convert("RGBA")
+    
+    # Free temporary buffers
+    gc.collect()
     
     return result

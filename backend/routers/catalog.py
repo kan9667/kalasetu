@@ -22,9 +22,12 @@ from ..models.schemas import (
 from ..services.catalog_service import CatalogService
 from ..services.storage_service import StorageService
 
+import asyncio
+
 router = APIRouter(prefix="/api/v1/catalog", tags=["Cataloger AI"])
 catalog_service = CatalogService()
 storage_service = StorageService()
+_image_semaphore = asyncio.Semaphore(1)
 
 
 @router.post("/enhance-image", response_model=ImageEnhanceResponse)
@@ -34,6 +37,7 @@ async def enhance_image(
     """
     Upload and optimize product photos for studio quality e-commerce listings.
     Non-blocking: offloads CPU-bound rembg/CV processing to background threadpool.
+    Serialized with Semaphore(1) to avoid concurrent memory spikes on cloud containers.
     """
     try:
         # 1. Save original raw upload
@@ -48,14 +52,15 @@ async def enhance_image(
         enhanced_filename = f"{raw_path.stem}_enhanced.jpg"
         enhanced_path = enhanced_dir / enhanced_filename
 
-        # 3. Execute non-blocking AI image enhancement
-        result_path = await catalog_service.enhance_product_photo(
-            input_path=str(raw_path),
-            output_path=str(enhanced_path),
-        )
-        if Path(result_path) != enhanced_path or not enhanced_path.is_file():
-            import shutil
-            shutil.copy2(str(result_path), str(enhanced_path))
+        # 3. Execute non-blocking AI image enhancement (serialized)
+        async with _image_semaphore:
+            result_path = await catalog_service.enhance_product_photo(
+                input_path=str(raw_path),
+                output_path=str(enhanced_path),
+            )
+            if Path(result_path) != enhanced_path or not enhanced_path.is_file():
+                import shutil
+                shutil.copy2(str(result_path), str(enhanced_path))
 
 
         enhanced_url = f"{storage_service.settings.static_url_prefix}/enhanced/{enhanced_filename}" if hasattr(storage_service, 'settings') else f"/uploads/enhanced/{enhanced_filename}"
