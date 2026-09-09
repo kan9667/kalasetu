@@ -17,7 +17,7 @@ Built for Smart India Hackathon 2026 · Problem Statement PS-26090
 [![SIH 2026](https://img.shields.io/badge/SIH%202026-PS--90-brightgreen)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Architecture Specification](docs/architecture.md) · [Submission Guide](SUBMISSION_GUIDE.md) · [Presentation](submission/PRESENTATION.md) · [Demo Video](submission/DEMO.md)
+[Architecture Specification](docs/architecture.md)  · [Presentation](submission/PRESENTATION.md) · [Demo Video](submission/DEMO.md)
 
 </div>
 
