@@ -29,17 +29,19 @@ Built for Smart India Hackathon 2026 · Problem Statement PS-26090
 - **PS ID:** PS-26090
 - **PS Title:** AI-Driven Market Linkage and Smart Cataloging Mobile Application for Marginalized Artisans
 - **Category:** Software
-- **Theme:** Heritage & Culture / Smart Automation / Inclusive Technology
+- **Theme:** Heritage & Culture 
 
 ---
 
 ## 2. Problem Statement
 
-India's traditional handicraft sector sustains over 7 million rural artisans, yet most struggle to bridge the divide into year-round e-commerce:
-1. **Seasonal Market Isolation:** Government exhibitions (Shilp Samagam, Surajkund Mela, Dilli Haat) provide brief seasonal visibility that vanishes once fairs conclude.
-2. **Literacy & Technical Friction:** Commercial e-commerce catalogs demand professional studio photography, fluent English SEO copy, and typing-heavy admin portals that exclude non-literate artisans.
-3. **Exploitative Pricing & Middlemen:** Lacking real-time market awareness, artisans frequently undervalue their craft or sell below cost to predatory intermediaries.
-4. **Intermittent Connectivity:** Rural craft clusters suffer from unstable networks where cloud-dependent applications fail entirely.
+While government exhibitions (such as Shilp Samagam, Surajkund Mela, and Dilli Haat) offer crucial temporary exposure, rural micro-entrepreneurs and artisans lack continuous, year-round access to modern digital marketplaces. Transitioning to e-commerce is stalled by three core challenges:
+
+* **Digital & Technical Friction:** E-commerce platforms demand studio-grade photography, typing-heavy onboarding, and fluent English SEO descriptions—creating insurmountable barriers for low-literacy, regional-language artisans.
+* **Seasonal Sales Dependency:** Without year-round digital market exposure, artisans suffer from inconsistent income once physical fairs conclude.
+* **Pricing Inefficiencies:** Lacking real-time market awareness and cost analysis, artisans frequently undervalue their craftsmanship or lose profits to predatory intermediaries.
+
+**The Solution:** An intuitive, AI-driven mobile "virtual business manager" that breaks technical barriers by automating studio image editing, voice-based multilingual cataloging, and dynamic market pricing—empowering artisans to independently digitize and scale their inventory on global B2B and government e-marketplaces.
 
 ---
 
