@@ -52,6 +52,17 @@ async def lifespan(app: FastAPI):
     # 2. Initialize database tables (artisans + products)
     init_db()
 
+    # 3. Pre-warm rembg ONNX session asynchronously so first request has 0s model download penalty
+    def _warmup_models():
+        try:
+            from ML.image_pipeline.processors.background_removal import get_rembg_session
+            get_rembg_session()
+        except Exception:
+            pass
+
+    import threading
+    threading.Thread(target=_warmup_models, daemon=True).start()
+
     print("\n" + "=" * 60)
     print(f"  ✨ {settings.app_name} v{settings.app_version} Started")
     print(f"  📖 Swagger UI Docs: http://localhost:{settings.port}/docs")
