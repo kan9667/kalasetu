@@ -1,0 +1,10 @@
+frontend/
+.git/
+.venv/
+venv/
+env/
+assets/
+docs/
+submission/
+*.apk
+*.log

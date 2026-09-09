@@ -5,6 +5,7 @@ Uses the ArtisanDB table for persistent artisan registration and lookup.
 OTP verification is still demo-mode (accepts any 6-digit code).
 """
 
+import uuid
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -48,7 +49,7 @@ async def register_artisan(
         )
 
     artisan = ArtisanDB(
-        id=f"artisan_{int(datetime.now().timestamp())}",
+        id=f"artisan_{uuid.uuid4().hex[:10]}",
         name=request.name,
         phone=phone_clean,
         craft_type=request.craft_type,

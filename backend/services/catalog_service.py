@@ -69,6 +69,15 @@ class CatalogService:
         self.groq_client = GroqClient()
         self.client = genai.Client(api_key=self.settings.gemini_api_key) if self.settings.gemini_api_key else None
         self.voice_processor = ArtisanVoiceProcessor()
+        self._pricing_service = None
+
+    @property
+    def pricing_service(self):
+        """Persistent lazily-initialized PricingService instance."""
+        if self._pricing_service is None:
+            from .pricing_service import PricingService
+            self._pricing_service = PricingService()
+        return self._pricing_service
 
     # ── Image Enhancement ───────────────────────────────────────────────────
 
@@ -604,8 +613,7 @@ Return ONLY a valid JSON object matching keys: materials, labor_hours, hourly_ra
         Audio Upload -> Speech-to-Text -> Listing Generation (Description, Tags) ->
         Cost Cue Extraction -> AI Pricing Calculation -> Ready Product Draft.
         """
-        from .pricing_service import PricingService
-        pricing_service = PricingService()
+        pricing_service = self.pricing_service
 
         # Step 1: Transcribe Audio using ML Voice Pipeline
         transcribe_res = await self.transcribe_audio(

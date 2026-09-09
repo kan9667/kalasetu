@@ -5,6 +5,7 @@ Loads environment variables from the root .env file and provides
 centralized application settings.
 """
 
+from functools import lru_cache
 from pathlib import Path
 from typing import List
 from pydantic_settings import BaseSettings
@@ -106,8 +107,9 @@ class Settings(BaseSettings):
     }
 
 
+@lru_cache()
 def get_settings() -> Settings:
-    """Return application settings."""
+    """Return cached application settings."""
     return Settings()
 
 

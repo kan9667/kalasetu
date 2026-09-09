@@ -5,8 +5,13 @@ AI-Driven Market Linkage & Smart Cataloging Backend for Marginalized Artisans.
 """
 
 import sys
+import warnings
 from pathlib import Path
 from contextlib import asynccontextmanager
+
+# Silence upstream 3rd-party vendor deprecations on Python 3.14+
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.genai")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="chromadb")
 
 # Fix Windows console encoding for emoji output
 if sys.platform == "win32":

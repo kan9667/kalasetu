@@ -7,6 +7,7 @@ Supports direct JSON payload, image upload, and audio voice note upload.
 
 from typing import Optional, List
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -36,7 +37,7 @@ async def suggest_price_json(
     Compatible with Flutter's PricingService.
     """
     try:
-        return pricing_service.suggest_price(request, db=db)
+        return await run_in_threadpool(pricing_service.suggest_price, request, db=db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Pricing calculation failed: {str(e)}")
 
@@ -76,7 +77,7 @@ async def suggest_price_with_file_upload(
     )
 
     try:
-        return pricing_service.suggest_price(request, db=db)
+        return await run_in_threadpool(pricing_service.suggest_price, request, db=db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Pricing calculation failed: {str(e)}")
 
@@ -148,7 +149,7 @@ async def suggest_price_from_voice(
             tags=listing_res.tags,
         )
 
-        return pricing_service.suggest_price(request, db=db)
+        return await run_in_threadpool(pricing_service.suggest_price, request, db=db)
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
@@ -160,4 +161,4 @@ async def get_pricing_status():
     """
     Get the current vector index status and total benchmark products count.
     """
-    return pricing_service.get_index_status()
+    return await run_in_threadpool(pricing_service.get_index_status)

@@ -322,6 +322,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
           SizedBox(
             height: 44,
             child: ListView.builder(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
               itemCount: categories.length,
@@ -408,6 +409,7 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                       .read(productListProvider.notifier)
                       .loadProducts(forceRefresh: true),
                   child: GridView.builder(
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.screenPadding,
                       vertical: AppSpacing.xs,
@@ -492,6 +494,8 @@ class _GridProductCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
+          splashColor: AppColors.terracotta.withValues(alpha: 0.12),
+          highlightColor: AppColors.terracotta.withValues(alpha: 0.06),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
