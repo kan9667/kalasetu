@@ -196,7 +196,7 @@ A video walkthrough demonstrating the working prototype across voice cataloging,
 
 Visual demonstration of the mobile app workflows:
 - **Screenshots Directory:** [`assets/screenshots/`](assets/screenshots/)
-- See [`assets/screenshots/README.md`](assets/screenshots/README.md) for standard naming conventions and visual highlights.
+
 
 ---
 
@@ -291,11 +291,7 @@ KalaSetu is built by a 6-person multidisciplinary engineering team for **Smart I
 
 ---
 
-## 15. Important
 
-Before evaluation, ensure the following standards are observed:
-- **Credentials Security:** Do **not** commit `.env` files, production API tokens, or personal database passwords to GitHub.
-- **Reviewer Accessibility:** Verify in an incognito browser window that code, documentation, presentation slides, and video links are publicly accessible without authentication gates.
 
 ---
 
