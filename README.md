@@ -7,7 +7,7 @@
 
 **Bridging looms to livelihoods: an offline-first emissary that speaks an artisan's own tongue and safeguards the worth of their hands.**
 
-Built for Smart India Hackathon 2026 · Problem Statement PS-90
+Built for Smart India Hackathon 2026 · Problem Statement PS-26090
 
 [![Flutter](https://img.shields.io/badge/Client-Flutter-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -26,8 +26,8 @@ Built for Smart India Hackathon 2026 · Problem Statement PS-90
 ## 1. Project Information
 
 - **Project Title:** KalaSetu (कलासेतु) — Offline-First Multimodal AI Co-Pilot for Indian Artisans
-- **PS ID:** PS-90
-- **PS Title:** Digital Storefront & Fair-Value Market Access Enablement for Rural Craft Producers
+- **PS ID:** PS-26090
+- **PS Title:** AI-Driven Market Linkage and Smart Cataloging Mobile Application for Marginalized Artisans
 - **Category:** Software
 - **Theme:** Heritage & Culture / Smart Automation / Inclusive Technology
 
