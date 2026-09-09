@@ -180,10 +180,7 @@ KalaSetu/
 
 ## 8. Final Presentation
 
-Keep your final SIH presentation in the repository whenever file size permits:
-- **Presentation Details:** [`submission/PRESENTATION.md`](submission/PRESENTATION.md)
-- **Local PPTX:** [`submission/KalaSetu_SIH2026_Presentation.pptx`](submission/)
-- **Shareable Viewer Link:** Included in `submission/PRESENTATION.md` if file exceeds GitHub limits.
+
 
 ---
 
