@@ -19,7 +19,23 @@ Built for Smart India Hackathon 2026 · Problem Statement PS-26090
 
 [Architecture Specification](docs/architecture.md)  · [Presentation](submission/PRESENTATION.md) · [Demo Video](submission/DEMO.md)
 
+<br/>
+
+[![Download APK](https://img.shields.io/badge/Download-Release%20APK%20(v1.0.0)-2ea44f?style=for-the-badge&logo=android&logoColor=white)](https://github.com/kan9667/kalasetu/releases/tag/v1.0.0)
+[![Live API](https://img.shields.io/badge/API-Live%20on%20Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white)](https://kalasetu-production.up.railway.app/docs)
+[![Health Status](https://img.shields.io/badge/Status-Healthy%20(200)-success?style=for-the-badge)](https://kalasetu-production.up.railway.app/api/v1/health)
+
 </div>
+
+---
+
+> [!TIP]
+> ### ⚡ Live Deployment & Evaluator Quickstart
+> Evaluators can test KalaSetu immediately on Android or inspect the cloud AI backend via Swagger UI:
+> * **Android Release APK**: [Download v1.0.0 APK](https://github.com/kan9667/kalasetu/releases/tag/v1.0.0) *(Universal, crash-proof build)*
+> * **Live Cloud Backend**: [`https://kalasetu-production.up.railway.app`](https://kalasetu-production.up.railway.app) *(FastAPI + ML Pipelines on Railway)*
+> * **Interactive API Docs**: [Open Swagger UI](https://kalasetu-production.up.railway.app/docs) *(Test all 8 endpoints directly from your browser)*
+> * **Pre-Seeded Demo Login**: Phone: `9876543210` | OTP: `123456` *(Rameshwar Lal Kumhar, Master Terracotta Artisan)*
 
 ---
 
@@ -253,6 +269,13 @@ flutter run
 ```bash
 flutter run --dart-define=MOCK_AI_BACKEND=true
 ```
+
+### Build Production Release APK (Cloud Connected)
+```bash
+cd frontend
+flutter build apk --release --no-tree-shake-icons --dart-define=API_BASE_URL=https://kalasetu-production.up.railway.app
+```
+*(Output: `frontend/build/app/outputs/flutter-apk/app-release.apk`)*
 
 ### Run Tests
 ```bash
