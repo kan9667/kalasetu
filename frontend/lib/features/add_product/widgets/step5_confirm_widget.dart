@@ -207,28 +207,50 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                         const SizedBox(height: AppSpacing.sm),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Text(
-                              'final_selling_price_label'.tr(),
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+                            Expanded(
+                              child: Text(
+                                'final_selling_price_label'.tr(),
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+                              ),
                             ),
-                            Text(
-                              '₹${finalPrice.toStringAsFixed(0)}',
-                              style: AppTextStyles.headlineSmall.copyWith(color: AppColors.ink),
+                            const SizedBox(width: AppSpacing.sm),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  '₹${finalPrice.toStringAsFixed(0)}',
+                                  style: AppTextStyles.headlineSmall.copyWith(color: AppColors.ink),
+                                  maxLines: 1,
+                                ),
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Text(
-                              'floor_cost_label'.tr(),
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+                            Expanded(
+                              child: Text(
+                                'floor_cost_label'.tr(),
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+                              ),
                             ),
-                            Text(
-                              '₹${floorCost.toStringAsFixed(0)}',
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+                            const SizedBox(width: AppSpacing.sm),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  '₹${floorCost.toStringAsFixed(0)}',
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.inkSoft),
+                                  maxLines: 1,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -238,25 +260,39 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                         ),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.trending_up, size: 16, color: AppColors.success),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'profit_earned_label'.tr(),
-                                  style: AppTextStyles.labelMedium.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.ink,
+                            Expanded(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.trending_up, size: 16, color: AppColors.success),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      'profit_earned_label'.tr(),
+                                      style: AppTextStyles.labelMedium.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.ink,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                            Text(
-                              '+₹${profit.toStringAsFixed(0)}',
-                              style: AppTextStyles.headlineMedium.copyWith(
-                                color: AppColors.success,
-                                fontWeight: FontWeight.bold,
+                            const SizedBox(width: AppSpacing.sm),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  '+₹${profit.toStringAsFixed(0)}',
+                                  style: AppTextStyles.headlineMedium.copyWith(
+                                    color: AppColors.success,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                ),
                               ),
                             ),
                           ],
@@ -410,21 +446,26 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.parchmentDeep,
-                              borderRadius: BorderRadius.circular(AppRadii.button),
-                              border: Border.all(color: AppColors.line),
-                            ),
-                            child: Text(
-                              draft.category,
-                              style: AppTextStyles.labelSmall.copyWith(
-                                color: AppColors.ink,
-                                fontWeight: FontWeight.w600,
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.parchmentDeep,
+                                borderRadius: BorderRadius.circular(AppRadii.button),
+                                border: Border.all(color: AppColors.line),
+                              ),
+                              child: Text(
+                                draft.category,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.ink,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
+                          const SizedBox(width: AppSpacing.xs),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(

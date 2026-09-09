@@ -265,6 +265,13 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
 
     return AppScaffold(
       title: 'my_catalogue_title'.tr(),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.trending_up),
+          tooltip: 'artisan_analytics_tooltip'.tr(),
+          onPressed: () => context.pushNamed(AppRouteConstants.myStats),
+        ),
+      ],
       body: Column(
         children: [
           // Search Bar matching kalasetu-redesign-v3.html

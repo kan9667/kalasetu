@@ -34,7 +34,7 @@ class _MyOrdersScreenState extends ConsumerState<MyOrdersScreen> {
       title: 'my_orders_title'.tr(),
       actions: [
         IconButton(
-          icon: const Icon(Icons.analytics_outlined),
+          icon: const Icon(Icons.trending_up),
           tooltip: 'artisan_analytics_tooltip'.tr(),
           onPressed: () => context.pushNamed(AppRouteConstants.myStats),
         ),
