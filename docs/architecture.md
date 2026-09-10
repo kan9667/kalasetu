@@ -1295,10 +1295,10 @@ Any action that creates or modifies a product while the device might be offline 
 Never instantiate `FlutterTts()` directly in a widget. Always use `AppTtsService()` handles (which are lightweight and share `_TtsEngine.instance`). Constructing a new raw `FlutterTts()` steals the platform channel `setMethodCallHandler` from all existing handles, breaking their `onComplete`/`onError` callbacks.
 
 ```dart
-// ✅ Correct
+// Correct
 final AppTtsService _tts = AppTtsService();
 
-// ❌ Wrong — breaks all other TTS handles
+// Wrong — breaks all other TTS handles
 final FlutterTts _tts = FlutterTts();
 ```
 

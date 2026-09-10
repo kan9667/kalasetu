@@ -13,7 +13,7 @@
   - This directly improves Whisper transcription accuracy and Gemini cost-extraction precision.
 
 * **Universal Text-to-Speech (TTS) Read-Back**:
-  - Add a floating or header **"सुनें" (Listen)** audio button on every screen (Catalogue, Product Details, Pricing Step) so non-literate artisans can hear descriptions and pricing explanations.
+  - Add a floating or header **"सुनें" (Listen)** audio button on every screen (Catalogue, Product Details, Pricing Step) so non-literate artisans can hear descriptions and pricing explanations read aloud in Hindi.
 
 * **"My Orders" & Packaging Advisory Screen**:
   - An **Orders Tab/Screen** displaying received orders, buyer location, status (*New, Packed, Shipped*).
@@ -77,4 +77,5 @@
 5. **Production Cloud Hardening & Push Services**:
    - Transition media storage from local filesystem to S3 / Cloudflare R2 with CDN acceleration.
    - Integrate Firebase Cloud Messaging (FCM) for push notifications and establish Alembic database schema migrations.
+
 
