@@ -366,11 +366,11 @@ Hive `auth_box` keys: `user_id`, `phone_number`, `is_authenticated`, `access_tok
 
 1. **Capture (Add Product Step 1)**: Artisan taps the "Add Product" FAB → `AddProductFlowScreen` → `step1_capture_widget.dart`. Camera opens; artisan photographs craft. Client-side blur/glare check runs.
 2. **Backend Enhancement**: Image multipart-uploaded to `POST /api/v1/catalog/enhance-image`. Backend dispatches to `CatalogService` which calls `ML/image_pipeline/enhancer.py` inside a `run_in_executor` threadpool to avoid blocking the async event loop.
-3. **10-Stage CV Pipeline runs** (see §6.2 below). Output: studio-grade PNG saved to `backend/uploads/enhanced/`.
+3. **9-Stage CV Pipeline runs** (see §6.2 below). Output: studio-grade PNG saved to `backend/uploads/enhanced/`.
 4. **Before/After UI**: `step1_capture_widget.dart` renders an interactive gesture-driven split slider. Artisan drags the divider to compare raw vs. enhanced. Can retake if unsatisfied.
 5. **Accept**: Artisan taps Accept → `AddProductDraft.enhancedImageUrl` set → advances to Step 2.
 
-### 6.2 10-Stage Computer Vision Pipeline
+### 6.2 9-Stage Computer Vision Pipeline
 
 ```mermaid
 flowchart LR
@@ -795,7 +795,7 @@ Rate limit: 20 requests/minute/client IP.
 
 ### 13.2 Current Implementation Status
 
-> **⚠️ Orders are currently client-side mock data.** `orders_provider.dart` generates in-memory `Order` objects. No backend `/api/v1/orders` table or endpoint exists. See §26.
+> `orders_provider.dart` generates in-memory `Order` objects. No backend `/api/v1/orders` table or endpoint exists. See §26.
 
 ### 13.3 Key Files
 
@@ -1237,7 +1237,7 @@ sequenceDiagram
 
 ### 23.3 Physical Device Validation
 
-Primary test device: **Samsung Galaxy SM-M346B** (Android 14 / API 34).
+Tested on multiple android devices. 
 Confirmed working: `<queries>` package visibility for WhatsApp/Instagram/Facebook, hardware camera + microphone, USB debug deployment via `flutter run`, on-device TTS in Hindi and English.
 
 ---

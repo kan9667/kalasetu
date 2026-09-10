@@ -1,33 +1,16 @@
-# Ideas
 
-- [x] My performance analytics
-- [x] My orders page
-- [x] Suggestions for improvement of packaging
-- [x] Help chatbot
-- [ ] Text to speech on every page
-- [x] Cues for what to say in voice description (description, price, raw materials)
-- [x] Onboarding assist
-- [x] Social media helper
-- [ ] Whatsapp broadcast message generator
-- [ ] Multiple images?
-- [ ] Tutorial walkthrough
-- [x] Sold out/remove listing/relist option in catalog
-- [ ] improve social media helper
-- [ ] fix error- last transcription is shown
-
-
+# KalaSetu — Implementation Phases & Future Scope
 
 ---
 
-
-### 1. High Impact / Demo Features (Top Priority)
+## Phase 1: High-Impact & Core Demo Features (Top Priority)
 
 * **🎙️ Spoken Cues on Voice Description Screen (`Step 2`)**:
   - Add visual & audio prompt chips guiding the artisan on **what to say**:
     - *"सामग्री (Materials used: clay, silk, brass)"*
     - *"बनाने में लगा समय (Hours of labor spent)"*
     - *"विशेष तकनीक (Special technique/heritage)"*
-  - This directly improves the Whisper transcription and Gemini cost-extraction accuracy.
+  - This directly improves Whisper transcription accuracy and Gemini cost-extraction precision.
 
 * **🔊 Universal Text-to-Speech (TTS) Read-Back**:
   - Add a floating or header **"सुनें" (Listen)** audio button on every screen (Catalogue, Product Details, Pricing Step) so non-literate artisans can hear descriptions and pricing explanations read aloud in Hindi.
@@ -44,12 +27,13 @@
 
 ---
 
-### 2. AI & ML Pipeline Features
+## Phase 2: AI & ML Pipeline Features
 
-* **🤖 Artisan Help Chatbot ("LLM as an Agent")**:
+* **🤖 Artisan Help Chatbot ("LLM as an Agent" / KalaMitra)**:
   - A conversational voice/text assistant where artisans can ask questions in Hindi:
     - *"मेरी कुल्हड़ की बिक्री कैसे बढ़ाऊं?"* (How do I increase sales?)
     - *"मिट्टी के बर्तन को सुरक्षित पैक कैसे करें?"* (How to safely pack pottery?)
+
 * **🏷️ Printable Artisan Story & Packaging Label**:
   - A 1-click generator for a printable package label with:
     - Artisan name & village
@@ -61,18 +45,36 @@
 
 ---
 
-### 3. Polish & Hackathon Readiness
+## Phase 3: Polish & Hackathon Readiness
 
-* **Voice-First Onboarding**:
+* **🎓 Voice-First Onboarding**:
   - 3-slide welcome walk-through with automatic voice guidance explaining: *Photo lo $\to$ Bolkar batao $\to$ Sahi daam pao*.
-* **UI Sequencing & State Transition Polish**:
+
+* **✨ UI Sequencing & State Transition Polish**:
   - Smooth hero animations and micro-interactions when moving between draft steps and catalogue cards.
+
+* **🧪 Edge-Case & Offline Graceful Handling**:
+  - Visual sync indicators, robust retry handling for degraded 2G/poor cellular networks, and local offline draft recovery.
 
 ---
 
-### Suggested Next Action
-Which of these would you like to tackle first? 
-1. **Spoken cues on the Voice recording screen** (Quickest win for the voice flow)
-2. **"My Orders" & AI Packaging Advice screen**
-3. **Artisan Performance Analytics dashboard**
-4. **Artisan Help Chatbot (LLM agent in Hindi)**
+## Future Scope
+
+1. **🌐 Live ONDC (Open Network for Digital Commerce) Integration**:
+   - Implement full Beckn protocol BAP/BPP gateway connections for direct live marketplace cataloging, buyer-seller discovery, and automated order intake.
+   - Plug into automated logistics and shipping aggregators (Shiprocket, Delhivery, India Post).
+
+2. **🗣️ Pan-India Multilingual & Dialect Expansion**:
+   - Expand voice cataloging, LLM generation, and TTS beyond Hindi and English into 12+ Indic languages (Tamil, Telugu, Kannada, Bengali, Odia, Gujarati, Marathi, Assamese).
+   - Fine-tune ASR biasing for regional craft dialects and localized heritage terminology (e.g., *Ikat*, *Kalamkari*, *Dhokra*, *Bidriware*).
+
+3. **👓 Augmented Reality (AR) Product Visualizer**:
+   - WebAR and mobile AR support allowing prospective domestic and international buyers to view 3D scale models of pottery, handicrafts, and brassware in their physical living space.
+
+4. **💳 Micro-Credit & Working Capital Integration (FinTech Linkage)**:
+   - Use verified artisan catalog volume and sales velocity to generate alternative credit scores for collateral-free micro-loans through OCEN and government initiatives (PM SVANidhi, Mudra Yojana).
+
+5. **☁️ Production Cloud Hardening & Push Services**:
+   - Transition media storage from local filesystem to S3 / Cloudflare R2 with CDN acceleration.
+   - Integrate Firebase Cloud Messaging (FCM) for push notifications and establish Alembic database schema migrations.
+
