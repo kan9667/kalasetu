@@ -202,7 +202,7 @@ Access the official Smart India Hackathon presentation deck and dossier:
 ## 9. Demo Video
 
 A video walkthrough demonstrating the working prototype across voice cataloging, studio image processing, fair price calculation, and offline sync:
-- **Demo Video Google Drive lINK:** [`Demo video link`](https://drive.google.com/drive/folders/1en0R4M21m5d_nWMa_3JCC-h_3KorvcZA?usp=drive_link&authuser=1)
+- **Demo Video Google Drive Link:** [`Demo video link`](https://drive.google.com/drive/folders/1en0R4M21m5d_nWMa_3JCC-h_3KorvcZA?usp=drive_link&authuser=1)
 
 ---
 
