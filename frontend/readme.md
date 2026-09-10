@@ -1,514 +1,211 @@
-# KalaSetu Frontend - Flutter Mobile & Web App
+# KalaSetu Mobile Client — Flutter Application
 
-A production-quality, cross-platform mobile app connecting marginalized artisans in India to markets through AI-driven smart cataloging and market linkage.
-
-## 🎯 Overview
-
-KalaSetu is an intelligent platform that helps artisans:
-- 📸 Capture and enhance product photos with AI
-- 🎤 Record voice descriptions in their native language
-- 🤖 Get AI-generated product listings in English & Hindi
-- 💰 Receive smart pricing suggestions
-- 🌐 List products to reach buyers online
-- 📱 Work offline - sync when connected
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Flutter SDK (latest stable)
-- Dart 3.12+
-- iOS 12.0+ (for iOS) or Android API 21+ (for Android)
-- Chrome (for web testing)
-
-### Installation
-
-```bash
-# Clone repository
-cd frontend
-
-# Get dependencies
-flutter pub get
-
-# Generate Hive adapters
-flutter pub run build_runner build
-
-# Run on different platforms
-flutter run -d chrome      # Web
-flutter run -d ios         # iOS simulator
-flutter run -d android     # Android emulator
-```
-
-## 📁 Project Structure
-
-```
-lib/
-├── main.dart                          # App entry point
-├── app.dart                           # MaterialApp configuration
-│
-├── core/
-│   ├── theme/                         # Design system
-│   │   ├── app_colors.dart           # Warm earthy palette (terracotta, indigo, turmeric)
-│   │   ├── app_text_styles.dart      # Typography (Zilla Slab + Nunito Sans)
-│   │   ├── app_spacing.dart          # Responsive spacing & layout
-│   │   └── app_theme.dart            # Complete ThemeData
-│   │
-│   ├── router/                        # Navigation
-│   │   ├── app_router.dart           # go_router configuration
-│   │   ├── app_route_constants.dart  # Route names
-│   │
-│   ├── widgets/                       # Design system components
-│   │   ├── app_button.dart           # Responsive button with text overflow handling
-│   │   ├── app_scaffold.dart         # App structure widget
-│   │   ├── offline_banner.dart       # Connectivity indicator
-│   │   ├── language_picker.dart      # Language selection
-│   │   └── responsive_widgets.dart   # Responsive containers, grids, text
-│   │
-│   ├── providers/                     # Global state management
-│   │   └── app_providers.dart        # Riverpod providers
-│   │
-│   └── utils/                         # Helpers
-│       ├── validators.dart           # Form validation
-│       └── formatters.dart           # Number, date formatting
-│
-├── data/
-│   ├── models/                        # Data classes
-│   │   ├── product.dart              # Product model with Hive adapter
-│   │   ├── user_profile.dart         # User model
-│   │   └── pricing.dart              # Pricing suggestion model
-│   │
-│   ├── services/                      # Mock/Real API services
-│   │   ├── api_service.dart          # HTTP client with dio
-│   │   ├── speech_service.dart       # Speech-to-text (mock)
-│   │   ├── image_enhancer_service.dart # AI image enhancement (mock)
-│   │   └── pricing_service.dart      # Price suggestions (mock)
-│   │
-│   ├── repositories/                  # Business logic layer
-│   │   ├── product_repository.dart   # Product CRUD + offline queue
-│   │   └── auth_repository.dart      # Auth with Hive persistence
-│   │
-│   └── local/                         # Local storage
-│       ├── hive_adapters.dart        # Hive type registrations
-│       └── sync_queue.dart           # Offline sync queue
-│
-└── features/
-    ├── auth/
-    │   ├── screens/
-    │   │   ├── splash_screen.dart    # Splash with auto-navigation
-    │   │   ├── sign_in_screen.dart   # Phone + language selection
-    │   │   └── otp_screen.dart       # 6-digit OTP verification
-    │   ├── providers/
-    │   │   └── auth_provider.dart    # Riverpod auth state
-    │   └── widgets/
-    │
-    ├── home/
-    │   └── screens/
-    │       └── home_shell.dart       # 3-tab bottom navigation shell
-    │
-    ├── add_product/
-    │   ├── screens/
-    │   │   └── add_product_flow_screen.dart  # Multi-step stepper host
-    │   ├── widgets/
-    │   │   ├── step_progress_bar.dart      # Step indicator
-    │   │   ├── step1_capture_widget.dart   # Camera + image enhancement
-    │   │   ├── step2_describe_widget.dart  # Voice + text description
-    │   │   ├── step3_ai_review_widget.dart # AI listing review
-    │   │   ├── step4_pricing_widget.dart   # Pricing assistant
-    │   │   └── step5_confirm_widget.dart   # Confirm & list
-    │   └── providers/
-    │       └── add_product_provider.dart   # Multi-step flow state
-    │
-    ├── catalogue/
-    │   ├── screens/
-    │   │   ├── catalogue_screen.dart       # Grid/list toggle + search + filter
-    │   │   └── product_detail_screen.dart  # Full product view + edit
-    │   ├── widgets/
-    │   │   ├── product_card.dart          # Product grid/list item
-    │   │   └── filter_chip_bar.dart       # Category filters
-    │   └── providers/
-    │       └── catalogue_provider.dart    # Product list + filters
-    │
-    └── profile/
-        ├── screens/
-        │   ├── profile_screen.dart        # Artisan profile + stats + menu
-        │   ├── language_settings_screen.dart  # Language picker
-        │   └── my_stats_screen.dart       # Stats dashboard
-        ├── widgets/
-        └── providers/
-            └── profile_provider.dart      # User profile state
-
-assets/
-├── images/                           # Product images, illustrations
-├── icons/                           # Custom icons
-├── lottie/                          # Animations
-└── translations/                    # i18n files
-    ├── en.json                      # English strings
-    ├── hi.json                      # Hindi strings
-    ├── ta.json                      # Tamil (stub)
-    └── bn.json                      # Bengali (stub)
-
-l10n/
-├── app_en.arb                       # English localization
-└── app_hi.arb                       # Hindi localization
-```
-
-## 🎨 Design System
-
-### Color Palette (Warm, Earthy, Craft-Inspired)
-```dart
-Primary (Terracotta)    → #D4785B, #E89A7E, #B85A3A
-Secondary (Indigo)     → #2F4858, #4A6A7C, #1A2C3A
-Accent (Turmeric)      → #FDB833, #FFCC66, #E5A51F
-Green Accent            → #2D5016, #4A7A2C, #1A3009
-Background (Off-white)  → #FAF8F3
-Surface                → #FFFFFF
-```
-
-### Typography
-- **Headings**: Zilla Slab (warm serif, craft-inspired brand feel)
-- **Body**: Nunito Sans (highly legible humanist sans for accessibility)
-- All loaded via `google_fonts` package
-
-### Spacing Grid (8pt base)
-```dart
-xs: 4px, sm: 8px, md: 16px, lg: 24px, xl: 32px, xxl: 48px
-```
-
-### Responsive Breakpoints
-- **XS**: < 360px (extra small phones, scaled fonts 0.85x)
-- **SM**: 360-480px (small phones, compact buttons)
-- **MD**: 480-600px (regular phones)
-- **LG**: 600-900px (tablets, 2-3 column layouts)
-- **XL**: > 900px (desktops, 3-4 column layouts)
-
-## 📱 Platform Support
-
-### iOS
-- **Min Version**: 12.0
-- **Permissions**: Camera, Photo Library, Microphone (in Info.plist)
-- **Features**: Full camera, image picker, audio recording, TTS
-
-### Android
-- **Min API**: 21
-- **Permissions**: CAMERA, READ/WRITE_EXTERNAL_STORAGE, RECORD_AUDIO
-- **Features**: Full camera, image picker, audio recording
-
-### Web
-- **Browsers**: Chrome, Safari, Firefox (latest)
-- **Graceful Degradation**:
-  - Camera → File upload via `image_picker` web
-  - Audio → Web-safe `record` package
-  - No filesystem access → Uses browser file APIs
-  - Uses `kIsWeb` checks throughout code
-
-## 🔄 State Management (Riverpod)
-
-All state managed with `flutter_riverpod` for:
-- Authentication state
-- Product list & filtering
-- Add-product flow multi-step state
-- User profile preferences
-- Connectivity status
-- Offline sync queue
-
-```dart
-// Example provider usage
-final productListProvider = StateNotifierProvider<ProductListNotifier, AsyncValue<List<Product>>>(...);
-final addProductFlowProvider = StateNotifierProvider<AddProductFlowNotifier, AddProductDraft>(...);
-```
-
-## 🗂️ Local Storage (Hive)
-
-Persistent storage for:
-- **Auth**: User ID, phone number, session token
-- **Products**: Full product data with images (cached)
-- **Drafts**: In-progress product listings
-- **Sync Queue**: Failed API calls waiting for retry
-- **User Preferences**: Language, theme settings
-
-## 🌐 Offline-First Architecture
-
-### How It Works
-1. **Every write operation**:
-   - Save to Hive immediately
-   - Add to sync queue
-   - Show "Pending sync" badge
-   - User can continue working
-
-2. **When connection restored**:
-   - `SyncService` detects connectivity change
-   - Drains queue in priority order
-   - Updates item status from "Pending" → "Live"
-   - Retries failed items with exponential backoff
-
-3. **Persistent banner**:
-   - Shows "Offline - changes will sync automatically" when no network
-   - Dismissible but reappears when truly offline
-   - Visible in `AppScaffold` on all screens
-
-## 🔐 Authentication
-
-### Sign-In Flow
-```
-Phone Number → OTP Verification → Home
-```
-
-### Mock Data
-- Any phone number (10 digits) works
-- Any OTP code works (or use 123456)
-- Session persisted in Hive - survives app restart
-- Automatic redirect to sign-in if logged out
-
-## 📸 Add Product Flow (5 Steps)
-
-### Step 1: Capture Image
-- Camera or gallery upload
-- AI enhancement simulation with before/after slider
-- Sample craft images available for testing
-
-### Step 2: Describe Product
-- Voice recording with waveform animation
-- OR manual text input
-- Replay & edit transcript
-- Human-in-the-loop verification
-
-### Step 3: AI Listing Review
-- Generated title + description (EN + HI)
-- Editable fields
-- Category & tags (chips, add/remove)
-- TTS playback of description
-
-### Step 4: Pricing Assistant
-- Price range slider with AI suggestion
-- Cost input form (material + labor)
-- Ethical minimum floor price (can't price below cost)
-- Visualized bounds on slider
-
-### Step 5: Confirm & List
-- Summary card review
-- Submit action
-- Success animation (confetti)
-- Auto-add to Catalogue
-- Offline: added to sync queue with "Pending" badge
-
-## 🔍 Catalogue Screen
-
-- **Grid/List toggle**: Switch between views
-- **Search**: Full-text search (title EN/HI, category, tags)
-- **Filter chips**: Category, status filters
-- **Product cards**: Thumbnail, title, price, status badge
-- **Status badges**:
-  - 🟢 Live (synced)
-  - 🟡 Pending sync (offline queue)
-  - ⚪ Draft (not yet listed)
-- **Product detail**: Tap card → full view + edit + delete
-- **Empty state**: Illustration + "Add your first product" CTA
-
-## 👤 Profile Screen
-
-- **Artisan info**: Avatar, name, craft type, location
-- **Stats cards**: Listings count, pending sync, estimated earnings
-- **Language settings**: EN/HI/TA/BN with live locale switch
-- **Help & support**: Links to FAQs, contact
-- **Sign out**: Clears auth + returns to sign-in
-
-## 🌍 Localization
-
-All user-facing text uses `easy_localization`:
-- **Supported**: English (en), Hindi (hi)
-- **Stub locales**: Tamil (ta), Bengali (bn) - use English fallback for now
-- **Arb files**: `l10n/app_en.arb`, `l10n/app_hi.arb`
-- **Runtime switch**: Language picker updates app-wide locale
-
-Example string keys:
-```
-"sign_in_subtitle"
-"phone_label", "phone_hint", "phone_required", "phone_invalid"
-"continue_btn", "verify_btn", "ngo_assist_btn"
-"capture_title", "capture_subtitle", "capture_instructions"
-"take_photo", "upload_gallery", "accept_photo", "redo_photo"
-"my_catalogue_title", "search_products_hint"
-```
-
-## 🧪 Testing
-
-### Widget Tests
-```bash
-# Run all tests
-flutter test
-
-# Run specific test file
-flutter test test/auth_test.dart
-```
-
-Key tests included:
-- ✅ Sign-in happy path
-- ✅ Add-product flow to success state
-- ✅ Catalogue empty vs populated state
-- ✅ Offline sync queue functionality
-
-### Manual Testing
-```bash
-# Run on Chrome for web dev
-flutter run -d chrome --profile
-
-# Run on iOS simulator
-flutter run -d ios
-
-# Run on Android emulator
-flutter run -d android
-```
-
-### Test Scenarios
-- [ ] Offline mode: Disable network, try add product
-- [ ] Sync queue: Go offline, list products, check "Pending" badge, restore network
-- [ ] Language switch: Change language mid-flow
-- [ ] Camera: Test on real device (simulator has limitations)
-- [ ] Responsive: Test on multiple device sizes (use Chrome DevTools)
-- [ ] Performance: Use Dart DevTools profiler
-
-## 🛠️ Development Workflow
-
-### Adding a New Feature
-1. Add model + Hive adapter in `data/models/`
-2. Create repository method in `data/repositories/`
-3. Add Riverpod provider in feature's `providers/`
-4. Build UI in feature's `screens/` and `widgets/`
-5. Update routes in `core/router/`
-6. Add localization strings in `l10n/`
-7. Test on web first (fastest), then iOS/Android
-
-### Mock API Swap Point
-To connect real backend, only modify:
-```dart
-// lib/data/services/api_service.dart
-// Change from mock implementations to real HTTP calls via dio
-
-// lib/data/repositories/product_repository.dart
-// Response handling already abstracted - no changes needed
-```
-
-## 📊 API Contracts (Mock Endpoints)
-
-### /enhance
-```json
-POST { imageBytes }
-→ { enhancedImageUrl, metadata }
-```
-
-### /catalog
-```json
-POST { audioBytes | text, languageCode }
-→ { titleEn, titleHi, descriptionEn, descriptionHi, tags[], category }
-```
-
-### /price-suggest
-```json
-POST { category, tags, costInputs? }
-→ { minPrice, maxPrice, suggestedPrice, reasoning }
-```
-
-### /products
-```json
-POST { productPayload }
-→ { productId, status }
-
-GET
-→ { products[] }
-```
-
-## 🎯 Performance Targets
-
-- App startup: < 2 seconds
-- Image upload: < 5 seconds (with AI enhancement simulation)
-- Product list load: < 1 second (from cache)
-- Smooth 60 FPS on mid-range devices
-- < 50MB app size (release build)
-
-## 🔍 Debugging
-
-### Enable debug logging
-```dart
-// In main.dart
-flutter run --dart-define=DEBUG=true
-```
-
-### Hive box inspection
-```dart
-// View stored data
-final box = await Hive.openBox('auth_box');
-print(box.toMap());
-```
-
-### Network inspection
-```bash
-# Intercept HTTP with dio-interceptor
-# Mock responses logged to console
-```
-
-### UI inspection
-```bash
-# Dart DevTools
-flutter pub global activate devtools
-flutter pub global run devtools
-
-# Then use Inspector tab to inspect widget tree
-```
-
-## 📚 Key Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| flutter_riverpod | ^2.5.1 | State management |
-| go_router | ^14.8.1 | Navigation |
-| hive | ^2.2.3 | Local persistence |
-| dio | ^5.11.0 | HTTP client |
-| connectivity_plus | ^6.1.5 | Network status |
-| camera | ^0.11.4 | Mobile camera |
-| image_picker | ^1.1.2 | Gallery + web upload |
-| record | ^5.2.1 | Audio recording |
-| just_audio | ^0.9.46 | Audio playback |
-| flutter_tts | ^4.2.5 | Text-to-speech |
-| cached_network_image | ^3.4.1 | Image caching |
-| google_fonts | ^6.3.3 | Custom fonts |
-| easy_localization | ^3.0.8 | i18n |
-
-## 🚨 Known Limitations
-
-- Audio recording on web is limited (uses browser APIs)
-- Camera on iOS simulator shows file picker (use real device for full camera)
-- Sample craft images are mock URLs (replace with real S3/CDN URLs)
-- Speech-to-text is mock (returns canned transcripts)
-- Image enhancement is mock (returns same image with subtle filter)
-- Pricing suggestions are mock (uses random multipliers)
-
-## 📝 Future Enhancements
-
-- [ ] Real backend integration (FastAPI, Django)
-- [ ] Real speech-to-text (Whisper API, Bhashini)
-- [ ] Real image enhancement (ML model)
-- [ ] Real pricing ML model
-- [ ] Dark mode support
-- [ ] Additional languages (Marathi, Gujarati, Bengali, Tamil)
-- [ ] Seller dashboard with analytics
-- [ ] Buyer app for browsing
-- [ ] In-app messaging/chat
-- [ ] Payment integration
-
-## 📄 License
-
-© 2026 KalaSetu. All rights reserved.
-
-## 🤝 Support
-
-For issues or questions:
-1. Check existing GitHub issues
-2. Review this README
-3. Check UI_ENHANCEMENTS.md for responsive design details
-4. Open new issue with reproduction steps
+The mobile client of **KalaSetu (कलासेतु)** — an offline-first, multimodal AI business co-pilot tailored for rural and marginalized Indian artisans. Built with Flutter, it bridges low-literacy craftspeople to national and global e-marketplaces through voice-driven cataloging, on-device studio photo enhancement, automated bilingual copywriting, non-negotiable fair pricing floors, and conversational AI assistance.
 
 ---
 
-**Last Updated**: August 27, 2026  
-**Flutter Version**: Latest Stable  
-**Dart Version**: 3.12+  
-**Status**: ✅ Production-Ready MVP
+## Key Capabilities
+
+* **Offline-First Architecture:** Complete on-device resilience using local relational storage (Drift SQLite), fast key-value cache (Hive), and OS-level background synchronization workers (WorkManager). Product drafts, voice notes, and captured images are stored locally and automatically drained to the backend when network connectivity resumes.
+* **Multilingual Voice-to-Listing:** Artisans narrate product details in their regional language; voice notes are streamed to the Whisper Large v3 speech engine and synthesized into structured bilingual (English + Devanagari Hindi) listings with SEO tags.
+* **AI Photo Studio Integration:** Captures raw, cluttered workshop photos on budget smartphones and connects directly to the containerized rembg (U²-Net) + OpenCV CLAHE vision pipeline to produce square 1080×1080 e-commerce assets.
+* **Dual-Layer Fair Pricing Assistant:** Real-time calculation displaying an inviolable mathematical cost floor (`Materials + Labor Hours × Fair Wage + Transport + Overhead`) alongside indexed handicraft market comps from ChromaDB RAG.
+* **KalaMitra AI Conversational Co-Pilot:** In-app voice and chat assistant powered by Groq LPUs that executes direct app actions (filtering inventory, updating product status, triggering sync) and provides tailored advice on government schemes (PM Vishwakarma, Pehchan ID, Mudra loans) and craft defect troubleshooting.
+* **Orders & Packaging Advisory:** Order lifecycle management with craft-specific transit packaging guidelines and downloadable, printable shipping labels embedding ONDC-compliant artisan profile QR codes.
+* **Social Media Launchpad:** One-tap marketing copy generation with custom templates formatted for direct dispatch across WhatsApp, Instagram, and Facebook.
+* **Bilingual On-Device TTS:** Complete voice feedback across all screens using `flutter_tts`, enabling low-literacy artisans to listen to previews, prices, and guidance.
+
+---
+
+## Technology Stack
+
+| Component | Technology | Version | Purpose |
+|---|---|---|---|
+| **Framework** | Flutter (Dart SDK) | `^3.12.0` (Flutter 3.44+) | High-performance multi-platform UI compiled to native ARM machine code |
+| **State Management** | `flutter_riverpod` | `^2.5.1` | Reactive, testable, compile-safe application state |
+| **Routing** | `go_router` | `^14.6.2` | Declarative deep-linking and state-driven navigation |
+| **Relational Offline DB** | `drift` / `sqlite3_flutter_libs` | `^2.21.0` / `^0.5.24` | ACID-compliant local database for offline draft items and media queues |
+| **Key-Value Cache** | `hive` / `hive_flutter` | `^2.2.3` / `^1.1.0` | Ultra-fast local persistence for auth sessions, cached profiles, and settings |
+| **Background OS Worker** | `workmanager` | `^0.6.0` | Android background job execution with exponential backoff for queue draining |
+| **Networking & HTTP** | `dio` | `^5.7.0` | High-throughput asynchronous HTTP client with multipart file upload support |
+| **Connectivity** | `connectivity_plus` | `^6.0.5` | Real-time network interface monitoring |
+| **Camera & Media** | `camera`, `image_picker` | `^0.11.0+2`, `^1.1.2` | Hardware camera stream and gallery asset selection |
+| **Audio I/O** | `record`, `just_audio` | `^7.1.1`, `^0.9.40` | Low-latency audio capture and waveform playback |
+| **Voice Accessibility** | `flutter_tts` | `^4.1.0` | On-device text-to-speech reading in Hindi and English |
+| **Localization** | `easy_localization` | `^3.0.7` | Dynamic runtime locale switching (English, Hindi, Tamil, Bengali) |
+| **Typography & Icons** | `google_fonts`, `phosphor_flutter` | `^6.2.1`, `^2.1.0` | Craft-inspired typography (Zilla Slab & Nunito Sans) and accessible iconography |
+
+---
+
+## Directory Structure
+
+```text
+frontend/
+├── android/                    # Android native project and Gradle configuration
+├── ios/                        # iOS native project
+├── assets/                     # Packaged static assets
+│   ├── fonts/                  # Custom offline font binaries
+│   ├── icons/                  # Scalable craft and UI icons
+│   ├── images/                 # App logos, background motifs, and placeholders
+│   ├── sounds/                 # UI feedback audio files
+│   └── translations/           # JSON translation bundles (en.json, hi.json, ta.json, bn.json)
+├── lib/
+│   ├── main.dart               # App entrypoint, dependency initialization & service pre-warming
+│   ├── app.dart                # EasyLocalization wrapper & MaterialApp router binding
+│   ├── core/                   # Shared infrastructure and utilities
+│   │   ├── config/             # Dynamic API endpoint resolution (api_config.dart)
+│   │   ├── offline_sync/       # Drift SQLite media database, sync queue & WorkManager runner
+│   │   ├── providers/          # Global application state providers
+│   │   ├── router/             # GoRouter routes and transition handlers
+│   │   ├── services/           # Platform utilities (audio, social sharing, storage)
+│   │   ├── theme/              # Earthy artisan design system (terracotta, indigo, turmeric)
+│   │   ├── utils/              # Formatters, validators, and currency helpers
+│   │   └── widgets/            # Reusable responsive components and feedback banners
+│   ├── data/                   # Data and networking layer
+│   │   ├── models/             # Strongly typed data models and serializers
+│   │   ├── repositories/       # Abstraction layer between network and local databases
+│   │   └── services/           # Backend API clients (Dio REST endpoints)
+│   │       ├── api_service.dart            # Base HTTP client with auto-headers & error handling
+│   │       ├── chat_service.dart           # KalaMitra LLM conversation & intent parsing
+│   │       ├── image_enhancer_service.dart # U²-Net studio background excision endpoint
+│   │       ├── pricing_service.dart        # Dual-layer pricing & cost floor calculation
+│   │       ├── social_media_service.dart   # Marketing caption generator for social platforms
+│   │       ├── speech_service.dart         # Whisper STT transcription & voice cataloging
+│   │       └── sync_service.dart           # Local queue dispatcher to backend
+│   └── features/               # Domain feature modules
+│       ├── add_product/        # 5-step smart cataloging flow (photo, voice, review, price, publish)
+│       ├── auth/               # Artisan onboarding, Pehchan ID KYC & OTP verification
+│       ├── catalogue/          # Searchable, filterable product grid with sync state badges
+│       ├── chatbot/            # KalaMitra voice assistant with direct in-app action dispatch
+│       ├── home/               # Navigation shell with real-time connectivity indicators
+│       ├── notifications/      # Order alerts, scheme updates, and sync logs
+│       ├── orders/             # Order fulfillment, packaging advisory & printable shipping labels
+│       ├── profile/            # Master artisan credentials, language switcher & performance stats
+│       ├── social_media/       # Social media launchpad (WhatsApp/Instagram/Facebook)
+│       └── tutorial/           # First-run onboarding walkthrough for new artisans
+└── test/                       # Comprehensive unit and widget testing suites
+```
+
+---
+
+## Configuration & Environment Flags
+
+The app connects by default to the production cloud backend hosted on Railway, with dynamic fallback resolution for local LAN physical testing. Configuration is managed at build or runtime using Dart environment flags:
+
+### Available `--dart-define` Flags
+
+| Flag | Default Value | Description |
+|---|---|---|
+| `API_BASE_URL` | Dynamic auto-discovery | Base URL of the backend API (e.g., `https://kalasetu-production.up.railway.app`) |
+| `MOCK_AI_BACKEND` | `false` | When set to `true`, uses local heuristic mock responses for AI pipelines (offline testing without cloud API keys) |
+| `DEBUG` | `false` | Enables verbose HTTP network and sync queue diagnostic logging in the console |
+
+---
+
+## Getting Started
+
+### Prerequisites
+* **Flutter SDK**: `3.22.0` or newer (stable channel)
+* **Dart SDK**: `3.12.0` or newer
+* **Android Studio / Android SDK**: API level 21 (Android 5.0 Lollipop) or higher
+* **Java**: OpenJDK 17 or higher
+
+### 1. Install Dependencies
+From the `frontend/` directory:
+```bash
+flutter pub get
+```
+
+### 2. Run the Application
+
+#### Connect to Cloud Backend (Production Railway API):
+```bash
+flutter run --dart-define=API_BASE_URL=https://kalasetu-production.up.railway.app
+```
+
+#### Run with Standalone Mock Mode (No Backend Required):
+```bash
+flutter run --dart-define=MOCK_AI_BACKEND=true
+```
+
+#### Run Locally with Localhost Backend:
+If running `uvicorn backend.main:app` locally on machine port 8000:
+* On Android Emulator (points to host loopback):
+  ```bash
+  flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
+  ```
+* On Physical Android Device (replace with your machine's LAN IP):
+  ```bash
+  flutter run --dart-define=API_BASE_URL=http://192.168.1.5:8000
+  ```
+
+---
+
+## Building for Production
+
+### Build Release APK (Universal Android)
+Compile an optimized, standalone release APK pointed to the live production cloud backend:
+```bash
+flutter build apk --release --no-tree-shake-icons --dart-define=API_BASE_URL=https://kalasetu-production.up.railway.app
+```
+The compiled release binary will be generated at:
+```text
+build/app/outputs/flutter-apk/app-release.apk
+```
+
+### Build App Bundle (Google Play Store)
+```bash
+flutter build appbundle --release --dart-define=API_BASE_URL=https://kalasetu-production.up.railway.app
+```
+
+---
+
+## Testing
+
+The frontend includes extensive unit and widget test suites covering authentication, smart cataloging, offline sync, and conversational bot actions:
+
+```bash
+# Run all unit and widget tests
+flutter test
+
+# Run a specific test suite
+flutter test test/add_product_bilingual_test.dart
+flutter test test/chatbot_direct_actions_test.dart
+flutter test test/offline_sync_placeholder_test.dart
+```
+
+---
+
+## Offline-First Architecture Breakdown
+
+```text
+                      Artisan Action (New Listing / Edit / Photo)
+                                        │
+                                        ▼
+                      ┌──────────────────────────────────┐
+                      │    Drift (Local SQLite DB)       │
+                      │  - Stores raw image & audio path │
+                      │  - Marks status: "pending_sync"  │
+                      └─────────────────┬────────────────┘
+                                        │
+                         Connectivity Available?
+                                ├── YES ──► Immediate HTTP Multipart Upload via Dio
+                                │
+                                └── NO ───► Enqueue in WorkManager Background Queue
+                                                  │
+                                                  ▼
+                                    OS Network State Restored
+                                                  │
+                                                  ▼
+                                    WorkManager wakes background worker
+                                    Drains queue with exponential backoff
+                                    Updates local status to "synced"
+```
+
+---
+
+## Architecture & Code Quality Highlights
+
+1. **Strict Cost Floor Enforcement:** The UI visually bounds pricing input sliders so that an artisan cannot accidentally publish an item below its calculated material, labor, and transport costs.
+2. **Accessible Regional UX:** Form inputs accept voice notes alongside typing; text sizes, tap targets (minimum 48×48dp), and contrast ratios comply with WCAG 2.1 AA accessibility standards for low-literacy users.
+3. **Failover Resilience:** The networking layer handles transient cloud network errors gracefully, preserving the artisan's captured draft on device without data loss.

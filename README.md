@@ -17,7 +17,7 @@ Built for Smart India Hackathon 2026 · Problem Statement PS-26090
 [![SIH 2026](https://img.shields.io/badge/SIH%202026-PS--90-brightgreen)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Architecture Specification](docs/architecture.md)  · [Presentation](submission/PRESENTATION.md) · [Demo Video](submission/DEMO.md)
+[Architecture Specification](docs/architecture.md)  · [Submission Dossier](submission/submission.md) · [Presentation Deck (PDF)](submission/PRESENTATION.pdf)
 
 <br/>
 
@@ -150,9 +150,9 @@ KalaSetu/
 ├── requirements.txt           # Unified backend & ML python dependencies
 ├── Procfile                   # Cloud process execution command for Railway
 ├── LICENSE                    # MIT Open Source License
-├── submission/                # Final presentation & demo video links
-│   ├── PRESENTATION.md        # PPT/PPTX link & presentation highlights
-│   └── DEMO.md                # Video walkthrough & demonstration flow
+├── submission/                # Final presentation & submission dossier
+│   ├── submission.md          # Official submission dossier, presentation & video links
+│   └── PRESENTATION.pdf       # Project presentation slide deck (PDF)
 ├── docs/                      # Technical documentation & architecture specs
 │   ├── architecture.md        # In-depth architecture specification
 │   └── Ideas.md               # Product ideation notes
@@ -186,8 +186,8 @@ KalaSetu/
 | Machine Learning pipelines | [`ML/`](ML/) |
 | Architecture & technical specifications | [`docs/architecture.md`](docs/architecture.md) |
 | Product ideation notes | [`docs/Ideas.md`](docs/Ideas.md) |
-| Submission presentation (PPT/PPTX) | [`submission/PRESENTATION.md`](submission/PRESENTATION.md) |
-| Prototype demo video link | [`submission/DEMO.md`](submission/DEMO.md) |
+| Submission dossier & media links | [`submission/submission.md`](submission/submission.md) |
+| Presentation slide deck (PDF) | [`submission/PRESENTATION.pdf`](submission/PRESENTATION.pdf) |
 | App screenshots & visual walkthrough | [`assets/screenshots/`](assets/screenshots/) |
 | Unified Python dependencies | [`requirements.txt`](requirements.txt) |
 
@@ -195,16 +195,16 @@ KalaSetu/
 
 ## 8. Final Presentation
 
-Access the official Smart India Hackathon presentation deck and presentation guide:
-- **Presentation Documentation & Links:** [`submission/PRESENTATION.md`](submission/PRESENTATION.md)
-- **Local PPTX / Cloud Viewer:** Includes presentation highlights, PPTX download link, and shared viewer link for evaluators.
+Access the official Smart India Hackathon presentation deck and dossier:
+- **Presentation Slide Deck (PDF):** [`submission/PRESENTATION.pdf`](submission/PRESENTATION.pdf)
+- **Google Drive Link Of Presentation:** [`google drive link `](https://drive.google.com/file/d/1g0Bg0w2IjVS-Pwto8tREn7CM8BSsauXp/view?usp=sharing)
 
 ---
 
 ## 9. Demo Video
 
 A video walkthrough demonstrating the working prototype across voice cataloging, studio image processing, fair price calculation, and offline sync:
-- **Demo Video Documentation:** [`submission/DEMO.md`](submission/DEMO.md)
+- **Demo Video Google Drive lINK:** [`Demo video link`](https://drive.google.com/drive/folders/1en0R4M21m5d_nWMa_3JCC-h_3KorvcZA?usp=drive_link&authuser=1)
 
 ---
 
@@ -212,6 +212,7 @@ A video walkthrough demonstrating the working prototype across voice cataloging,
 
 Visual demonstration of the mobile app workflows:
 - **Screenshots Directory:** [`assets/screenshots/`](assets/screenshots/)
+- **Cloud Screenshot Gallery (Google Drive):** [Open High-Resolution Screenshots](https://drive.google.com/drive/u/0/folders/1-xWkvbRUBBh8lHN0tcv4wrhii_e2MibU)
 
 
 ---
