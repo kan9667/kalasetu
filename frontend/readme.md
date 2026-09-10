@@ -2,17 +2,17 @@
 
 A production-quality, cross-platform mobile app connecting marginalized artisans in India to markets through AI-driven smart cataloging and market linkage.
 
-## 🎯 Overview
+## Overview
 
 KalaSetu is an intelligent platform that helps artisans:
-- 📸 Capture and enhance product photos with AI
-- 🎤 Record voice descriptions in their native language
-- 🤖 Get AI-generated product listings in English & Hindi
-- 💰 Receive smart pricing suggestions
-- 🌐 List products to reach buyers online
-- 📱 Work offline - sync when connected
+- Capture and enhance product photos with AI
+- Record voice descriptions in their native language
+- Get AI-generated product listings in English & Hindi
+- Receive smart pricing suggestions
+- List products to reach buyers online
+- Work offline - sync when connected
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Flutter SDK (latest stable)
@@ -38,7 +38,7 @@ flutter run -d ios         # iOS simulator
 flutter run -d android     # Android emulator
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 lib/
@@ -151,7 +151,7 @@ l10n/
 └── app_hi.arb                       # Hindi localization
 ```
 
-## 🎨 Design System
+## Design System
 
 ### Color Palette (Warm, Earthy, Craft-Inspired)
 ```dart
@@ -180,7 +180,7 @@ xs: 4px, sm: 8px, md: 16px, lg: 24px, xl: 32px, xxl: 48px
 - **LG**: 600-900px (tablets, 2-3 column layouts)
 - **XL**: > 900px (desktops, 3-4 column layouts)
 
-## 📱 Platform Support
+## Platform Support
 
 ### iOS
 - **Min Version**: 12.0
@@ -200,7 +200,7 @@ xs: 4px, sm: 8px, md: 16px, lg: 24px, xl: 32px, xxl: 48px
   - No filesystem access → Uses browser file APIs
   - Uses `kIsWeb` checks throughout code
 
-## 🔄 State Management (Riverpod)
+## State Management (Riverpod)
 
 All state managed with `flutter_riverpod` for:
 - Authentication state
@@ -216,7 +216,7 @@ final productListProvider = StateNotifierProvider<ProductListNotifier, AsyncValu
 final addProductFlowProvider = StateNotifierProvider<AddProductFlowNotifier, AddProductDraft>(...);
 ```
 
-## 🗂️ Local Storage (Hive)
+## Local Storage (Hive)
 
 Persistent storage for:
 - **Auth**: User ID, phone number, session token
@@ -225,7 +225,7 @@ Persistent storage for:
 - **Sync Queue**: Failed API calls waiting for retry
 - **User Preferences**: Language, theme settings
 
-## 🌐 Offline-First Architecture
+## Offline-First Architecture
 
 ### How It Works
 1. **Every write operation**:
@@ -245,7 +245,7 @@ Persistent storage for:
    - Dismissible but reappears when truly offline
    - Visible in `AppScaffold` on all screens
 
-## 🔐 Authentication
+## Authentication
 
 ### Sign-In Flow
 ```
@@ -258,7 +258,7 @@ Phone Number → OTP Verification → Home
 - Session persisted in Hive - survives app restart
 - Automatic redirect to sign-in if logged out
 
-## 📸 Add Product Flow (5 Steps)
+## Add Product Flow (5 Steps)
 
 ### Step 1: Capture Image
 - Camera or gallery upload
@@ -290,20 +290,20 @@ Phone Number → OTP Verification → Home
 - Auto-add to Catalogue
 - Offline: added to sync queue with "Pending" badge
 
-## 🔍 Catalogue Screen
+## Catalogue Screen
 
 - **Grid/List toggle**: Switch between views
 - **Search**: Full-text search (title EN/HI, category, tags)
 - **Filter chips**: Category, status filters
 - **Product cards**: Thumbnail, title, price, status badge
 - **Status badges**:
-  - 🟢 Live (synced)
-  - 🟡 Pending sync (offline queue)
-  - ⚪ Draft (not yet listed)
+  - Live (synced)
+  - Pending sync (offline queue)
+  - Draft (not yet listed)
 - **Product detail**: Tap card → full view + edit + delete
 - **Empty state**: Illustration + "Add your first product" CTA
 
-## 👤 Profile Screen
+## Profile Screen
 
 - **Artisan info**: Avatar, name, craft type, location
 - **Stats cards**: Listings count, pending sync, estimated earnings
@@ -311,7 +311,7 @@ Phone Number → OTP Verification → Home
 - **Help & support**: Links to FAQs, contact
 - **Sign out**: Clears auth + returns to sign-in
 
-## 🌍 Localization
+## Localization
 
 All user-facing text uses `easy_localization`:
 - **Supported**: English (en), Hindi (hi)
@@ -329,7 +329,7 @@ Example string keys:
 "my_catalogue_title", "search_products_hint"
 ```
 
-## 🧪 Testing
+## Testing
 
 ### Widget Tests
 ```bash
@@ -341,10 +341,10 @@ flutter test test/auth_test.dart
 ```
 
 Key tests included:
-- ✅ Sign-in happy path
-- ✅ Add-product flow to success state
-- ✅ Catalogue empty vs populated state
-- ✅ Offline sync queue functionality
+- Sign-in happy path
+- Add-product flow to success state
+- Catalogue empty vs populated state
+- Offline sync queue functionality
 
 ### Manual Testing
 ```bash
@@ -366,7 +366,7 @@ flutter run -d android
 - [ ] Responsive: Test on multiple device sizes (use Chrome DevTools)
 - [ ] Performance: Use Dart DevTools profiler
 
-## 🛠️ Development Workflow
+## Development Workflow
 
 ### Adding a New Feature
 1. Add model + Hive adapter in `data/models/`
@@ -387,7 +387,7 @@ To connect real backend, only modify:
 // Response handling already abstracted - no changes needed
 ```
 
-## 📊 API Contracts (Mock Endpoints)
+## API Contracts (Mock Endpoints)
 
 ### /enhance
 ```json
@@ -416,7 +416,7 @@ GET
 → { products[] }
 ```
 
-## 🎯 Performance Targets
+## Performance Targets
 
 - App startup: < 2 seconds
 - Image upload: < 5 seconds (with AI enhancement simulation)
@@ -424,7 +424,7 @@ GET
 - Smooth 60 FPS on mid-range devices
 - < 50MB app size (release build)
 
-## 🔍 Debugging
+## Debugging
 
 ### Enable debug logging
 ```dart
@@ -454,7 +454,7 @@ flutter pub global run devtools
 # Then use Inspector tab to inspect widget tree
 ```
 
-## 📚 Key Dependencies
+## Key Dependencies
 
 | Package | Version | Purpose |
 |---------|---------|---------|
@@ -472,7 +472,7 @@ flutter pub global run devtools
 | google_fonts | ^6.3.3 | Custom fonts |
 | easy_localization | ^3.0.8 | i18n |
 
-## 🚨 Known Limitations
+## Known Limitations
 
 - Audio recording on web is limited (uses browser APIs)
 - Camera on iOS simulator shows file picker (use real device for full camera)
@@ -481,7 +481,7 @@ flutter pub global run devtools
 - Image enhancement is mock (returns same image with subtle filter)
 - Pricing suggestions are mock (uses random multipliers)
 
-## 📝 Future Enhancements
+## Future Enhancements
 
 - [ ] Real backend integration (FastAPI, Django)
 - [ ] Real speech-to-text (Whisper API, Bhashini)
@@ -494,11 +494,11 @@ flutter pub global run devtools
 - [ ] In-app messaging/chat
 - [ ] Payment integration
 
-## 📄 License
+## License
 
 © 2026 KalaSetu. All rights reserved.
 
-## 🤝 Support
+## Support
 
 For issues or questions:
 1. Check existing GitHub issues
@@ -511,4 +511,4 @@ For issues or questions:
 **Last Updated**: August 27, 2026  
 **Flutter Version**: Latest Stable  
 **Dart Version**: 3.12+  
-**Status**: ✅ Production-Ready MVP
+**Status**: Production-Ready MVP
