@@ -34,7 +34,7 @@ Built for Smart India Hackathon 2026 · Problem Statement PS-26090
 > Evaluators can test KalaSetu immediately on Android or inspect the cloud AI backend via Swagger UI:
 > * **Android Release APK**: [Download v1.0.0 APK](https://github.com/kan9667/kalasetu/releases/tag/v1.0.0) *(Universal, crash-proof build)*
 > * **Live Cloud Backend**: [`https://kalasetu-production.up.railway.app`](https://kalasetu-production.up.railway.app) *(FastAPI + ML Pipelines on Railway)*
-> * **Interactive API Docs**: [Open Swagger UI](https://kalasetu-production.up.railway.app/docs) *(Test all 8 endpoints directly from your browser)*
+> * **Interactive API Docs**: [Open Swagger UI](https://kalasetu-production.up.railway.app/docs) *(Explore all 8 API modules and 30+ endpoints directly from your browser)*
 > * **Pre-Seeded Demo Login**: Phone: `9876543210` | OTP: `123456` *(Rameshwar Lal Kumhar, Master Terracotta Artisan)*
 
 ---
@@ -96,14 +96,14 @@ KalaSetu compresses the entire digitization and e-commerce pipeline into **one p
 | **Computer Vision** | rembg (U²-Net), OpenCV, Pillow | 10-stage studio background removal & enhancement |
 | **Speech-to-Text** | Whisper Large v3 (Groq API) | Regional dialect audio transcription with craft glossary |
 | **Large Language Models** | Groq Cloud (primary), Google Gemini (fallback) | Bilingual listing generation, KalaMitra chat, social copy |
-| **Vector Store & RAG** | ChromaDB, Google Gemini Embeddings | Market benchmark similarity search for pricing intelligence |
-| **Deployment** | Docker, Uvicorn | Production-ready containerized microservices |
+| **Deployment & Hosting** | Railway (PaaS), Nixpacks, Procfile | Continuous cloud deployment & auto-built container environment |
+| **Server & Runtime** | Uvicorn (ASGI), Python 3.11+ | High-concurrency production ASGI application server |
 
 ---
 
 ## 6. Architecture
 
-See [docs/architecture.md](docs/architecture.md) for architecture documentation and [docs/ARCHITECTURE.md](docs/architecture.md) for the 76KB in-depth technical specification.
+See [docs/architecture.md](docs/architecture.md) for the comprehensive 76KB architecture specification and system design.
 
 ```text
        Artisan (Smartphone Camera & Microphone)
@@ -147,21 +147,20 @@ See [docs/architecture.md](docs/architecture.md) for architecture documentation 
 ```text
 KalaSetu/
 ├── README.md                  # Standardized SIH 15-section project overview
-├── SUBMISSION_GUIDE.md        # Evaluator checklist & submission instructions
 ├── requirements.txt           # Unified backend & ML python dependencies
+├── Procfile                   # Cloud process execution command for Railway
 ├── LICENSE                    # MIT Open Source License
 ├── submission/                # Final presentation & demo video links
-│   ├── PRESENTATION.md        # PPT/PPTX link / Google Drive viewer link
-│   └── DEMO.md                # Video walkthrough & demonstration agenda
+│   ├── PRESENTATION.md        # PPT/PPTX link & presentation highlights
+│   └── DEMO.md                # Video walkthrough & demonstration flow
 ├── docs/                      # Technical documentation & architecture specs
-│   ├── architecture.md        # High-level architecture specification
-│   ├── Ideas.md               # Product ideation notes
-│   └── kalasetu-redesign-v3.html # Interactive UI design mockup
+│   ├── architecture.md        # In-depth architecture specification
+│   └── Ideas.md               # Product ideation notes
 ├── assets/                    # Project visuals & branding
-│   └── screenshots/           # Prototype walkthrough screenshots
+│   └── screenshots/           # Prototype walkthrough screenshots & guide
 │       └── README.md
 ├── backend/                   # FastAPI backend service
-│   ├── routers/               # REST endpoints (/api/v1/auth, catalog, pricing, chat)
+│   ├── routers/               # REST routers (/api/v1/auth, catalog, pricing, products, voice, chat, social, health)
 │   ├── services/              # Core business logic & AI orchestration
 │   ├── models/                # SQLAlchemy models & Pydantic schemas
 │   ├── utils/                 # Shared cost extraction & helper utilities
@@ -174,8 +173,8 @@ KalaSetu/
     ├── lib/
     │   ├── core/              # Config, routing, offline sync engine, theme
     │   ├── data/              # Repositories, models, network services
-    │   └── features/          # Feature screens (auth, catalog, pricing, chatbot)
-    └── assets/                # App logos, craft icons, localizations
+    │   └── features/          # Feature screens (auth, catalog, pricing, chatbot, social, orders)
+    └── assets/                # App logos, craft icons, localizations, fonts & audio
 ```
 
 ### What goes where?
@@ -186,17 +185,19 @@ KalaSetu/
 | Backend API & business logic | [`backend/`](backend/) |
 | Machine Learning pipelines | [`ML/`](ML/) |
 | Architecture & technical specifications | [`docs/architecture.md`](docs/architecture.md) |
+| Product ideation notes | [`docs/Ideas.md`](docs/Ideas.md) |
 | Submission presentation (PPT/PPTX) | [`submission/PRESENTATION.md`](submission/PRESENTATION.md) |
 | Prototype demo video link | [`submission/DEMO.md`](submission/DEMO.md) |
 | App screenshots & visual walkthrough | [`assets/screenshots/`](assets/screenshots/) |
-| Evaluator compliance checklist | [`SUBMISSION_GUIDE.md`](SUBMISSION_GUIDE.md) |
 | Unified Python dependencies | [`requirements.txt`](requirements.txt) |
 
 ---
 
 ## 8. Final Presentation
 
-
+Access the official Smart India Hackathon presentation deck and presentation guide:
+- **Presentation Documentation & Links:** [`submission/PRESENTATION.md`](submission/PRESENTATION.md)
+- **Local PPTX / Cloud Viewer:** Includes presentation highlights, PPTX download link, and shared viewer link for evaluators.
 
 ---
 
@@ -282,6 +283,9 @@ flutter build apk --release --no-tree-shake-icons --dart-define=API_BASE_URL=htt
 # Run backend integration and rule suites (from root)
 pytest backend/tests/ -v
 
+# Run standalone ML pipeline unit tests
+pytest ML/image_pipeline/tests/ ML/voice_pipeline/tests/ -v
+
 # Run Flutter client unit tests
 cd frontend
 flutter test
@@ -313,7 +317,9 @@ KalaSetu is built by a 6-person multidisciplinary engineering team for **Smart I
 
 ---
 
+## 15. Conclusion & Impact
 
+KalaSetu transforms how traditional Indian micro-entrepreneurs interface with the digital economy. By collapsing complex e-commerce workflows into **one photograph and one spoken sentence**, eliminating predatory intermediary markups through an **inviolable mathematical cost floor**, and guaranteeing access even in zero-connectivity rural clusters via **offline-first local queues**, KalaSetu ensures that India's rich artisanal heritage translates into sustainable, independent digital livelihoods.
 
 ---
 
