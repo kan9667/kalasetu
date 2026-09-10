@@ -17,7 +17,7 @@
 
 * **"My Orders" & Packaging Advisory Screen**:
   - An **Orders Tab/Screen** displaying received orders, buyer location, status (*New, Packed, Shipped*).
-  - **AI Packaging Suggestions**: Tailored advice based on craft category (e.g., for *Terracotta/Pottery*: double-wall corrugated box, straw/shredded paper cushioning; for *Chanderi Silk*: moisture-proof wrapping).
+  - **AI Packaging Suggestions**: Tailored advice based on craft category (e.g., for *Terracotta/Pottery*: double-wall corrugated box, straw/shredded paper cushioning; for *Chanderi Silk*: moisture-proof packaging, acid-free tissue wrapping).
 
 * **Artisan Performance & Revenue Analytics**:
   - A dashboard widget in Profile or Home showing:
