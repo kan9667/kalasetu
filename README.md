@@ -34,8 +34,6 @@ Built for Smart India Hackathon 2026 · Problem Statement PS-26090
 > Evaluators can test KalaSetu immediately on Android or inspect the cloud AI backend via Swagger UI:
 > * **Android Release APK**: [Download v1.0.0 APK](https://github.com/kan9667/kalasetu/releases/tag/v1.0.0) *(Universal, crash-proof build)*
 > * **Live Cloud Backend**: [`https://kalasetu-production.up.railway.app`](https://kalasetu-production.up.railway.app) *(FastAPI + ML Pipelines on Railway)*
-> * **Interactive API Docs**: [Open Swagger UI](https://kalasetu-production.up.railway.app/docs) *(Explore all 8 API modules and 30+ endpoints directly from your browser)*
-> * **Pre-Seeded Demo Login**: Phone: `9876543210` | OTP: `123456` *(Rameshwar Lal Kumhar, Master Terracotta Artisan)*
 
 ---
 
