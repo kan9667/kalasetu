@@ -23,7 +23,6 @@
 
 ## 3. Live Evaluator Sandbox
 
-* **Live Cloud Backend (Swagger UI):** [`https://kalasetu-production.up.railway.app/docs`](https://kalasetu-production.up.railway.app/docs)
 * **Production Android Release APK:** [Download v1.0.0 APK](https://github.com/kan9667/kalasetu/releases/tag/v1.0.0)
 * **Curated Visual Gallery:** [Google Drive Screenshot Repository](https://drive.google.com/drive/u/0/folders/1-xWkvbRUBBh8lHN0tcv4wrhii_e2MibU)
 
