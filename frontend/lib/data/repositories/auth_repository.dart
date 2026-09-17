@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../../core/config/api_config.dart';
+import '../../core/storage/secure_token_storage.dart';
 import '../models/user_profile.dart';
 
 /// Repository for authentication operations with Hive persistence and live backend integration
@@ -14,9 +15,11 @@ class AuthRepository {
 
   final Dio _dio;
   final String? _explicitBaseUrl;
+  final SecureTokenStorage _tokenStorage;
 
-  AuthRepository({String? baseUrl, Dio? dio})
+  AuthRepository({String? baseUrl, Dio? dio, SecureTokenStorage? tokenStorage})
       : _explicitBaseUrl = baseUrl,
+        _tokenStorage = tokenStorage ?? SecureTokenStorage(),
         _dio = dio ??
             Dio(
               BaseOptions(
@@ -58,6 +61,10 @@ class AuthRepository {
   }
 
   Future<String?> getAccessToken() async {
+    final secureToken = await _tokenStorage.getToken();
+    if (secureToken != null && secureToken.isNotEmpty) {
+      return secureToken;
+    }
     final box = await _getBox();
     return box.get(_keyAccessToken) as String?;
   }
@@ -72,8 +79,9 @@ class AuthRepository {
     await box.put(_keyUserId, userId);
     await box.put(_keyPhoneNumber, phoneNumber);
     await box.put(_keyIsAuthenticated, true);
-    if (token != null) {
-      await box.put(_keyAccessToken, token);
+    if (token != null && token.isNotEmpty) {
+      await _tokenStorage.saveToken(token);
+      await box.delete(_keyAccessToken);
     }
   }
 
@@ -82,6 +90,7 @@ class AuthRepository {
     await box.delete(_keyUserId);
     await box.delete(_keyPhoneNumber);
     await box.delete(_keyAccessToken);
+    await _tokenStorage.clearToken();
     await box.put(_keyIsAuthenticated, false);
   }
 
@@ -145,6 +154,9 @@ class AuthRepository {
             : null;
 
         final profile = artisanMap != null ? UserProfile.fromJson(artisanMap) : null;
+        if (token != null && token.isNotEmpty) {
+          await _tokenStorage.saveToken(token);
+        }
         return (profile, token);
       }
     } on DioException catch (e) {

@@ -14,6 +14,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../data/models/product.dart';
 import '../../social_media/providers/social_media_provider.dart';
 import '../../social_media/widgets/social_media_launchpad_sheet.dart';
+import 'review_existing_product_screen.dart';
 
 class ProductDetailScreen extends ConsumerWidget {
   final String productId;
@@ -190,16 +191,12 @@ class ProductDetailScreen extends ConsumerWidget {
         ],
       ),
       onConfirm: () async {
-        final updated = product.copyWith(
-          status: ProductStatus.listingRemoved,
-          statusUpdatedAt: DateTime.now(),
-        );
-        await ref.read(productListProvider.notifier).updateProduct(updated);
+        await ref.read(productListProvider.notifier).unpublishProduct(product.id);
         if (context.mounted) {
           Navigator.of(context, rootNavigator: true).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('product_removed_ondc'.tr()),
+              content: Text('removal_queued_notice'.tr()),
               backgroundColor: AppColors.ink,
             ),
           );
@@ -209,19 +206,11 @@ class ProductDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _relistProduct(BuildContext context, WidgetRef ref, Product product) async {
-    final updated = product.copyWith(
-      status: ProductStatus.live,
-      statusUpdatedAt: DateTime.now(),
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ReviewExistingProductScreen(initialProduct: product),
+      ),
     );
-    await ref.read(productListProvider.notifier).updateProduct(updated);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('product_relisted_live'.tr()),
-          backgroundColor: AppColors.statusSuccessFg,
-        ),
-      );
-    }
   }
 
   void _showLegendDialog(BuildContext context) {
@@ -267,16 +256,27 @@ class ProductDetailScreen extends ConsumerWidget {
   (IconData, Color, Color, String) _statusVisual(ProductStatus status) {
     switch (status) {
       case ProductStatus.live:
+      case ProductStatus.published:
         return (Icons.check_circle, AppColors.statusSuccessBg, AppColors.statusSuccessFg, 'status_live');
+      case ProductStatus.approved:
+        return (Icons.verified, AppColors.statusSuccessBg, AppColors.statusSuccessFg, 'status_live');
       case ProductStatus.pendingSync:
+      case ProductStatus.awaitingApproval:
         return (Icons.cloud_queue, AppColors.statusPendingBg, AppColors.statusPendingFg, 'status_pending_sync');
+      case ProductStatus.pendingApprovalSync:
+        return (Icons.schedule_send, AppColors.statusPendingBg, AppColors.statusPendingFg, 'status_pending_approval_sync');
+      case ProductStatus.pendingUnpublishSync:
+        return (Icons.sync_disabled, AppColors.terracottaLight, AppColors.terracottaDark, 'status_pending_unpublish_sync');
       case ProductStatus.draft:
+      case ProductStatus.legacyUnverified:
         return (Icons.edit_note, AppColors.parchmentDeep, AppColors.inkSoft, 'status_draft');
       case ProductStatus.sold:
         return (Icons.sell, AppColors.goldLight, AppColors.goldDark, 'status_sold');
       case ProductStatus.soldOut:
         return (Icons.remove_shopping_cart_outlined, AppColors.terracottaLight, AppColors.terracottaDark, 'status_sold_out');
       case ProductStatus.listingRemoved:
+      case ProductStatus.superseded:
+      case ProductStatus.rejected:
         return (Icons.visibility_off_outlined, AppColors.parchmentDeep, AppColors.inkFaint, 'status_listing_removed');
     }
   }

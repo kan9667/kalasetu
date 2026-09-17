@@ -19,10 +19,22 @@ if str(PROJECT_ROOT) not in sys.path:
 import pytest
 from fastapi.testclient import TestClient
 from backend.main import app
+from backend.database import SessionLocal, init_db
+from backend.models.db_models import ArtisanDB
 from backend.models.schemas import PriceSuggestRequest, CostInputsSchema
+from backend.utils.auth import create_access_token
 from backend.utils.cost_extraction import regex_extract_cost_cues, DEFAULT_HOURLY_RATE
 
-client = TestClient(app)
+init_db()
+_db = SessionLocal()
+if not _db.query(ArtisanDB).filter(ArtisanDB.id == "artisan_cost_test").first():
+    _db.add(ArtisanDB(id="artisan_cost_test", name="Cost Artisan", phone="+919876543211"))
+    _db.commit()
+_db.close()
+
+from backend.tests.conftest import IdempotentTestClient
+token = create_access_token("artisan_cost_test")
+client = IdempotentTestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
 def test_regex_cost_phrasing_variants():

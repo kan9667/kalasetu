@@ -3,15 +3,16 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_colors.dart';
-
 import '../config/api_config.dart';
+import '../storage/private_media_cache.dart';
 
-class AppImage extends StatelessWidget {
+class AppImage extends StatefulWidget {
   final String imageUrl;
   final BoxFit fit;
   final double? width;
   final double? height;
   final Widget? fallbackWidget;
+  final PrivateMediaCache? mediaCache;
 
   const AppImage({
     super.key,
@@ -20,28 +21,129 @@ class AppImage extends StatelessWidget {
     this.width,
     this.height,
     this.fallbackWidget,
+    this.mediaCache,
   });
+
+  static bool isPrivateMedia(String url) {
+    if (url.startsWith('med_')) return true;
+    if (url.contains('/api/v1/media/')) return true;
+    return false;
+  }
+
+  static String extractMediaId(String url) {
+    if (url.startsWith('med_')) {
+      return url.split('.').first;
+    }
+    final match = RegExp(r'/api/v1/media/([^/?#]+)').firstMatch(url);
+    if (match != null) {
+      return match.group(1)!;
+    }
+    return url;
+  }
+
+  @override
+  State<AppImage> createState() => _AppImageState();
+}
+
+class _AppImageState extends State<AppImage> {
+  Future<File>? _mediaFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveMediaFuture();
+  }
+
+  @override
+  void didUpdateWidget(AppImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl ||
+        oldWidget.mediaCache != widget.mediaCache) {
+      _resolveMediaFuture();
+    }
+  }
+
+  void _resolveMediaFuture() {
+    String resolvedUrl = widget.imageUrl;
+    if (resolvedUrl.startsWith('/uploads/')) {
+      resolvedUrl = '${ApiConfig.baseUrl}$resolvedUrl';
+    }
+
+    if (!kIsWeb && AppImage.isPrivateMedia(resolvedUrl)) {
+      final mediaId = AppImage.extractMediaId(resolvedUrl);
+      final cache = widget.mediaCache ?? PrivateMediaCache.instance;
+      final downloadUrl = resolvedUrl.startsWith('http')
+          ? resolvedUrl
+          : '${ApiConfig.baseUrl}/api/v1/media/$mediaId';
+      _mediaFuture = cache.downloadAndCacheMedia(
+        mediaId: mediaId,
+        downloadUrl: downloadUrl,
+      );
+    } else {
+      _mediaFuture = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final fallback =
-        fallbackWidget ??
+        widget.fallbackWidget ??
         Container(
-          width: width,
-          height: height,
+          width: widget.width,
+          height: widget.height,
           color: AppColors.surfaceVariant,
           child: const Center(
             child: Icon(Icons.palette_outlined, size: 40, color: AppColors.oak),
           ),
         );
 
-    if (imageUrl.isEmpty) {
+    if (widget.imageUrl.isEmpty) {
       return fallback;
     }
 
-    String resolvedUrl = imageUrl;
+    String resolvedUrl = widget.imageUrl;
     if (resolvedUrl.startsWith('/uploads/')) {
       resolvedUrl = '${ApiConfig.baseUrl}$resolvedUrl';
+    }
+
+    // Private media asset caching
+    if (_mediaFuture != null) {
+      return FutureBuilder<File>(
+        future: _mediaFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Container(
+              width: widget.width,
+              height: widget.height,
+              color: AppColors.surfaceVariant,
+              child: const Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.terracotta,
+                  ),
+                ),
+              ),
+            );
+          }
+          if (snapshot.hasError) {
+            debugPrint('[AppImage] Future error: ${snapshot.error} ${snapshot.stackTrace}');
+            return fallback;
+          }
+          if (snapshot.hasData && snapshot.data != null) {
+            return Image.file(
+              snapshot.data!,
+              width: widget.width,
+              height: widget.height,
+              fit: widget.fit,
+              errorBuilder: (context, error, stackTrace) => fallback,
+            );
+          }
+          return fallback;
+        },
+      );
     }
 
     final isNetwork =
@@ -59,9 +161,9 @@ class AppImage extends StatelessWidget {
       if (file.existsSync()) {
         return Image.file(
           file,
-          width: width,
-          height: height,
-          fit: fit,
+          width: widget.width,
+          height: widget.height,
+          fit: widget.fit,
           errorBuilder: (context, error, stackTrace) => fallback,
         );
       }
@@ -71,14 +173,14 @@ class AppImage extends StatelessWidget {
     if (isBlobOrLocalhost) {
       return Image.network(
         resolvedUrl,
-        width: width,
-        height: height,
-        fit: fit,
+        width: widget.width,
+        height: widget.height,
+        fit: widget.fit,
         loadingBuilder: (context, child, loadingProgress) {
           if (loadingProgress == null) return child;
           return Container(
-            width: width,
-            height: height,
+            width: widget.width,
+            height: widget.height,
             color: AppColors.parchmentDeep,
             child: const Center(
               child: SizedBox(
@@ -104,12 +206,12 @@ class AppImage extends StatelessWidget {
     if (isNetwork) {
       return CachedNetworkImage(
         imageUrl: resolvedUrl,
-        width: width,
-        height: height,
-        fit: fit,
+        width: widget.width,
+        height: widget.height,
+        fit: widget.fit,
         placeholder: (context, url) => Container(
-          width: width,
-          height: height,
+          width: widget.width,
+          height: widget.height,
           color: AppColors.surfaceVariant,
           child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
         ),
@@ -119,9 +221,9 @@ class AppImage extends StatelessWidget {
 
     return Image.file(
       File(resolvedUrl),
-      width: width,
-      height: height,
-      fit: fit,
+      width: widget.width,
+      height: widget.height,
+      fit: widget.fit,
       errorBuilder: (context, error, stackTrace) => fallback,
     );
   }

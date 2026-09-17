@@ -158,6 +158,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
+  void expireSession() {
+    state = state.copyWith(isAuthenticated: false);
+  }
+
   Future<void> signOut() async {
     await _authRepository.clearAuthData();
     state = const AuthState();

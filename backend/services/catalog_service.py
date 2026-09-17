@@ -34,14 +34,8 @@ from ML.voice_pipeline.orchestrator.processor import ArtisanVoiceProcessor
 from ML.voice_pipeline.glossary import build_prompt_hint, get_glossary_terms
 from ML.voice_pipeline.models import JobStatus
 
-# Import Image Pipeline Enhancer
-try:
-    from ML.image_pipeline.enhancer import enhance_image as run_ml_enhancer
-except ImportError:
-    try:
-        from enhancer import enhance_image as run_ml_enhancer
-    except ImportError:
-        run_ml_enhancer = None
+# Image Pipeline Enhancer is lazy-loaded inside enhance_product_photo() to avoid import-time ML penalties
+run_ml_enhancer = None
 
 from .groq_client import GroqClient
 from ..config import get_settings
@@ -91,12 +85,14 @@ class CatalogService:
         blocking FastAPI's async event loop.
         """
         global run_ml_enhancer
+        degraded_reason = None
         if run_ml_enhancer is None:
             try:
                 from ML.image_pipeline.enhancer import enhance_image as _dyn_enhancer
                 run_ml_enhancer = _dyn_enhancer
             except Exception as import_err:
-                logger.warning("[CatalogService] ML image enhancer dynamic import failed: %s", import_err)
+                degraded_reason = f"ML image enhancer dynamic import failed: {import_err}"
+                logger.warning("[CatalogService] %s", degraded_reason)
 
         if run_ml_enhancer is not None:
             try:
@@ -106,16 +102,18 @@ class CatalogService:
                     output_path=output_path,
                 )
                 if enhanced_path and Path(enhanced_path).is_file():
-                    return str(enhanced_path)
+                    return (str(enhanced_path), False, None)
             except Exception as e:
-                logger.error("[CatalogService] Image enhancement execution failed, falling back to input image: %s", e)
+                degraded_reason = f"Image enhancement execution failed: {e}"
+                logger.error("[CatalogService] %s, falling back to input image", degraded_reason)
 
         # Fallback: copy input image to output path if specified, or return input path
+        reason = degraded_reason or "AI enhancement unavailable; raw image preserved"
         if output_path:
             import shutil
             shutil.copy2(input_path, output_path)
-            return output_path
-        return input_path
+            return (output_path, True, reason)
+        return (input_path, True, reason)
 
 
     # ── Voice Transcription (ML Voice Pipeline) ─────────────────────────────
@@ -686,7 +684,11 @@ Return ONLY a valid JSON object matching keys: materials, labor_hours, hourly_ra
             description=listing_res.description_en,
             description_hi=listing_res.description_hi,
             price=pricing_res.suggested_price,
-            image_url=image_url or "/uploads/default.jpg",
+            materials=final_materials,
+            labor_hours=final_hours,
+            hourly_rate=final_rate,
+            transport=final_transport,
+            overhead=final_overhead,
             category=listing_res.category,
             tags=listing_res.tags,
             status="draft",

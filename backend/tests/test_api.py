@@ -24,8 +24,20 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.main import app
+from backend.database import SessionLocal, init_db
+from backend.models.db_models import ArtisanDB
+from backend.utils.auth import create_access_token
 
-client = TestClient(app)
+init_db()
+_db = SessionLocal()
+if not _db.query(ArtisanDB).filter(ArtisanDB.id == "artisan_01").first():
+    _db.add(ArtisanDB(id="artisan_01", name="Ramesh", phone="+919876543210"))
+    _db.commit()
+_db.close()
+
+from backend.tests.conftest import IdempotentTestClient
+token = create_access_token("artisan_01")
+client = IdempotentTestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
 def test_health():
@@ -67,9 +79,24 @@ def test_pricing_suggest():
 
 
 def test_products_crud_and_sync():
-    """Test product listing, creation, and offline batch sync."""
+    """Test product listing, creation, and offline batch sync with bearer authentication."""
+    from backend.utils.auth import create_access_token
+    from backend.database import SessionLocal
+    from backend.models.db_models import ArtisanDB
+
+    db = SessionLocal()
+    artisan = db.query(ArtisanDB).filter(ArtisanDB.id == "artisan_01").first()
+    if not artisan:
+        artisan = ArtisanDB(id="artisan_01", name="Ramesh", phone="+919876543210")
+        db.add(artisan)
+        db.commit()
+    db.close()
+
+    token = create_access_token("artisan_01")
+    headers = {"Authorization": f"Bearer {token}"}
+
     # 1. List initial products
-    res = client.get("/api/v1/products")
+    res = client.get("/api/v1/products", headers=headers)
     assert res.status_code == 200
     initial_products = res.json()
     assert isinstance(initial_products, list)
@@ -80,47 +107,58 @@ def test_products_crud_and_sync():
         "title": "Test Dokra Brass Figurine",
         "description": "Lost wax cast brass craft",
         "price": 1500.0,
-        "image_url": "/uploads/images/test.jpg",
         "category": "Jewelry",
         "tags": ["dokra", "brass", "tribal"],
-        "status": "live",
+        "materials": 200.0,
+        "labor_hours": 2.0,
+        "hourly_rate": 100.0,
     }
-    res_create = client.post("/api/v1/products", json=new_prod)
+    import uuid
+    test_run_id = uuid.uuid4().hex[:8]
+    create_headers = {**headers, "Idempotency-Key": f"test_create_{test_run_id}"}
+    res_create = client.post("/api/v1/products", json=new_prod, headers=create_headers)
     assert res_create.status_code == 201
     created = res_create.json()
     prod_id = created["id"]
     print(f"✅ Product Create Passed: Created ID {prod_id}")
 
     # 3. Get single product
-    res_get = client.get(f"/api/v1/products/{prod_id}")
+    res_get = client.get(f"/api/v1/products/{prod_id}", headers=headers)
     assert res_get.status_code == 200
     assert res_get.json()["title"] == "Test Dokra Brass Figurine"
 
-    # 4. Offline Batch Sync
+    # 4. Offline Batch Sync (drafts)
+    sync_id = f"offline_prod_{uuid.uuid4().hex[:8]}"
     sync_payload = {
         "products": [
             {
-                "id": "offline_prod_101",
+                "id": sync_id,
                 "title": "Offline Queued Saree",
                 "description": "Handloom silk saree captured offline",
                 "price": 4200.0,
-                "image_url": "/uploads/images/offline.jpg",
                 "category": "Textiles",
                 "tags": ["offline", "sync"],
-                "status": "pendingSync",
+                "materials": 500.0,
+                "labor_hours": 4.0,
+                "hourly_rate": 200.0,
+                "expected_revision": None,
             }
         ]
     }
-    res_sync = client.post("/api/v1/products/sync", json=sync_payload)
+    sync_headers = {**headers, "Idempotency-Key": f"test_sync_{test_run_id}"}
+    res_sync = client.post("/api/v1/products/sync", json=sync_payload, headers=sync_headers)
     assert res_sync.status_code == 200
     sync_data = res_sync.json()
     assert sync_data["synced_count"] == 1
-    assert sync_data["products"][0]["id"] == "offline_prod_101"
+    assert sync_data["products"][0]["id"] == sync_id
     print("✅ Product Offline Sync Batch Passed")
 
-    # 5. Delete product
-    res_del = client.delete(f"/api/v1/products/{prod_id}")
+    # 5. Delete products
+    del_headers_1 = {**headers, "Idempotency-Key": f"test_del_1_{test_run_id}"}
+    res_del = client.delete(f"/api/v1/products/{prod_id}", headers=del_headers_1)
     assert res_del.status_code == 200
+    del_headers_2 = {**headers, "Idempotency-Key": f"test_del_2_{test_run_id}"}
+    client.delete(f"/api/v1/products/{sync_id}", headers=del_headers_2)
     print("✅ Product Delete Passed")
 
 

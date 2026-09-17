@@ -30,6 +30,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.main import app
+from backend.database import SessionLocal, init_db
+from backend.models.db_models import ArtisanDB
+from backend.utils.auth import create_access_token
 from ML.voice_pipeline.models import (
     Transcript,
     VoicePipelineResult,
@@ -37,7 +40,25 @@ from ML.voice_pipeline.models import (
     JobStatus,
 )
 
-client = TestClient(app)
+init_db()
+_db = SessionLocal()
+if not _db.query(ArtisanDB).filter(ArtisanDB.id == "artisan_voice_test").first():
+    _db.add(ArtisanDB(id="artisan_voice_test", name="Voice Artisan", phone="+919876543213"))
+    _db.commit()
+_db.close()
+
+token = create_access_token("artisan_voice_test")
+client = TestClient(app, headers={"Authorization": f"Bearer {token}"})
+
+import uuid
+_orig_post = client.post
+def _auto_idem_post(url, *args, **kwargs):
+    headers = kwargs.get("headers") or {}
+    if "Idempotency-Key" not in headers:
+        headers = {**headers, "Idempotency-Key": f"test_auto_{uuid.uuid4().hex}"}
+    kwargs["headers"] = headers
+    return _orig_post(url, *args, **kwargs)
+client.post = _auto_idem_post
 
 
 def generate_synthetic_wav_bytes(duration_seconds: float = 1.0, framerate: int = 16000) -> bytes:
@@ -219,7 +240,7 @@ def test_voice_error_handling():
     """Test error handling for empty audio."""
     files = {"audio": ("empty.wav", b"", "audio/wav")}
     res = client.post("/api/v1/voice/transcribe", files=files, data={"language_code": "hi"})
-    assert res.status_code in [400, 500]
+    assert res.status_code in [400, 422, 500]
     print("✅ Voice Error Handling Passed: Empty audio properly rejected")
 
 

@@ -21,6 +21,7 @@ dependencies:
   # Local storage
   hive: ^2.2.3
   hive_flutter: ^1.1.0
+  flutter_secure_storage: ^10.3.3
 
   # Offline media queue
   drift: ^2.21.0
@@ -52,6 +53,7 @@ dependencies:
   # Utils
   path_provider: ^2.1.4
   permission_handler: ^13.0.1
+  crypto: ^3.0.3
 
   # Sharing & Gallery
   share_plus: ^10.1.4

@@ -33,13 +33,26 @@ class ProductAdapter extends TypeAdapter<Product> {
       statusUpdatedAt: fields[13] as DateTime?,
       restockQuantity: fields[14] as int?,
       statusReason: fields[15] as String?,
+      revision: fields[16] == null ? 1 : fields[16] as int,
+      approvedRevision: fields[17] as int?,
+      approvedAt: fields[18] as DateTime?,
+      approvedByArtisanId: fields[19] as String?,
+      publishedAt: fields[20] as DateTime?,
+      contentHash: fields[21] as String?,
+      mediaId: fields[22] as String?,
+      floorPrice: fields[23] as double?,
+      materialsCost: fields[24] as double?,
+      laborHours: fields[25] as double?,
+      hourlyRate: fields[26] as double?,
+      transportCost: fields[27] as double?,
+      otherOverhead: fields[28] as double?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Product obj) {
     writer
-      ..writeByte(16)
+      ..writeByte(29)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -71,7 +84,33 @@ class ProductAdapter extends TypeAdapter<Product> {
       ..writeByte(14)
       ..write(obj.restockQuantity)
       ..writeByte(15)
-      ..write(obj.statusReason);
+      ..write(obj.statusReason)
+      ..writeByte(16)
+      ..write(obj.revision)
+      ..writeByte(17)
+      ..write(obj.approvedRevision)
+      ..writeByte(18)
+      ..write(obj.approvedAt)
+      ..writeByte(19)
+      ..write(obj.approvedByArtisanId)
+      ..writeByte(20)
+      ..write(obj.publishedAt)
+      ..writeByte(21)
+      ..write(obj.contentHash)
+      ..writeByte(22)
+      ..write(obj.mediaId)
+      ..writeByte(23)
+      ..write(obj.floorPrice)
+      ..writeByte(24)
+      ..write(obj.materialsCost)
+      ..writeByte(25)
+      ..write(obj.laborHours)
+      ..writeByte(26)
+      ..write(obj.hourlyRate)
+      ..writeByte(27)
+      ..write(obj.transportCost)
+      ..writeByte(28)
+      ..write(obj.otherOverhead);
   }
 
   @override
@@ -104,6 +143,22 @@ class ProductStatusAdapter extends TypeAdapter<ProductStatus> {
         return ProductStatus.soldOut;
       case 5:
         return ProductStatus.listingRemoved;
+      case 6:
+        return ProductStatus.awaitingApproval;
+      case 7:
+        return ProductStatus.approved;
+      case 8:
+        return ProductStatus.published;
+      case 9:
+        return ProductStatus.superseded;
+      case 10:
+        return ProductStatus.rejected;
+      case 11:
+        return ProductStatus.legacyUnverified;
+      case 12:
+        return ProductStatus.pendingApprovalSync;
+      case 13:
+        return ProductStatus.pendingUnpublishSync;
       default:
         return ProductStatus.live;
     }
@@ -129,6 +184,30 @@ class ProductStatusAdapter extends TypeAdapter<ProductStatus> {
         break;
       case ProductStatus.listingRemoved:
         writer.writeByte(5);
+        break;
+      case ProductStatus.awaitingApproval:
+        writer.writeByte(6);
+        break;
+      case ProductStatus.approved:
+        writer.writeByte(7);
+        break;
+      case ProductStatus.published:
+        writer.writeByte(8);
+        break;
+      case ProductStatus.superseded:
+        writer.writeByte(9);
+        break;
+      case ProductStatus.rejected:
+        writer.writeByte(10);
+        break;
+      case ProductStatus.legacyUnverified:
+        writer.writeByte(11);
+        break;
+      case ProductStatus.pendingApprovalSync:
+        writer.writeByte(12);
+        break;
+      case ProductStatus.pendingUnpublishSync:
+        writer.writeByte(13);
         break;
     }
   }

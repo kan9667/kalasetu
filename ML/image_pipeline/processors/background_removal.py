@@ -8,7 +8,6 @@
 
 import gc
 from PIL import Image
-from rembg import remove, new_session
 
 _session = None
 
@@ -19,6 +18,10 @@ def get_rembg_session():
     """
     global _session
     if _session is None:
+        try:
+            from rembg import new_session
+        except ImportError as e:
+            raise RuntimeError(f"rembg is not installed or available: {e}")
         try:
             _session = new_session("u2netp")
         except Exception:
@@ -52,6 +55,11 @@ def remove_background(image):
         process_img = image.resize(new_size, Image.Resampling.BILINEAR)
     else:
         process_img = image
+
+    try:
+        from rembg import remove
+    except ImportError as e:
+        raise RuntimeError(f"rembg is not installed or available: {e}")
 
     session = get_rembg_session()
     result = remove(process_img, session=session)

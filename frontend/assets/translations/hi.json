@@ -165,6 +165,12 @@
   "filter_paintings": "चित्रकला",
   "status_live": "लाइव (बिक्री हेतु)",
   "status_pending_sync": "सिंक होना बाकी",
+  "status_pending_approval_sync": "स्वीकृति सिंक के लिए कतारबद्ध",
+  "status_pending_unpublish_sync": "हटाना सिंक के लिए कतारबद्ध",
+  "removal_queued_notice": "हटाना कतारबद्ध है। सिंक पूरा होने तक यह लिस्टिंग सार्वजनिक रह सकती है।",
+  "approval_queued_offline": "स्वीकृति ऑफ़लाइन कतारबद्ध है। ऑनलाइन आने पर प्रकाशित होगी।",
+  "product_published_successfully": "लिस्टिंग सफलतापूर्वक प्रकाशित हुई।",
+  "review_listing": "लिस्टिंग की समीक्षा करें",
   "status_draft": "ड्राफ्ट",
   "no_products_title": "कैटलॉग में कोई उत्पाद नहीं है",
   "no_products_desc": "अपनी कला को बाज़ार तक पहुंचाएं। केवल 5 सरल चरणों में अपना पहला उत्पाद जोड़ें।",
@@ -493,5 +499,6 @@
   "artisan_analytics_tooltip": "कारीगर प्रदर्शन और विश्लेषण",
   "listing_online_desc": "आपकी शिल्प लिस्टिंग ओएनडीसी पर लाइव है और खरीदारों को दिखाई दे रही है।",
   "listing_offline_desc": "उत्पाद स्थानीय रूप से सहेजा गया। इंटरनेट वापस आने पर कलासेतु इसे अपने आप अपलोड कर देगा।",
+  "saved_offline_awaiting_sync": "ऑफ़लाइन सहेजा गया — सिंक और अनुमोदन की प्रतीक्षा है",
   "listing_actions": "लिस्टिंग क्रियाएं"
 }

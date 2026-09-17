@@ -461,11 +461,22 @@ class ChatService:
                 params=params,
             )
 
-        # If LLM didn't emit an action, check if user message had a deterministic action command
-        if action is None:
+        # If LLM didn't emit an action (or emitted a generic navigate on a direct action utterance), check deterministic fallback
+        direct_triggers = ["sold", "bik gaya", "बिक गया", "filter", "show me", "dikhao", "sync", "लंबित", "mark"]
+        is_direct_utterance = any(phrase in user_msg.lower() for phrase in direct_triggers)
+        if action is None or (action.type == "navigate" and is_direct_utterance):
             fallback = self._rule_based_fallback(user_msg, app_lang, artisan_craft=artisan_craft)
-            if fallback.action is not None:
+            if fallback.action is not None and fallback.action.type != "navigate":
                 action = fallback.action
+        elif action.type in ("update_product_status", "filter_catalogue"):
+            # If LLM emitted an action but omitted critical parameters, fill from deterministic fallback
+            if not action.params or (action.type == "update_product_status" and "status" not in action.params) or (action.type == "filter_catalogue" and "query" not in action.params):
+                fallback = self._rule_based_fallback(user_msg, app_lang, artisan_craft=artisan_craft)
+                if fallback.action is not None and fallback.action.type == action.type and fallback.action.params:
+                    merged = dict(fallback.action.params)
+                    if action.params:
+                        merged.update({k: v for k, v in action.params.items() if v})
+                    action.params = merged
 
         # Ensure language mismatch suggestion is present if query language differs from app_lang
         is_devanagari = bool(re.search(r'[\u0900-\u097F]', user_msg))

@@ -16,6 +16,22 @@ enum ProductStatus {
   soldOut,
   @HiveField(5)
   listingRemoved,
+  @HiveField(6)
+  awaitingApproval,
+  @HiveField(7)
+  approved,
+  @HiveField(8)
+  published,
+  @HiveField(9)
+  superseded,
+  @HiveField(10)
+  rejected,
+  @HiveField(11)
+  legacyUnverified,
+  @HiveField(12)
+  pendingApprovalSync,
+  @HiveField(13)
+  pendingUnpublishSync,
 }
 
 @HiveType(typeId: 0)
@@ -79,6 +95,45 @@ class Product extends HiveObject {
   @HiveField(15)
   final String? statusReason;
 
+  @HiveField(16)
+  final int revision;
+
+  @HiveField(17)
+  final int? approvedRevision;
+
+  @HiveField(18)
+  final DateTime? approvedAt;
+
+  @HiveField(19)
+  final String? approvedByArtisanId;
+
+  @HiveField(20)
+  final DateTime? publishedAt;
+
+  @HiveField(21)
+  final String? contentHash;
+
+  @HiveField(22)
+  final String? mediaId;
+
+  @HiveField(23)
+  final double? floorPrice;
+
+  @HiveField(24)
+  final double? materialsCost;
+
+  @HiveField(25)
+  final double? laborHours;
+
+  @HiveField(26)
+  final double? hourlyRate;
+
+  @HiveField(27)
+  final double? transportCost;
+
+  @HiveField(28)
+  final double? otherOverhead;
+
   Product({
     required this.id,
     required this.title,
@@ -96,6 +151,19 @@ class Product extends HiveObject {
     this.statusUpdatedAt,
     this.restockQuantity,
     this.statusReason,
+    this.revision = 1,
+    this.approvedRevision,
+    this.approvedAt,
+    this.approvedByArtisanId,
+    this.publishedAt,
+    this.contentHash,
+    this.mediaId,
+    this.floorPrice,
+    this.materialsCost,
+    this.laborHours,
+    this.hourlyRate,
+    this.transportCost,
+    this.otherOverhead,
   }) : createdAt = createdAt ?? DateTime.now();
 
   /// All captured photos in order (primary first), for the review screen's
@@ -107,6 +175,9 @@ class Product extends HiveObject {
   /// otherwise the original capture.
   String get displayPhotoPath =>
       aiEnhancedPhotoPath.isNotEmpty ? aiEnhancedPhotoPath : photoPath;
+
+  bool get isPublished =>
+      status == ProductStatus.published || status == ProductStatus.live;
 
   bool get isNonLive =>
       status == ProductStatus.soldOut ||
@@ -130,6 +201,20 @@ class Product extends HiveObject {
     DateTime? statusUpdatedAt,
     int? restockQuantity,
     String? statusReason,
+    int? revision,
+    int? approvedRevision,
+    DateTime? approvedAt,
+    String? approvedByArtisanId,
+    DateTime? publishedAt,
+    String? contentHash,
+    String? mediaId,
+    double? floorPrice,
+    double? materialsCost,
+    double? laborHours,
+    double? hourlyRate,
+    double? transportCost,
+    double? otherOverhead,
+    bool clearApprovalMetadata = false,
   }) {
     return Product(
       id: id ?? this.id,
@@ -148,6 +233,19 @@ class Product extends HiveObject {
       statusUpdatedAt: statusUpdatedAt ?? this.statusUpdatedAt,
       restockQuantity: restockQuantity ?? this.restockQuantity,
       statusReason: statusReason ?? this.statusReason,
+      revision: revision ?? this.revision,
+      approvedRevision: clearApprovalMetadata ? null : (approvedRevision ?? this.approvedRevision),
+      approvedAt: clearApprovalMetadata ? null : (approvedAt ?? this.approvedAt),
+      approvedByArtisanId: clearApprovalMetadata ? null : (approvedByArtisanId ?? this.approvedByArtisanId),
+      publishedAt: clearApprovalMetadata ? null : (publishedAt ?? this.publishedAt),
+      contentHash: contentHash ?? this.contentHash,
+      mediaId: mediaId ?? this.mediaId,
+      floorPrice: floorPrice ?? this.floorPrice,
+      materialsCost: materialsCost ?? this.materialsCost,
+      laborHours: laborHours ?? this.laborHours,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
+      transportCost: transportCost ?? this.transportCost,
+      otherOverhead: otherOverhead ?? this.otherOverhead,
     );
   }
 
@@ -169,6 +267,19 @@ class Product extends HiveObject {
       'statusUpdatedAt': statusUpdatedAt?.toIso8601String(),
       'restockQuantity': restockQuantity,
       'statusReason': statusReason,
+      'revision': revision,
+      'approvedRevision': approvedRevision,
+      'approvedAt': approvedAt?.toIso8601String(),
+      'approvedByArtisanId': approvedByArtisanId,
+      'publishedAt': publishedAt?.toIso8601String(),
+      'contentHash': contentHash,
+      'mediaId': mediaId,
+      'floorPrice': floorPrice,
+      'materialsCost': materialsCost,
+      'laborHours': laborHours,
+      'hourlyRate': hourlyRate,
+      'transportCost': transportCost,
+      'otherOverhead': otherOverhead,
     };
   }
 
@@ -181,11 +292,78 @@ class Product extends HiveObject {
       'description': description,
       'description_hi': descriptionHi,
       'price': price,
-      'image_url': displayPhotoPath,
       'category': category,
       'tags': tags,
-      'status': status.name,
+      'status': 'draft', // INVARIANT: client mutations are always draft
+      if (mediaId != null && mediaId!.isNotEmpty) 'media_id': mediaId,
+      if (materialsCost != null) 'materials': materialsCost,
+      if (laborHours != null) 'labor_hours': laborHours,
+      if (hourlyRate != null) 'hourly_rate': hourlyRate,
+      if (transportCost != null) 'transport': transportCost,
+      if (otherOverhead != null) 'overhead': otherOverhead,
     };
+  }
+
+  Map<String, dynamic> toBackendUpdateJson({int? expectedRevision}) {
+    return {
+      'title': title,
+      'title_hi': titleHi,
+      'description': description,
+      'description_hi': descriptionHi,
+      'price': price,
+      'category': category,
+      'tags': tags,
+      'expected_revision': ?expectedRevision,
+      if (mediaId != null && mediaId!.isNotEmpty) 'media_id': mediaId,
+      if (materialsCost != null) 'materials': materialsCost,
+      if (laborHours != null) 'labor_hours': laborHours,
+      if (hourlyRate != null) 'hourly_rate': hourlyRate,
+      if (transportCost != null) 'transport': transportCost,
+      if (otherOverhead != null) 'overhead': otherOverhead,
+    };
+  }
+
+  static ProductStatus parseStatus(String? val) {
+    if (val == null) return ProductStatus.draft;
+    switch (val) {
+      case 'live':
+        return ProductStatus.live;
+      case 'pendingSync':
+      case 'pending_sync':
+        return ProductStatus.pendingSync;
+      case 'pendingApprovalSync':
+      case 'pending_approval_sync':
+        return ProductStatus.pendingApprovalSync;
+      case 'pendingUnpublishSync':
+      case 'pending_unpublish_sync':
+        return ProductStatus.pendingUnpublishSync;
+      case 'draft':
+        return ProductStatus.draft;
+      case 'sold':
+        return ProductStatus.sold;
+      case 'soldOut':
+      case 'sold_out':
+        return ProductStatus.soldOut;
+      case 'listingRemoved':
+      case 'listing_removed':
+        return ProductStatus.listingRemoved;
+      case 'awaitingApproval':
+      case 'awaiting_approval':
+        return ProductStatus.awaitingApproval;
+      case 'approved':
+        return ProductStatus.approved;
+      case 'published':
+        return ProductStatus.published;
+      case 'superseded':
+        return ProductStatus.superseded;
+      case 'rejected':
+        return ProductStatus.rejected;
+      case 'legacyUnverified':
+      case 'legacy_unverified':
+        return ProductStatus.legacyUnverified;
+      default:
+        return ProductStatus.draft;
+    }
   }
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -202,10 +380,7 @@ class Product extends HiveObject {
           ? (json['category'] as String).trim()
           : 'Handicraft',
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
-      status: ProductStatus.values.firstWhere(
-        (e) => e.name == json['status'],
-        orElse: () => ProductStatus.draft,
-      ),
+      status: parseStatus(json['status'] as String?),
       createdAt: json['created_at'] != null
           ? (DateTime.tryParse(json['created_at'] as String) ?? DateTime.now())
           : (json['createdAt'] != null
@@ -223,6 +398,38 @@ class Product extends HiveObject {
               : null),
       restockQuantity: json['restockQuantity'] as int?,
       statusReason: json['statusReason'] as String?,
+      revision: (json['revision'] as num?)?.toInt() ?? 1,
+      approvedRevision: (json['approved_revision'] as num?)?.toInt() ??
+          (json['approvedRevision'] as num?)?.toInt(),
+      approvedAt: json['approved_at'] != null
+          ? DateTime.tryParse(json['approved_at'] as String)
+          : (json['approvedAt'] != null
+              ? DateTime.tryParse(json['approvedAt'] as String)
+              : null),
+      approvedByArtisanId: json['approved_by_artisan_id'] as String? ??
+          json['approvedByArtisanId'] as String?,
+      publishedAt: json['published_at'] != null
+          ? DateTime.tryParse(json['published_at'] as String)
+          : (json['publishedAt'] != null
+              ? DateTime.tryParse(json['publishedAt'] as String)
+              : null),
+      contentHash: json['content_hash'] as String? ?? json['contentHash'] as String?,
+      mediaId: json['media_id'] as String? ?? json['mediaId'] as String?,
+      floorPrice: (json['floor_price'] as num?)?.toDouble() ??
+          (json['floorPrice'] as num?)?.toDouble(),
+      materialsCost: (json['materials'] as num?)?.toDouble() ??
+          (json['materials_cost'] as num?)?.toDouble() ??
+          (json['materialsCost'] as num?)?.toDouble(),
+      laborHours: (json['labor_hours'] as num?)?.toDouble() ??
+          (json['laborHours'] as num?)?.toDouble(),
+      hourlyRate: (json['hourly_rate'] as num?)?.toDouble() ??
+          (json['hourlyRate'] as num?)?.toDouble(),
+      transportCost: (json['transport'] as num?)?.toDouble() ??
+          (json['transport_cost'] as num?)?.toDouble() ??
+          (json['transportCost'] as num?)?.toDouble(),
+      otherOverhead: (json['overhead'] as num?)?.toDouble() ??
+          (json['other_overhead'] as num?)?.toDouble() ??
+          (json['otherOverhead'] as num?)?.toDouble(),
     );
   }
 }

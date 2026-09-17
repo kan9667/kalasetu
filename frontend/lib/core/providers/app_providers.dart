@@ -17,6 +17,8 @@ import '../../data/services/pricing_service.dart';
 import '../../data/services/sync_service.dart';
 import '../offline_sync/models/queue_item.dart';
 import '../offline_sync/offline_sync_service.dart';
+import '../storage/secure_token_storage.dart';
+import '../../features/auth/providers/auth_provider.dart';
 
 // --- Dev/test bypass ---------------------------------------------------
 // Lets you build and run the app WITHOUT the backend running, so you can
@@ -104,6 +106,10 @@ final listingTutorialProvider =
   return ListingTutorialNotifier();
 });
 
+final secureTokenStorageProvider = Provider<SecureTokenStorage>((ref) {
+  return SecureTokenStorage();
+});
+
 // --- Services Providers ---
 final apiServiceProvider = Provider<ApiService>((ref) {
   if (kMockAiBackend) {
@@ -113,18 +119,21 @@ final apiServiceProvider = Provider<ApiService>((ref) {
 });
 
 final imageEnhancerServiceProvider = Provider<ImageEnhancerService>((ref) {
-  return HttpImageEnhancerService();
+  final tokenStorage = ref.watch(secureTokenStorageProvider);
+  return HttpImageEnhancerService(tokenStorage: tokenStorage);
 });
 
 final speechServiceProvider = Provider<SpeechService>((ref) {
-  return HttpSpeechService();
+  final tokenStorage = ref.watch(secureTokenStorageProvider);
+  return HttpSpeechService(tokenStorage: tokenStorage);
 });
 
 final pricingServiceProvider = Provider<PricingService>((ref) {
   if (kMockAiBackend) {
     return MockPricingService();
   }
-  return HttpPricingService();
+  final tokenStorage = ref.watch(secureTokenStorageProvider);
+  return HttpPricingService(tokenStorage: tokenStorage);
 });
 
 // --- Repository Providers ---
@@ -213,11 +222,12 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
     return created;
   }
 
-  Future<Product> updateProduct(Product product) async {
+  Future<Product> updateProduct(Product product, {String? idempotencyKey}) async {
     final isOnline = _ref.read(connectivityProvider).value ?? true;
     final updated = await _repository.updateProduct(
       product,
       isOnline: isOnline,
+      idempotencyKey: idempotencyKey,
     );
     await loadProducts();
     return updated;
@@ -227,6 +237,38 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
     final isOnline = _ref.read(connectivityProvider).value ?? true;
     await _repository.deleteProduct(id, isOnline: isOnline);
     await loadProducts();
+  }
+
+  Future<Product> approveAndPublishProduct(
+    String productId, {
+    int? revision,
+    String? contentHash,
+    String? idempotencyKey,
+  }) async {
+    final isOnline = _ref.read(connectivityProvider).value ?? true;
+    final published = await _repository.approveAndPublishProduct(
+      productId,
+      revision: revision,
+      contentHash: contentHash,
+      isOnline: isOnline,
+      idempotencyKey: idempotencyKey,
+    );
+    await loadProducts();
+    return published;
+  }
+
+  Future<Product> unpublishProduct(
+    String productId, {
+    String? idempotencyKey,
+  }) async {
+    final isOnline = _ref.read(connectivityProvider).value ?? true;
+    final unpublished = await _repository.unpublishProduct(
+      productId,
+      isOnline: isOnline,
+      idempotencyKey: idempotencyKey,
+    );
+    await loadProducts();
+    return unpublished;
   }
 
   Future<int> syncQueue() async {
@@ -345,6 +387,20 @@ class AddProductDraft {
   final String? voiceQueueItemId;
   final QueueStatus imageQueueStatus;
   final QueueStatus voiceQueueStatus;
+  final String? mediaId;
+  final String? originalMediaId;
+  final String? sha256Checksum;
+  final bool isDegraded;
+  final String? degradedReason;
+  final String? imageEnhanceOpId;
+  final String? voiceListingOpId;
+  final String? pricingOpId;
+  final bool isVoiceDegraded;
+  final String? voiceDegradedReason;
+  final bool isListingDegraded;
+  final String? listingDegradedReason;
+  final bool isPricingDegraded;
+  final String? pricingDegradedReason;
 
   const AddProductDraft({
     this.draftId = '',
@@ -386,6 +442,20 @@ class AddProductDraft {
     this.voiceQueueItemId,
     this.imageQueueStatus = QueueStatus.completed,
     this.voiceQueueStatus = QueueStatus.completed,
+    this.mediaId,
+    this.originalMediaId,
+    this.sha256Checksum,
+    this.isDegraded = false,
+    this.degradedReason,
+    this.imageEnhanceOpId,
+    this.voiceListingOpId,
+    this.pricingOpId,
+    this.isVoiceDegraded = false,
+    this.voiceDegradedReason,
+    this.isListingDegraded = false,
+    this.listingDegradedReason,
+    this.isPricingDegraded = false,
+    this.pricingDegradedReason,
   });
 
   AddProductDraft copyWith({
@@ -428,6 +498,20 @@ class AddProductDraft {
     Object? voiceQueueItemId = _unset,
     QueueStatus? imageQueueStatus,
     QueueStatus? voiceQueueStatus,
+    Object? mediaId = _unset,
+    Object? originalMediaId = _unset,
+    Object? sha256Checksum = _unset,
+    bool? isDegraded,
+    Object? degradedReason = _unset,
+    Object? imageEnhanceOpId = _unset,
+    Object? voiceListingOpId = _unset,
+    Object? pricingOpId = _unset,
+    bool? isVoiceDegraded,
+    Object? voiceDegradedReason = _unset,
+    bool? isListingDegraded,
+    Object? listingDegradedReason = _unset,
+    bool? isPricingDegraded,
+    Object? pricingDegradedReason = _unset,
   }) {
     return AddProductDraft(
       draftId: draftId ?? this.draftId,
@@ -474,6 +558,38 @@ class AddProductDraft {
           : voiceQueueItemId as String?,
       imageQueueStatus: imageQueueStatus ?? this.imageQueueStatus,
       voiceQueueStatus: voiceQueueStatus ?? this.voiceQueueStatus,
+      mediaId: identical(mediaId, _unset) ? this.mediaId : mediaId as String?,
+      originalMediaId: identical(originalMediaId, _unset)
+          ? this.originalMediaId
+          : originalMediaId as String?,
+      sha256Checksum: identical(sha256Checksum, _unset)
+          ? this.sha256Checksum
+          : sha256Checksum as String?,
+      isDegraded: isDegraded ?? this.isDegraded,
+      degradedReason: identical(degradedReason, _unset)
+          ? this.degradedReason
+          : degradedReason as String?,
+      imageEnhanceOpId: identical(imageEnhanceOpId, _unset)
+          ? this.imageEnhanceOpId
+          : imageEnhanceOpId as String?,
+      voiceListingOpId: identical(voiceListingOpId, _unset)
+          ? this.voiceListingOpId
+          : voiceListingOpId as String?,
+      pricingOpId: identical(pricingOpId, _unset)
+          ? this.pricingOpId
+          : pricingOpId as String?,
+      isVoiceDegraded: isVoiceDegraded ?? this.isVoiceDegraded,
+      voiceDegradedReason: identical(voiceDegradedReason, _unset)
+          ? this.voiceDegradedReason
+          : voiceDegradedReason as String?,
+      isListingDegraded: isListingDegraded ?? this.isListingDegraded,
+      listingDegradedReason: identical(listingDegradedReason, _unset)
+          ? this.listingDegradedReason
+          : listingDegradedReason as String?,
+      isPricingDegraded: isPricingDegraded ?? this.isPricingDegraded,
+      pricingDegradedReason: identical(pricingDegradedReason, _unset)
+          ? this.pricingDegradedReason
+          : pricingDegradedReason as String?,
     );
   }
 }
@@ -637,6 +753,20 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     String? voiceQueueItemId,
     QueueStatus? imageQueueStatus,
     QueueStatus? voiceQueueStatus,
+    String? mediaId,
+    String? originalMediaId,
+    String? sha256Checksum,
+    bool? isDegraded,
+    String? degradedReason,
+    String? imageEnhanceOpId,
+    String? voiceListingOpId,
+    String? pricingOpId,
+    bool? isVoiceDegraded,
+    String? voiceDegradedReason,
+    bool? isListingDegraded,
+    String? listingDegradedReason,
+    bool? isPricingDegraded,
+    String? pricingDegradedReason,
   }) {
     final hasImage =
         (originalImagePath.isNotEmpty || enhancedImagePath.isNotEmpty);
@@ -697,10 +827,25 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       voiceQueueItemId: voiceQueueItemId,
       imageQueueStatus: imageQueueStatus ?? QueueStatus.completed,
       voiceQueueStatus: voiceQueueStatus ?? QueueStatus.completed,
+      mediaId: mediaId,
+      originalMediaId: originalMediaId,
+      sha256Checksum: sha256Checksum,
+      isDegraded: isDegraded ?? false,
+      degradedReason: degradedReason,
+      imageEnhanceOpId: imageEnhanceOpId,
+      voiceListingOpId: voiceListingOpId,
+      pricingOpId: pricingOpId,
+      isVoiceDegraded: isVoiceDegraded ?? false,
+      voiceDegradedReason: voiceDegradedReason,
+      isListingDegraded: isListingDegraded ?? false,
+      listingDegradedReason: listingDegradedReason,
+      isPricingDegraded: isPricingDegraded ?? false,
+      pricingDegradedReason: pricingDegradedReason,
       hasExistingDraft: true,
       resumePromptHandled: false,
       isAiProcessing: false,
     );
+    _persistDraft();
   }
 
   void markResumePromptVisible() {
@@ -746,6 +891,20 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         voiceQueueItemId: pending['draft_voice_queue_id'] as String?,
         imageQueueStatus: _queueStatus(pending['draft_image_queue_status']),
         voiceQueueStatus: _queueStatus(pending['draft_voice_queue_status']),
+        mediaId: pending['draft_media_id'] as String?,
+        originalMediaId: pending['draft_original_media_id'] as String?,
+        sha256Checksum: pending['draft_sha256_checksum'] as String?,
+        isDegraded: pending['draft_is_degraded'] as bool? ?? false,
+        degradedReason: pending['draft_degraded_reason'] as String?,
+        imageEnhanceOpId: pending['draft_image_enhance_op_id'] as String?,
+        voiceListingOpId: pending['draft_voice_listing_op_id'] as String?,
+        pricingOpId: pending['draft_pricing_op_id'] as String?,
+        isVoiceDegraded: pending['draft_is_voice_degraded'] as bool? ?? false,
+        voiceDegradedReason: pending['draft_voice_degraded_reason'] as String?,
+        isListingDegraded: pending['draft_is_listing_degraded'] as bool? ?? false,
+        listingDegradedReason: pending['draft_listing_degraded_reason'] as String?,
+        isPricingDegraded: pending['draft_is_pricing_degraded'] as bool? ?? false,
+        pricingDegradedReason: pending['draft_pricing_degraded_reason'] as String?,
       );
       _hydrateQueueState();
     }
@@ -804,6 +963,20 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       box.put('draft_voice_queue_id', state.voiceQueueItemId);
       box.put('draft_image_queue_status', state.imageQueueStatus.index);
       box.put('draft_voice_queue_status', state.voiceQueueStatus.index);
+      box.put('draft_media_id', state.mediaId);
+      box.put('draft_original_media_id', state.originalMediaId);
+      box.put('draft_sha256_checksum', state.sha256Checksum);
+      box.put('draft_is_degraded', state.isDegraded);
+      box.put('draft_degraded_reason', state.degradedReason);
+      box.put('draft_image_enhance_op_id', state.imageEnhanceOpId);
+      box.put('draft_voice_listing_op_id', state.voiceListingOpId);
+      box.put('draft_pricing_op_id', state.pricingOpId);
+      box.put('draft_is_voice_degraded', state.isVoiceDegraded);
+      box.put('draft_voice_degraded_reason', state.voiceDegradedReason);
+      box.put('draft_is_listing_degraded', state.isListingDegraded);
+      box.put('draft_listing_degraded_reason', state.listingDegradedReason);
+      box.put('draft_is_pricing_degraded', state.isPricingDegraded);
+      box.put('draft_pricing_degraded_reason', state.pricingDegradedReason);
     }
   }
 
@@ -1030,17 +1203,33 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       _persistDraft();
       return;
     }
+    final opId = state.imageEnhanceOpId ??
+        'enh_${state.draftId.isNotEmpty ? state.draftId : "temp"}_${imageFile.path.hashCode.abs()}';
+    if (state.imageEnhanceOpId != opId) {
+      state = state.copyWith(imageEnhanceOpId: opId);
+      _persistDraft();
+    }
+
     try {
       final enhancer = _ref.read(imageEnhancerServiceProvider);
       // Cap at 30 s so the loading overlay is dismissed promptly when the
       // backend is unreachable instead of waiting for two full retry cycles.
-      final enhancedUrl = await enhancer
-          .enhanceImage(imageFile.path, draftId: state.draftId)
+      final result = await enhancer
+          .enhanceImage(
+            imageFile.path,
+            draftId: state.draftId,
+            idempotencyKey: opId,
+          )
           .timeout(
             const Duration(seconds: 30),
             onTimeout: () {
               debugPrint('[AddProductFlow] Image enhancement timed out — proceeding offline.');
-              return imageFile.path;
+              return EnhancedImageResult(
+                displayPath: imageFile.path,
+                isDegraded: true,
+                degradedReason: 'Image enhancement timed out after 30 seconds.',
+                status: 'timeout_fallback',
+              );
             },
           );
       // Mark not-in-flight before recomputing so any concurrent
@@ -1048,23 +1237,45 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       _imageEnhancementInFlight = false;
       if (gen != null && gen != _aiProcessingGen) return;
 
-      if (enhancedUrl.isEmpty || enhancedUrl == imageFile.path) {
+      if (result.displayPath.isEmpty || result.displayPath == imageFile.path) {
+        state = state.copyWith(
+          mediaId: result.mediaId,
+          originalMediaId: result.originalMediaId,
+          sha256Checksum: result.sha256Checksum,
+          isDegraded: result.isDegraded,
+          degradedReason: result.degradedReason,
+        );
         _recomputeAiProcessing();
+        _persistDraft();
         return;
       }
 
       state = state.copyWith(
-        enhancedImagePath: enhancedUrl,
-        isEnhanced: true,
+        enhancedImagePath: result.displayPath,
+        isEnhanced: !result.isDegraded,
         imageQueueStatus: QueueStatus.completed,
+        mediaId: result.mediaId,
+        originalMediaId: result.originalMediaId,
+        sha256Checksum: result.sha256Checksum,
+        isDegraded: result.isDegraded,
+        degradedReason: result.degradedReason,
       );
       _recomputeAiProcessing();
       _persistDraft();
     } catch (e, st) {
       debugPrint('[AddProductFlow] AI enhancement error: $e\n$st');
       _imageEnhancementInFlight = false;
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('401') || errStr.contains('403') || errStr.contains('unauthorized')) {
+        _ref.read(authStateProvider.notifier).expireSession();
+      }
+      state = state.copyWith(
+        isDegraded: true,
+        degradedReason: 'Image enhancement failed: $e',
+      );
       if (gen != null && gen != _aiProcessingGen) return;
       _recomputeAiProcessing();
+      _persistDraft();
     }
   }
 
@@ -1120,6 +1331,23 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       final enhancedUrl =
           result?['enhancedImageUrl'] as String? ??
           result?['enhanced_url'] as String?;
+      final serverMediaId =
+          result?['mediaId'] as String? ??
+          result?['media_id'] as String?;
+      final serverOriginalMediaId =
+          result?['originalMediaId'] as String? ??
+          result?['original_media_id'] as String?;
+      final sha256Checksum =
+          result?['sha256Checksum'] as String? ??
+          result?['sha256_checksum'] as String?;
+      final isDegraded =
+          result?['isDegraded'] as bool? ??
+          result?['is_degraded'] as bool? ??
+          false;
+      final degradedReason =
+          result?['degradedReason'] as String? ??
+          result?['degraded_reason'] as String?;
+
       final hasNewEnhancedUrl = enhancedUrl != null &&
           enhancedUrl.isNotEmpty &&
           enhancedUrl != state.originalImagePath;
@@ -1129,7 +1357,13 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         enhancedImagePath:
             hasNewEnhancedUrl ? enhancedUrl : state.enhancedImagePath,
         isEnhanced: state.isEnhanced || hasNewEnhancedUrl,
+        mediaId: serverMediaId ?? state.mediaId,
+        originalMediaId: serverOriginalMediaId ?? state.originalMediaId,
+        sha256Checksum: sha256Checksum ?? state.sha256Checksum,
+        isDegraded: isDegraded || state.isDegraded,
+        degradedReason: degradedReason ?? state.degradedReason,
       );
+      _persistDraft();
       _recomputeAiProcessing();
     } else {
       final pricing = result?['pricing'] as Map<String, dynamic>?;
@@ -1140,6 +1374,13 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       final maxPrice = (priceRange?['max'] as num?)?.toDouble();
       final reasoning = pricing?['reasoning'] as String?;
       final reasoningHi = pricing?['reasoning_hi'] as String?;
+      final isDegraded =
+          result?['isDegraded'] as bool? ??
+          result?['is_degraded'] as bool? ??
+          false;
+      final degradedReason =
+          result?['degradedReason'] as String? ??
+          result?['degraded_reason'] as String?;
 
       state = state.copyWith(
         voiceQueueItemId: item.localId,
@@ -1169,6 +1410,12 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         finalPrice: suggestedPrice ?? state.finalPrice,
         pricingReasoning: reasoning ?? state.pricingReasoning,
         pricingReasoningHi: reasoningHi ?? state.pricingReasoningHi,
+        isVoiceDegraded: isDegraded || state.isVoiceDegraded,
+        voiceDegradedReason: degradedReason ?? state.voiceDegradedReason,
+        isListingDegraded: isDegraded || state.isListingDegraded,
+        listingDegradedReason: degradedReason ?? state.listingDegradedReason,
+        isPricingDegraded: isDegraded || state.isPricingDegraded,
+        pricingDegradedReason: degradedReason ?? state.pricingDegradedReason,
       );
       _recomputeAiProcessing();
     }
@@ -1196,6 +1443,13 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       _persistDraft();
       return;
     }
+    final opId = state.voiceListingOpId ??
+        'list_${state.draftId.isNotEmpty ? state.draftId : "temp"}_${state.manualDescription.hashCode.abs()}';
+    if (state.voiceListingOpId != opId) {
+      state = state.copyWith(voiceListingOpId: opId);
+      _persistDraft();
+    }
+
     try {
       final speechService = _ref.read(speechServiceProvider);
       // Cap at 25 s so isAiProcessing always resolves, even if the backend
@@ -1206,6 +1460,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
             transcript: state.manualDescription,
             languageCode: languageCode,
             categoryHint: (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null,
+            idempotencyKey: opId,
           )
           .timeout(
             const Duration(seconds: 25),
@@ -1220,6 +1475,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
                 descriptionHi: state.descriptionHi,
                 category: state.category,
                 tags: state.tags,
+                isDegraded: true,
+                degradedReason: 'Manual description listing generation timed out after 25 seconds.',
               );
             },
           );
@@ -1244,15 +1501,23 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         floorPrice: (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
             ? suggestion.floorPrice!
             : state.floorPrice,
+        isListingDegraded: suggestion.isDegraded,
+        listingDegradedReason: suggestion.degradedReason,
       );
       _recomputeAiProcessing();
       _persistDraft();
-    } catch (_) {
+    } catch (e) {
       _listingGenerationInFlight = false;
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('401') || errStr.contains('403') || errStr.contains('unauthorized')) {
+        _ref.read(authStateProvider.notifier).expireSession();
+      }
       if (gen != null && gen != _aiProcessingGen) return;
       state = state.copyWith(
         titleEn: state.manualDescription,
         descriptionEn: state.manualDescription,
+        isListingDegraded: true,
+        listingDegradedReason: 'Listing generation failed: $e',
       );
       _recomputeAiProcessing();
       _persistDraft();
@@ -1366,6 +1631,13 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       _persistDraft();
       return;
     }
+    final opId = state.voiceListingOpId ??
+        'voice_${state.draftId.isNotEmpty ? state.draftId : "temp"}_${audioFile.path.hashCode.abs()}';
+    if (state.voiceListingOpId != opId) {
+      state = state.copyWith(voiceListingOpId: opId);
+      _persistDraft();
+    }
+
     try {
       final speechService = _ref.read(speechServiceProvider);
 
@@ -1375,12 +1647,18 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           .transcribeAudio(
             audioPath: audioFile.path,
             languageCode: languageCode,
+            idempotencyKey: opId,
           )
           .timeout(
             const Duration(seconds: 20),
             onTimeout: () {
               debugPrint('[AddProductFlow] Direct transcription timed out.');
-              return const TranscriptionResult(transcript: '', confidence: 0);
+              return const TranscriptionResult(
+                transcript: '',
+                confidence: 0,
+                isDegraded: true,
+                degradedReason: 'Direct transcription timed out after 20 seconds.',
+              );
             },
           );
       final transcript = result.transcript;
@@ -1388,7 +1666,12 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       if (transcript.isEmpty ||
           HttpSpeechService.isSilenceHallucination(transcript)) {
         debugPrint('[AddProductFlow] Transcription empty or hallucination — skipping listing generation.');
+        state = state.copyWith(
+          isVoiceDegraded: true,
+          voiceDegradedReason: result.degradedReason ?? 'Transcription returned no audible speech.',
+        );
         _recomputeAiProcessing();
+        _persistDraft();
         return;
       }
 
@@ -1396,6 +1679,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       state = state.copyWith(
         voiceTranscript: transcript,
         transcriptionConfidence: result.confidence,
+        isVoiceDegraded: result.isDegraded,
+        voiceDegradedReason: result.degradedReason,
       );
       _recomputeAiProcessing();
       _persistDraft();
@@ -1408,6 +1693,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
             transcript: transcript,
             languageCode: languageCode,
             categoryHint: (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null,
+            idempotencyKey: opId,
           )
           .timeout(
             const Duration(seconds: 25),
@@ -1420,6 +1706,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
                 descriptionHi: state.descriptionHi,
                 category: state.category,
                 tags: state.tags,
+                isDegraded: true,
+                degradedReason: 'Listing generation timed out after 25 seconds.',
               );
             },
           );
@@ -1444,6 +1732,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         floorPrice: (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
             ? suggestion.floorPrice!
             : state.floorPrice,
+        isListingDegraded: suggestion.isDegraded,
+        listingDegradedReason: suggestion.degradedReason,
       );
       _recomputeAiProcessing();
       _persistDraft();
@@ -1451,7 +1741,16 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     } catch (e) {
       debugPrint('[AddProductFlow] Error during voice transcription/listing: $e');
       _listingGenerationInFlight = false;
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('401') || errStr.contains('403') || errStr.contains('unauthorized')) {
+        _ref.read(authStateProvider.notifier).expireSession();
+      }
+      state = state.copyWith(
+        isVoiceDegraded: true,
+        voiceDegradedReason: 'Voice transcription failed: $e',
+      );
       _recomputeAiProcessing();
+      _persistDraft();
     }
   }
 
@@ -1557,12 +1856,20 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
             : 'Handcrafted traditional artisan product';
       }
 
+      final opId = state.voiceListingOpId ??
+          'voice_gen_${state.draftId.isNotEmpty ? state.draftId : "temp"}_${(transcript.isNotEmpty ? transcript : state.draftId).hashCode.abs()}';
+      if (state.voiceListingOpId != opId) {
+        state = state.copyWith(voiceListingOpId: opId);
+        _persistDraft();
+      }
+
       // Cap listing generation at 25 s.
       final suggestion = await speechService
           .generateListingFromTranscript(
             transcript: transcript,
             languageCode: languageCode,
             categoryHint: (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null,
+            idempotencyKey: opId,
           )
           .timeout(
             const Duration(seconds: 25),
@@ -1575,6 +1882,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
                 descriptionHi: state.descriptionHi,
                 category: state.category,
                 tags: state.tags,
+                isDegraded: true,
+                degradedReason: 'Listing generation timed out after 25 seconds.',
               );
             },
           );
@@ -1598,12 +1907,23 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         floorPrice: (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
             ? suggestion.floorPrice!
             : state.floorPrice,
+        isListingDegraded: suggestion.isDegraded,
+        listingDegradedReason: suggestion.degradedReason,
         isAiProcessing: false,
       );
       _persistDraft();
     } catch (e) {
       debugPrint('[AddProductFlow] Error in generateAiListing: $e');
-      state = state.copyWith(isAiProcessing: false);
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('401') || errStr.contains('403') || errStr.contains('unauthorized')) {
+        _ref.read(authStateProvider.notifier).expireSession();
+      }
+      state = state.copyWith(
+        isAiProcessing: false,
+        isListingDegraded: true,
+        listingDegradedReason: 'Listing generation failed: $e',
+      );
+      _persistDraft();
     }
   }
 
@@ -1683,28 +2003,50 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         ? state.enhancedImagePath
         : state.originalImagePath;
 
-    final suggestion = await pricingService.suggestPrice(
-      description: desc.isNotEmpty ? desc : '${state.category} handcrafted product',
-      category: state.category,
-      tags: state.tags,
-      imageUrl: imagePath,
-      rawMaterialCost: state.rawMaterialCost > 0 ? state.rawMaterialCost : null,
-      laborHours: state.laborHours > 0 ? state.laborHours : null,
-      hourlyWage: (state.laborHours > 0 && state.hourlyRate > 0) ? state.hourlyRate : null,
-    );
+    final opId = state.pricingOpId ??
+        'price_${state.draftId.isNotEmpty ? state.draftId : "temp"}_${desc.hashCode.abs()}';
+    if (state.pricingOpId != opId) {
+      state = state.copyWith(pricingOpId: opId);
+      _persistDraft();
+    }
 
-    state = state.copyWith(
-      floorPrice: suggestion.floorPrice,
-      suggestedPrice: suggestion.suggestedPrice,
-      minPrice: suggestion.minPrice,
-      maxPrice: suggestion.maxPrice,
-      finalPrice: suggestion.suggestedPrice,
-      confidenceScore: suggestion.confidenceScore,
-      marketPosition: suggestion.marketPosition,
-      comparableProducts: suggestion.comparableProducts,
-      pricingReasoning: suggestion.reasoning,
-      pricingReasoningHi: suggestion.reasoningHi,
-    );
+    try {
+      final suggestion = await pricingService.suggestPrice(
+        description: desc.isNotEmpty ? desc : '${state.category} handcrafted product',
+        category: state.category,
+        tags: state.tags,
+        imageUrl: imagePath,
+        rawMaterialCost: state.rawMaterialCost > 0 ? state.rawMaterialCost : null,
+        laborHours: state.laborHours > 0 ? state.laborHours : null,
+        hourlyWage: (state.laborHours > 0 && state.hourlyRate > 0) ? state.hourlyRate : null,
+        idempotencyKey: opId,
+      );
+
+      state = state.copyWith(
+        floorPrice: suggestion.floorPrice,
+        suggestedPrice: suggestion.suggestedPrice,
+        minPrice: suggestion.minPrice,
+        maxPrice: suggestion.maxPrice,
+        finalPrice: suggestion.suggestedPrice,
+        confidenceScore: suggestion.confidenceScore,
+        marketPosition: suggestion.marketPosition,
+        comparableProducts: suggestion.comparableProducts,
+        pricingReasoning: suggestion.reasoning,
+        pricingReasoningHi: suggestion.reasoningHi,
+        isPricingDegraded: suggestion.isDegraded,
+        pricingDegradedReason: suggestion.degradedReason,
+      );
+    } catch (e) {
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('401') || errStr.contains('403') || errStr.contains('unauthorized')) {
+        _ref.read(authStateProvider.notifier).expireSession();
+      }
+      state = state.copyWith(
+        isPricingDegraded: true,
+        pricingDegradedReason: 'Pricing calculation failed: $e',
+      );
+      rethrow;
+    }
   }
 
   /// Called when the user taps "Looks Good!" on Step 3.

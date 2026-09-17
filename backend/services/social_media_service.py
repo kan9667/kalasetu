@@ -213,7 +213,10 @@ class SocialMediaService:
 
         # ── 2. Fallback to Gemini ───────────────────────────────────────────
         if self.client:
-            return await self._call_with_retry(prompt=prompt, image_url=image_url)
+            try:
+                return await self._call_with_retry(prompt=prompt, image_url=image_url)
+            except Exception as e:
+                logger.warning("[SocialMediaService] Gemini generation failed: %s. Falling back to offline templates.", e)
 
         # ── 3. Offline / Rule-based Fallback ────────────────────────────────
         if channel_lower == "whatsapp":
