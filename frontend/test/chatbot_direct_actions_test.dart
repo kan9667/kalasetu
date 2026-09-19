@@ -26,6 +26,7 @@ class FakeChatService implements ChatService {
     String languageCode = 'en',
     String? currentScreen,
     String? artisanCraft,
+    String? idempotencyKey,
   }) async {
     if (nextReply != null) return nextReply!;
     return ChatMessageModel.assistant(text: 'Fallback echo');
@@ -34,10 +35,10 @@ class FakeChatService implements ChatService {
   @override
   Future<VoiceChatResult> sendVoiceMessage({
     required String audioPath,
-    List<ChatMessageModel> history = const [],
     String languageCode = 'en',
     String? currentScreen,
     String? artisanCraft,
+    String? idempotencyKey,
   }) async {
     return VoiceChatResult(
       userTranscript: 'voice note',
@@ -193,16 +194,20 @@ void main() {
     expect(lastMsg.action?.isUndone, isFalse);
 
     // Now test Undo
-    await chatNotifier.undoProductStatusUpdate(
+    final undoAction = await chatNotifier.undoProductStatusUpdate(
       lastMsg.id,
       lastMsg.action!.updatedProductId!,
       lastMsg.action!.previousStatus!,
     );
 
-    // Verify product status restored to live
-    final restoredProduct = box.get('test_prod_chanderi');
-    expect(restoredProduct, isNotNull);
-    expect(restoredProduct!.status, equals(ProductStatus.live));
+    // Invariant: Direct actions / undo must never publish without explicit artisan review.
+    // ChatNotifier returns a typed navigation action to /review-product and NEVER calls updateProduct for live/published/draft directly.
+    final currentProduct = box.get('test_prod_chanderi');
+    expect(currentProduct, isNotNull);
+    expect(currentProduct!.status, equals(ProductStatus.sold));
+    expect(undoAction?.type, equals('navigate'));
+    expect(undoAction?.route, equals('/review-product'));
+    expect(undoAction?.params?['product_id'], equals('test_prod_chanderi'));
 
     // Verify message marked as undone
     final stateAfterUndo = container.read(chatNotifierProvider);

@@ -18,6 +18,7 @@ import io
 from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
+import pytest
 
 # Ensure root is in path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -43,7 +44,15 @@ def _create_sample_test_image(path: Path):
 
 
 def test_stage1_standalone_image_pipeline(tmp_path):
-    """Stage 1 Verification: Standalone Python pipeline correctness."""
+    """Stage 1 Verification: Standalone Python pipeline correctness (opt-in via RUN_REMBG_TESTS=1)."""
+    if os.environ.get("RUN_REMBG_TESTS") != "1":
+        pytest.skip("Real rembg ML execution is opt-in via RUN_REMBG_TESTS=1")
+
+    try:
+        import rembg  # noqa: F401
+    except Exception as e:
+        pytest.skip(f"rembg ML dependency failed runtime import or initialization: {e}")
+
     input_file = tmp_path / "test_raw_pot.jpg"
     output_file = tmp_path / "test_enhanced_pot.jpg"
     _create_sample_test_image(input_file)
@@ -68,9 +77,33 @@ def test_stage1_standalone_image_pipeline(tmp_path):
     print("✅ Stage 1 Passed: Standalone pipeline output is 1200x1200 with pure white background canvas.")
 
 
-def test_stage2_fastapi_multipart_endpoint(tmp_path):
-    """Stage 2 Verification: FastAPI TestClient multipart POST to /api/v1/catalog/enhance-image."""
-    client = TestClient(app)
+def test_stage2_fastapi_multipart_endpoint(tmp_path, monkeypatch):
+    """Stage 2 Verification: FastAPI TestClient multipart POST with deterministic fake enhancer asserting ready output."""
+    from backend.database import SessionLocal, init_db
+    from backend.models.db_models import ArtisanDB
+    from backend.utils.auth import create_access_token
+    from backend.routers.catalog import catalog_service
+    import uuid
+
+    init_db()
+    db = SessionLocal()
+    if not db.query(ArtisanDB).filter(ArtisanDB.id == "artisan_img_test").first():
+        db.add(ArtisanDB(id="artisan_img_test", name="Img Artisan", phone="+919876543214"))
+        db.commit()
+    db.close()
+
+    # Deterministic fake enhancer creating a valid 1200x1200 canvas
+    async def fake_enhance(input_path: str, output_path: str | None = None):
+        out_p = Path(output_path or input_path)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        img = Image.new("RGB", (1200, 1200), color=(255, 255, 255))
+        img.save(out_p, format="JPEG", quality=90)
+        return str(out_p), False, None
+
+    monkeypatch.setattr(catalog_service, "enhance_product_photo", fake_enhance)
+
+    token = create_access_token("artisan_img_test")
+    client = TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
     # Prepare in-memory image
     sample_path = tmp_path / "upload_sample.jpg"
@@ -82,22 +115,79 @@ def test_stage2_fastapi_multipart_endpoint(tmp_path):
     response = client.post(
         "/api/v1/catalog/enhance-image",
         files={"image": ("upload_sample.jpg", file_bytes, "image/jpeg")},
+        data={"return_format": "JPEG"},
+        headers={"Idempotency-Key": f"test_img_stage2_{uuid.uuid4().hex}"},
     )
 
     assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
     data = response.json()
-    assert "original_url" in data
-    assert "enhanced_url" in data
-    assert data["status"] == "success"
-    assert "/uploads/raw/" in data["original_url"] or "/uploads/" in data["original_url"]
-    assert "/uploads/enhanced/" in data["enhanced_url"]
+    assert "media_id" in data
+    assert "original_media_id" in data
+    assert data["status"] in ["ready", "success"]
+    assert data["is_degraded"] is False
+    assert data["degraded_reason"] is None
+    assert data["media_id"].startswith("med_")
+    assert data["original_media_id"].startswith("med_")
+    print(f"✅ Stage 2 Passed: FastAPI endpoint returned 200 OK with media_id={data['media_id']} and status={data['status']}")
 
-    print(f"✅ Stage 2 Passed: FastAPI endpoint returned 200 OK with original_url={data['original_url']} & enhanced_url={data['enhanced_url']}")
+
+def test_stage3_fastapi_multipart_endpoint_degraded_fallback(tmp_path, monkeypatch):
+    """Stage 3 Verification: Deterministic forced failure asserting degraded status and preserved media lineage."""
+    from backend.database import SessionLocal, init_db
+    from backend.models.db_models import ArtisanDB
+    from backend.utils.auth import create_access_token
+    from backend.routers.catalog import catalog_service
+    import uuid
+
+    init_db()
+    db = SessionLocal()
+    if not db.query(ArtisanDB).filter(ArtisanDB.id == "artisan_img_test").first():
+        db.add(ArtisanDB(id="artisan_img_test", name="Img Artisan", phone="+919876543214"))
+        db.commit()
+    db.close()
+
+    # Deterministic forced failure returning degraded status
+    forced_reason = "Simulated GPU out-of-memory during rembg inference"
+    async def forced_failure_enhance(input_path: str, output_path: str | None = None):
+        out_p = Path(output_path or input_path)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        import shutil
+        shutil.copy2(input_path, out_p)
+        return str(out_p), True, forced_reason
+
+    monkeypatch.setattr(catalog_service, "enhance_product_photo", forced_failure_enhance)
+
+    token = create_access_token("artisan_img_test")
+    client = TestClient(app, headers={"Authorization": f"Bearer {token}"})
+
+    sample_path = tmp_path / "upload_sample_degraded.jpg"
+    _create_sample_test_image(sample_path)
+
+    with open(sample_path, "rb") as f:
+        file_bytes = f.read()
+
+    response = client.post(
+        "/api/v1/catalog/enhance-image",
+        files={"image": ("upload_sample_degraded.jpg", file_bytes, "image/jpeg")},
+        data={"return_format": "JPEG"},
+        headers={"Idempotency-Key": f"test_img_stage3_{uuid.uuid4().hex}"},
+    )
+
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    data = response.json()
+    assert "media_id" in data
+    assert "original_media_id" in data
+    assert data["status"] == "degraded"
+    assert data["is_degraded"] is True
+    assert data["degraded_reason"] == forced_reason
+    assert data["media_id"].startswith("med_")
+    assert data["original_media_id"].startswith("med_")
+    print(f"✅ Stage 3 Passed: Forced failure returned 200 degraded with lineage preserved (original={data['original_media_id']}, media={data['media_id']})")
 
 
 if __name__ == "__main__":
     import tempfile
     with tempfile.TemporaryDirectory() as tmp_dir:
         test_stage1_standalone_image_pipeline(Path(tmp_dir))
-        test_stage2_fastapi_multipart_endpoint(Path(tmp_dir))
-    print("\n🎉 All Backend & ML Image Pipeline Tests Passed Successfully!")
+        # Note: Stage 2 & 3 use monkeypatch, run via pytest
+    print("\n🎉 Standalone ML Image Pipeline Tests Completed!")

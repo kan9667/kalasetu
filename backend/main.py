@@ -25,7 +25,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings, ensure_upload_dir
 from backend.database import init_db
@@ -38,9 +37,31 @@ from backend.routers import (
     voice_router,
     social_router,
     chat_router,
+    media_router,
 )
 
 settings = get_settings()
+
+
+def check_schema_readiness():
+    """Verify that database has completed required Alembic migrations."""
+    from sqlalchemy import text
+    from .database import engine
+    with engine.connect() as conn:
+        try:
+            result = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+            if result != "0003_media_asset_lineage_and_degradation":
+                raise RuntimeError(
+                    f"Database schema is out of date (current: {result}, required: 0003_media_asset_lineage_and_degradation). "
+                    f"Run 'PYTHONPATH=. alembic -c backend/alembic.ini upgrade head' before starting the application."
+                )
+        except Exception as e:
+            if isinstance(e, RuntimeError):
+                raise
+            raise RuntimeError(
+                f"Failed to verify database schema version: {e}. "
+                f"Ensure database exists and 'alembic upgrade head' has been executed."
+            )
 
 
 @asynccontextmanager
@@ -48,20 +69,24 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown event lifecycle."""
     # 1. Ensure upload directory exists
     ensure_upload_dir()
-    
-    # 2. Initialize database tables (artisans + products)
+
+    # 2. Verify schema readiness before serving traffic
+    check_schema_readiness()
+
+    # 3. Seed baseline development data
     init_db()
 
-    # 3. Pre-warm rembg ONNX session asynchronously so first request has 0s model download penalty
-    def _warmup_models():
-        try:
-            from ML.image_pipeline.processors.background_removal import get_rembg_session
-            get_rembg_session()
-        except Exception:
-            pass
+    # 4. Pre-warm ML models only in non-test runtime environments
+    if settings.environment != "test":
+        def _warmup_models():
+            try:
+                from ML.image_pipeline.processors.background_removal import get_rembg_session
+                get_rembg_session()
+            except Exception:
+                pass
 
-    import threading
-    threading.Thread(target=_warmup_models, daemon=True).start()
+        import threading
+        threading.Thread(target=_warmup_models, daemon=True).start()
 
     print("\n" + "=" * 60)
     print(f"  ✨ {settings.app_name} v{settings.app_version} Started")
@@ -94,9 +119,8 @@ app.add_middleware(
     allow_headers=settings.cors_allow_headers,
 )
 
-# ── Mount Uploaded Static Files ──────────────────────────────────────────────
-upload_path = ensure_upload_dir()
-app.mount(settings.static_url_prefix, StaticFiles(directory=str(upload_path)), name="uploads")
+# Note: Static serving of private uploads has been removed for genuine tenant privacy.
+# Media is served via authenticated /api/v1/media/{id} and gatekept /api/v1/media/{id}/public.
 
 # ── Register Routers ─────────────────────────────────────────────────────────
 app.include_router(health_router)
@@ -107,6 +131,7 @@ app.include_router(catalog_router)
 app.include_router(auth_router)
 app.include_router(social_router)
 app.include_router(chat_router)
+app.include_router(media_router)
 
 
 @app.get("/", tags=["Root"])

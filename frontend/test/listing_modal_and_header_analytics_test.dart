@@ -31,6 +31,27 @@ class _FakeProductListNotifier extends StateNotifier<AsyncValue<List<Product>>>
   }
 
   @override
+  Future<Product> approveAndPublishProduct(
+    String productId, {
+    int? revision,
+    String? contentHash,
+    String? idempotencyKey,
+  }) async {
+    final p = state.value?.firstWhere(
+      (prod) => prod.id == productId,
+      orElse: () => Product(
+        id: productId,
+        title: 'Test',
+        description: 'Test',
+        price: 100,
+        photoPath: '',
+        category: 'Craft',
+      ),
+    );
+    return p!;
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -63,6 +84,15 @@ void main() {
     if (!Hive.isBoxOpen('pending_sync_box')) {
       await Hive.openBox<String>('pending_sync_box');
     }
+    File('test_path.jpg').writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]);
+  });
+
+  tearDownAll(() async {
+    final testFile = File('test_path.jpg');
+    if (testFile.existsSync()) {
+      testFile.deleteSync();
+    }
+    await Hive.close();
   });
 
   group('Product Listed Successfully Modal Overflow Tests', () {

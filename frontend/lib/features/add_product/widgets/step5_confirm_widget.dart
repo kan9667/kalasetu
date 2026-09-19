@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -11,7 +12,7 @@ import '../../../core/widgets/app_image.dart';
 import '../../../core/widgets/speaker_affordance.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../data/models/product.dart';
-import '../../../data/services/social_media_service.dart';
+import '../../../data/services/api_service.dart';
 import '../../social_media/providers/social_media_provider.dart';
 import '../../social_media/widgets/social_media_launchpad_sheet.dart';
 import '../../home/screens/home_shell.dart';
@@ -25,6 +26,8 @@ class Step5ConfirmWidget extends ConsumerStatefulWidget {
 
 class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
   bool _isPublishing = false;
+  bool _previewFailed = false;
+  Product? _publishedProduct;
   final AppTtsService _tts = AppTtsService();
 
   @override
@@ -89,9 +92,46 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
   }
 
   Future<void> _handleListProduct() async {
+    final draft = ref.read(addProductFlowProvider);
+
+    // INVARIANT: Runtime check (never assert) enforcing exact media review.
+    if (draft.mediaId != null && draft.boundMediaGeneration != draft.imageInputGeneration) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot publish: Media asset belongs to a previous photo. Please retake or re-verify.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final hasValidLocalPhoto = draft.originalImagePath.isNotEmpty &&
+        (draft.originalImagePath.startsWith('http') ||
+            (File(draft.originalImagePath).existsSync() &&
+                File(draft.originalImagePath).lengthSync() > 0));
+
+    if (draft.mediaId == null && !hasValidLocalPhoto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot publish: A valid product photo is required.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_previewFailed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot publish: Image preview could not be verified.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isPublishing = true);
 
-    final draft = ref.read(addProductFlowProvider);
     final isOnline = ref.read(connectivityProvider).value ?? true;
 
     final fallbackCategory = ref.read(userProfileProvider).craftType.trim().isNotEmpty
@@ -102,9 +142,6 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
         ? draft.category.trim()
         : fallbackCategory;
 
-    const fallbackPhoto =
-        'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=600&q=80';
-
     final newProduct = Product(
       id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
       title: draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted $effectiveCategory',
@@ -112,20 +149,75 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       description: draft.descriptionEn.isNotEmpty ? draft.descriptionEn : draft.voiceTranscript,
       descriptionHi: draft.descriptionHi,
       price: draft.finalPrice,
-      photoPath: draft.originalImagePath.isNotEmpty ? draft.originalImagePath : fallbackPhoto,
+      photoPath: draft.originalImagePath,
       aiEnhancedPhotoPath: draft.isEnhanced ? draft.enhancedImagePath : '',
       additionalPhotoPaths: draft.additionalImagePaths,
       category: effectiveCategory,
       tags: draft.tags,
-      status: isOnline ? ProductStatus.live : ProductStatus.pendingSync,
+      status: ProductStatus.draft, // INVARIANT: initial mutation is strictly draft
       createdAt: DateTime.now(),
+      floorPrice: draft.floorPrice > 0 ? draft.floorPrice : null,
+      materialsCost: draft.rawMaterialCost > 0 ? draft.rawMaterialCost : null,
+      laborHours: draft.laborHours > 0 ? draft.laborHours : null,
+      hourlyRate: draft.hourlyRate > 0 ? draft.hourlyRate : null,
+      mediaId: draft.mediaId,
     );
 
-    final createdProduct = await ref.read(productListProvider.notifier).addProduct(newProduct);
+    Product createdProduct;
+    Product? publishedProduct;
+    try {
+      createdProduct = await ref.read(productListProvider.notifier).addProduct(newProduct);
+      // Enforce explicit artisan approval before publishing
+      publishedProduct = await ref.read(productListProvider.notifier).approveAndPublishProduct(
+        createdProduct.id,
+        revision: createdProduct.revision,
+        contentHash: createdProduct.contentHash,
+      );
+    } on StaleRevisionException catch (e) {
+      if (mounted) {
+        setState(() {
+          _isPublishing = false;
+          _publishedProduct = null;
+        });
+        showDialog(
+          context: context,
+          builder: (dialogCtx) => AlertDialog(
+            backgroundColor: AppColors.parchment,
+            title: Text('Revision Conflict', style: AppTextStyles.headlineMedium),
+            content: Text(
+              e.message,
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(dialogCtx).pop();
+                  // Return artisan to Step 3 Review to inspect latest server revision
+                  ref.read(addProductFlowProvider.notifier).setStep(2);
+                },
+                child: const Text('Review Latest Draft'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isPublishing = false;
+          _publishedProduct = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error publishing product: $e')),
+        );
+      }
+      return;
+    }
 
     if (isOnline && draft.draftId.isNotEmpty) {
       try {
-        await HttpSocialMediaService().linkDraftsToListing(
+        await ref.read(socialMediaServiceProvider).linkDraftsToListing(
           draftKey: draft.draftId,
           listingId: createdProduct.id,
         );
@@ -135,13 +227,20 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
     }
 
     if (mounted) {
-      setState(() => _isPublishing = false);
+      setState(() {
+        _isPublishing = false;
+        _publishedProduct = publishedProduct;
+      });
 
       final finalPrice = draft.finalPrice;
       final floorCost = draft.floorPrice > 0
           ? draft.floorPrice
           : (draft.rawMaterialCost + (draft.laborHours * draft.hourlyRate));
       final profit = (finalPrice - floorCost).clamp(0.0, double.infinity);
+
+      // INVARIANT: Never show "listing online" unless the returned server product status is published/live!
+      final bool isPublishedOnServer =
+          publishedProduct.status == ProductStatus.published || publishedProduct.status == ProductStatus.live;
 
       showDialog(
         context: context,
@@ -153,14 +252,16 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
             title: Row(
               children: [
                 Icon(
-                  isOnline ? Icons.check_circle : Icons.cloud_queue,
-                  color: isOnline ? AppColors.success : AppColors.goldDark,
+                  isPublishedOnServer ? Icons.check_circle : Icons.cloud_queue,
+                  color: isPublishedOnServer ? AppColors.success : AppColors.goldDark,
                   size: 28,
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    isOnline ? 'listing_online_success'.tr() : 'queued_offline_success'.tr(),
+                    isPublishedOnServer
+                        ? 'listing_online_success'.tr()
+                        : 'saved_offline_awaiting_sync'.tr(),
                     style: AppTextStyles.headlineMedium,
                   ),
                 ),
@@ -172,7 +273,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    isOnline
+                    isPublishedOnServer
                         ? 'listing_online_desc'.tr()
                         : 'listing_offline_desc'.tr(),
                     style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
@@ -348,8 +449,38 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
   @override
   Widget build(BuildContext context) {
     final draft = ref.watch(addProductFlowProvider);
-    final isOnline = ref.watch(connectivityProvider).value ?? true;
-    final displayImage = draft.isEnhanced ? draft.enhancedImagePath : draft.originalImagePath;
+    final currentStatus = _publishedProduct?.status ?? ProductStatus.draft;
+    final bool isLive = currentStatus == ProductStatus.published || currentStatus == ProductStatus.live;
+    final bool mediaGenerationMismatch = draft.mediaId != null &&
+        draft.boundMediaGeneration != draft.imageInputGeneration;
+
+    final hasValidLocalPhoto = draft.originalImagePath.isNotEmpty &&
+        (draft.originalImagePath.startsWith('http') ||
+            (File(draft.originalImagePath).existsSync() &&
+                File(draft.originalImagePath).lengthSync() > 0));
+
+    final bool missingPhoto = draft.mediaId == null && !hasValidLocalPhoto;
+    final bool isPublishBlocked = mediaGenerationMismatch || missingPhoto || _previewFailed;
+
+    final localEnhancedExists = draft.isEnhanced &&
+        draft.enhancedImagePath.isNotEmpty &&
+        (draft.enhancedImagePath.startsWith('http') ||
+            (File(draft.enhancedImagePath).existsSync() && File(draft.enhancedImagePath).lengthSync() > 0));
+    final localOriginalExists = draft.originalImagePath.isNotEmpty &&
+        (draft.originalImagePath.startsWith('http') ||
+            (File(draft.originalImagePath).existsSync() && File(draft.originalImagePath).lengthSync() > 0));
+
+    final displayImage = mediaGenerationMismatch
+        ? '' // Never render mismatched media asset
+        : (localEnhancedExists
+            ? draft.enhancedImagePath
+            : (localOriginalExists
+                ? draft.originalImagePath
+                : (draft.mediaId != null && draft.mediaId!.isNotEmpty
+                    ? draft.mediaId!
+                    : (draft.originalMediaId != null && draft.originalMediaId!.isNotEmpty
+                        ? draft.originalMediaId!
+                        : draft.originalImagePath))));
 
     final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
             EasyLocalization.of(context)?.locale.languageCode) ==
@@ -409,9 +540,119 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                     height: 220,
                     width: double.infinity,
                     color: AppColors.parchmentDeep,
-                    child: AppImage(imageUrl: displayImage, fit: BoxFit.cover),
+                    child: AppImage(
+                      imageUrl: displayImage,
+                      fit: BoxFit.cover,
+                      onError: () {
+                        if (mounted && !_previewFailed) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && !_previewFailed) {
+                              setState(() => _previewFailed = true);
+                            }
+                          });
+                        }
+                      },
+                    ),
                   ),
                 ),
+
+                if (draft.isDegraded || draft.isVoiceDegraded || draft.isListingDegraded || draft.isPricingDegraded)
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.statusPendingBg,
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      border: Border.all(color: AppColors.goldLight),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (draft.isDegraded)
+                          Row(
+                            children: [
+                              const Icon(Icons.info_outline, size: 16, color: AppColors.goldDark),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  draft.degradedReason != null && draft.degradedReason!.isNotEmpty
+                                      ? 'Photo Enhancement Degraded: ${draft.degradedReason}'
+                                      : 'AI photo enhancement degraded to original raw image',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.goldDark,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        if (draft.isVoiceDegraded) ...[
+                          if (draft.isDegraded) const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.info_outline, size: 16, color: AppColors.goldDark),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  draft.voiceDegradedReason != null && draft.voiceDegradedReason!.isNotEmpty
+                                      ? 'Voice Transcription Degraded: ${draft.voiceDegradedReason}'
+                                      : 'Voice transcription unavailable (using manual description)',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.goldDark,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (draft.isListingDegraded) ...[
+                          if (draft.isDegraded || draft.isVoiceDegraded) const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.info_outline, size: 16, color: AppColors.goldDark),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  draft.listingDegradedReason != null && draft.listingDegradedReason!.isNotEmpty
+                                      ? 'AI Listing Degraded: ${draft.listingDegradedReason}'
+                                      : 'AI listing generation degraded to raw transcription text',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.goldDark,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (draft.isPricingDegraded) ...[
+                          if (draft.isDegraded || draft.isVoiceDegraded || draft.isListingDegraded) const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.info_outline, size: 16, color: AppColors.goldDark),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  draft.pricingDegradedReason != null && draft.pricingDegradedReason!.isNotEmpty
+                                      ? 'AI Pricing Degraded: ${draft.pricingDegradedReason}'
+                                      : 'AI pricing guidance degraded to cost-floor fallback',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.goldDark,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
 
                 if (draft.additionalImagePaths.isNotEmpty)
                   Padding(
@@ -466,31 +707,38 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                             ),
                           ),
                           const SizedBox(width: AppSpacing.xs),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isOnline ? AppColors.statusSuccessBg : AppColors.statusPendingBg,
-                              borderRadius: BorderRadius.circular(AppRadii.button),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isOnline ? AppColors.statusSuccessFg : AppColors.statusPendingFg,
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isLive ? AppColors.statusSuccessBg : AppColors.statusPendingBg,
+                                borderRadius: BorderRadius.circular(AppRadii.button),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: isLive ? AppColors.statusSuccessFg : AppColors.statusPendingFg,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  isOnline ? 'status_live'.tr() : 'status_pending_sync'.tr(),
-                                  style: AppTextStyles.labelSmall.copyWith(
-                                    color: isOnline ? AppColors.statusSuccessFg : AppColors.statusPendingFg,
-                                    fontWeight: FontWeight.bold,
+                                  const SizedBox(width: 5),
+                                  Flexible(
+                                    child: Text(
+                                      isLive ? 'status_live'.tr() : 'status_pending_approval_sync'.tr(),
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: isLive ? AppColors.statusSuccessFg : AppColors.statusPendingFg,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -623,11 +871,52 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
             const SizedBox(height: 12),
           ],
 
+          if (isPublishBlocked)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.statusActionBg,
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                border: Border.all(color: AppColors.error),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Verification Required Before Publishing',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          mediaGenerationMismatch
+                              ? 'The processed media asset belongs to an earlier photo. Retake or re-enhance the photo before publishing.'
+                              : (missingPhoto
+                                  ? 'A valid product photo is required. Placeholders cannot be published.'
+                                  : 'The photo preview could not be loaded or verified. Please verify the image.'),
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.ink),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           AppButton(
             label: 'list_product_btn'.tr(),
             icon: Icons.cloud_upload_outlined,
             isLoading: _isPublishing,
-            onPressed: _handleListProduct,
+            onPressed: (_isPublishing || isPublishBlocked) ? null : _handleListProduct,
           ),
           const SizedBox(height: 20),
         ],

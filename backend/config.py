@@ -7,9 +7,9 @@ centralized application settings.
 
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, model_validator
 
 # Directories
 BACKEND_ROOT = Path(__file__).resolve().parent
@@ -100,6 +100,62 @@ class Settings(BaseSettings):
     cors_allow_methods: List[str] = ["*"]
     cors_allow_headers: List[str] = ["*"]
 
+    # Environment & Auth
+    environment: str = Field(default="development", description="Runtime environment: development, test, production")
+    allow_demo_otp: bool = Field(default=False, description="Whether fixed demo OTP is permitted (forbidden in production)")
+    jwt_secret_key: str = Field(
+        default="",
+        description="High-entropy secret key (min 32 chars) for HS256 JWT signing/verification",
+    )
+    jwt_algorithm: str = "HS256"
+    jwt_issuer: str = "kalasetu-backend"
+    jwt_audience: str = "kalasetu-app"
+    jwt_access_token_expire_minutes: int = 60 * 24 * 30  # 30 days
+
+    # SMS Provider Configuration
+    sms_provider: str = Field(default="console", description="SMS delivery provider: console, mock, http")
+    sms_api_url: Optional[str] = Field(default="", description="SMS gateway HTTP endpoint URL")
+    sms_api_key: Optional[str] = Field(default="", description="SMS gateway API key")
+    sms_sender_id: Optional[str] = Field(default="", description="SMS sender identifier")
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_cors_origins(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            raw = data.get("cors_origins") or data.get("CORS_ORIGINS")
+            if isinstance(raw, str):
+                origins = [o.strip() for o in raw.split(",") if o.strip()]
+                data["cors_origins"] = origins
+        return data
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        env = (self.environment or "").strip().lower()
+        is_prod = env == "production"
+        is_test = env == "test"
+
+        # Fail closed if JWT secret is missing or weak outside explicit test mode
+        if not is_test:
+            if not self.jwt_secret_key or len(self.jwt_secret_key) < 32:
+                raise ValueError("JWT_SECRET_KEY must be configured and at least 32 characters long outside test mode.")
+            weak_keys = {"secret", "changeme", "password", "12345678901234567890123456789012"}
+            if self.jwt_secret_key in weak_keys:
+                raise ValueError("JWT_SECRET_KEY cannot be a known weak secret.")
+
+        if is_prod:
+            if self.allow_demo_otp:
+                raise ValueError("ALLOW_DEMO_OTP cannot be enabled in production.")
+            if (self.sms_provider or "").lower() in {"console", "mock"}:
+                raise ValueError("Production environment must configure a real external SMS provider (e.g. 'http').")
+            if not self.sms_api_url or not self.sms_api_key:
+                raise ValueError("SMS_API_URL and SMS_API_KEY must be configured in production.")
+            if self.cors_allow_credentials and ("*" in self.cors_origins or not self.cors_origins):
+                raise ValueError(
+                    "Production environment cannot use wildcard CORS origins ('*') when credentials are enabled. "
+                    "Configure explicit allowed domains in CORS_ORIGINS."
+                )
+        return self
+
     model_config = {
         "env_file": str(PROJECT_ROOT / ".env"),
         "env_file_encoding": "utf-8",
@@ -111,6 +167,13 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return cached application settings."""
     return Settings()
+
+
+def validate_production_secrets(settings: Settings = None) -> None:
+    """Explicitly validate that production secrets and security flags are sound."""
+    if settings is None:
+        settings = get_settings()
+    settings.validate_production_security()
 
 
 def ensure_upload_dir() -> Path:

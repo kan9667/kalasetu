@@ -132,6 +132,18 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
         labelKey = 'status_pending_sync';
         icon = Icons.cloud_queue;
         break;
+      case ProductStatus.pendingApprovalSync:
+        bg = AppColors.statusPendingBg;
+        fg = AppColors.statusPendingFg;
+        labelKey = 'status_pending_approval_sync';
+        icon = Icons.schedule_send;
+        break;
+      case ProductStatus.pendingUnpublishSync:
+        bg = AppColors.terracottaLight;
+        fg = AppColors.terracottaDark;
+        labelKey = 'status_pending_unpublish_sync';
+        icon = Icons.sync_disabled;
+        break;
       case ProductStatus.draft:
         bg = AppColors.parchmentDeep;
         fg = AppColors.inkSoft;
@@ -157,10 +169,36 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
         icon = Icons.visibility_off_outlined;
         break;
       case ProductStatus.live:
+      case ProductStatus.published:
         bg = AppColors.statusSuccessBg;
         fg = AppColors.statusSuccessFg;
         labelKey = 'status_live';
         icon = Icons.check_circle;
+        break;
+      case ProductStatus.approved:
+        bg = AppColors.statusSuccessBg;
+        fg = AppColors.statusSuccessFg;
+        labelKey = 'status_live';
+        icon = Icons.verified;
+        break;
+      case ProductStatus.awaitingApproval:
+        bg = AppColors.goldLight;
+        fg = AppColors.goldDark;
+        labelKey = 'status_pending_sync';
+        icon = Icons.hourglass_top;
+        break;
+      case ProductStatus.superseded:
+      case ProductStatus.rejected:
+        bg = AppColors.terracottaLight;
+        fg = AppColors.terracottaDark;
+        labelKey = 'status_listing_removed';
+        icon = Icons.block;
+        break;
+      case ProductStatus.legacyUnverified:
+        bg = AppColors.parchmentDeep;
+        fg = AppColors.inkSoft;
+        labelKey = 'status_draft';
+        icon = Icons.help_outline;
         break;
     }
 

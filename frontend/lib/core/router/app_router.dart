@@ -11,6 +11,8 @@ import '../../features/auth/screens/otp_screen.dart';
 import '../../features/home/screens/home_shell.dart';
 import '../../features/catalogue/screens/catalogue_screen.dart';
 import '../../features/catalogue/screens/product_detail_screen.dart';
+import '../../data/models/product.dart';
+import '../../features/catalogue/screens/review_existing_product_screen.dart';
 import '../../features/add_product/screens/add_product_flow_screen.dart';
 import '../../features/social_media/providers/social_media_provider.dart';
 import '../../features/social_media/screens/social_media_screen.dart';
@@ -171,6 +173,26 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final productId = state.pathParameters['id'] ?? '';
           return ProductDetailScreen(productId: productId);
+        },
+      ),
+      GoRoute(
+        path: '/review-product/:id',
+        name: AppRouteConstants.reviewProduct,
+        builder: (context, state) {
+          final productId = state.pathParameters['id'] ?? '';
+          final extraProduct = state.extra is Product ? state.extra as Product : null;
+          final product = extraProduct ??
+              Product(
+                id: productId,
+                title: '',
+                description: '',
+                category: '',
+                price: 0,
+                photoPath: '',
+                status: ProductStatus.draft,
+                createdAt: DateTime.now(),
+              );
+          return ReviewExistingProductScreen(initialProduct: product);
         },
       ),
       GoRoute(

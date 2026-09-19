@@ -64,17 +64,17 @@ class OfflineSyncService {
     _initialized = false;
   }
 
-  /// Instantly saves the image locally and queues it for AI enhancement.
-  /// Returns a localId you can pass to [watchItem] to track progress.
   Future<String> enqueueImage({
     required File imageFile,
     required String productDraftId,
+    String? explicitLocalId,
   }) {
     _assertInitialized();
     return _syncManager.enqueue(
       file: imageFile,
       type: QueueItemType.imageEnhance,
       productDraftId: productDraftId,
+      explicitLocalId: explicitLocalId,
     );
   }
 
@@ -83,12 +83,14 @@ class OfflineSyncService {
   Future<String> enqueueVoiceNote({
     required File audioFile,
     required String productDraftId,
+    String? explicitLocalId,
   }) {
     _assertInitialized();
     return _syncManager.enqueue(
       file: audioFile,
       type: QueueItemType.voiceCatalog,
       productDraftId: productDraftId,
+      explicitLocalId: explicitLocalId,
     );
   }
 

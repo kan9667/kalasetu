@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
+import '../../../core/storage/private_media_cache.dart';
 import '../../../data/models/user_profile.dart';
 import '../../../data/repositories/auth_repository.dart';
 
@@ -48,6 +49,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final isAuthenticated = await _authRepository.isAuthenticated();
     final userId = await _authRepository.getUserId();
     final phoneNumber = await _authRepository.getPhoneNumber();
+
+    if (isAuthenticated && userId != null && userId.isNotEmpty) {
+      PrivateMediaCache.instance.updateSession(accountId: userId);
+    }
 
     state = state.copyWith(
       isAuthenticated: isAuthenticated,
@@ -133,6 +138,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await box.put('current_profile', resolvedProfile);
     }
 
+    PrivateMediaCache.instance.updateSession(accountId: resolvedProfile.id);
+
     state = state.copyWith(
       isAuthenticated: true,
       userId: resolvedProfile.id,
@@ -149,6 +156,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     final userId = 'artisan_ngo_${DateTime.now().millisecondsSinceEpoch}';
     await _authRepository.saveAuthData(userId, '');
+    PrivateMediaCache.instance.updateSession(accountId: userId);
     state = state.copyWith(
       isAuthenticated: true,
       userId: userId,
@@ -158,7 +166,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
+  void expireSession() {
+    PrivateMediaCache.instance.deactivateAccount();
+    state = state.copyWith(isAuthenticated: false);
+  }
+
   Future<void> signOut() async {
+    PrivateMediaCache.instance.deactivateAccount();
     await _authRepository.clearAuthData();
     state = const AuthState();
   }

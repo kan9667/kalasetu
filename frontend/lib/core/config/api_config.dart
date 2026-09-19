@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import '../storage/private_media_cache.dart';
 
 /// Centralized API configuration that dynamically resolves the working backend URL.
 /// Works seamlessly across physical Android phones on Wi-Fi (e.g., SM-M346B),
@@ -19,6 +20,12 @@ class ApiConfig {
   static void setBaseUrl(String url) {
     _cachedBaseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
     debugPrint('[ApiConfig] Base URL manually set to: $_cachedBaseUrl');
+    try {
+      PrivateMediaCache.instance.updateSession(
+        accountId: PrivateMediaCache.instance.activeAccountId,
+        backendUrl: _cachedBaseUrl,
+      );
+    } catch (_) {}
   }
 
   static String _resolveInitialBaseUrl() {

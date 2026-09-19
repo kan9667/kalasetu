@@ -155,6 +155,7 @@ void main() {
         ProviderScope(
           overrides: [
             apiServiceProvider.overrideWithValue(MockApiService()),
+            productListProvider.overrideWith((ref) => _FakeProductListNotifier(const AsyncValue.data([]))),
             userProfileProvider.overrideWith((ref) => _FakeUserProfileNotifier(
               UserProfile(
                 id: 'artisan-1',

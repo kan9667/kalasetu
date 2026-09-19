@@ -1,13 +1,16 @@
 """
 Authentication and User Profile Router for KalaSetu.
 
-Uses the ArtisanDB table for persistent artisan registration and lookup.
-OTP verification is still demo-mode (accepts any 6-digit code).
+Enforces:
+- Real cryptographic OTP challenge lifecycle (salted SHA-256, expiration, attempts limit, single-use).
+- Rate-limiting (per-phone and per-IP).
+- Signed HS256 JWT token issuance.
+- Tenant ownership checks on profile lookup.
 """
 
 import uuid
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -18,8 +21,11 @@ from ..models.schemas import (
     OtpVerifyRequest,
     ArtisanProfileResponse,
 )
+from ..services.otp_service import OtpService, validate_indian_phone
+from ..utils.auth import create_access_token, get_current_artisan
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication & Artisans"])
+otp_service = OtpService()
 
 
 @router.post(
@@ -27,18 +33,13 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authentication & Artisans"])
     response_model=ArtisanProfileResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new artisan",
-    description="Registers a new artisan profile with craft details and initiates phone verification.",
+    description="Registers a new artisan profile with craft details.",
 )
 async def register_artisan(
     request: ArtisanRegisterRequest,
     db: Session = Depends(get_db),
 ):
-    phone_clean = request.phone.strip()
-    if len(phone_clean) < 10:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid phone number. Must be at least 10 digits.",
-        )
+    phone_clean = validate_indian_phone(request.phone)
 
     # Check if phone already registered
     existing = db.query(ArtisanDB).filter(ArtisanDB.phone == phone_clean).first()
@@ -58,7 +59,7 @@ async def register_artisan(
         experience_years=request.experience_years or "",
         pehchan_id=request.pehchan_id,
         preferred_language=request.preferred_language or "en",
-        created_at=datetime.now(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(artisan)
     db.commit()
@@ -70,18 +71,14 @@ async def register_artisan(
 @router.post(
     "/login",
     summary="Request login OTP",
-    description="Requests an OTP for an existing registered phone number.",
+    description="Requests a secure OTP challenge for an existing registered phone number.",
 )
 async def login_artisan(
-    request: ArtisanLoginRequest,
+    payload: ArtisanLoginRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    phone_clean = request.phone.strip()
-    if len(phone_clean) < 10:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid phone number.",
-        )
+    phone_clean = validate_indian_phone(payload.phone)
 
     # Verify phone exists in database
     artisan = db.query(ArtisanDB).filter(ArtisanDB.phone == phone_clean).first()
@@ -91,26 +88,22 @@ async def login_artisan(
             detail="No artisan registered with this phone number.",
         )
 
-    return {
-        "status": "success",
-        "message": "OTP sent for login.",
-        "phone": phone_clean,
-        "otp_sent": True,
-        "demo_otp": "123456",
-    }
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    challenge_result = await otp_service.create_challenge(db, phone_clean, client_ip=client_ip)
+    return challenge_result
 
 
 @router.post(
     "/verify-otp",
     summary="Verify phone OTP",
-    description="Validates OTP and returns artisan session profile.",
+    description="Validates cryptographic OTP challenge and issues signed JWT bearer token.",
 )
 async def verify_otp(
-    request: OtpVerifyRequest,
+    payload: OtpVerifyRequest,
     db: Session = Depends(get_db),
 ):
-    phone_clean = request.phone.strip()
-    if len(request.otp) != 6:
+    phone_clean = validate_indian_phone(payload.phone)
+    if len(payload.otp) != 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid OTP format. Must be 6 digits.",
@@ -123,9 +116,15 @@ async def verify_otp(
             detail="No artisan registered with this phone number. Please register first.",
         )
 
+    # Verify cryptographic challenge
+    otp_service.verify_challenge(db, phone_clean, payload.otp)
+
+    # Issue cryptographically signed HS256 JWT
+    token = create_access_token(artisan.id)
+
     return {
         "status": "success",
-        "access_token": f"mock_jwt_token_{phone_clean}",
+        "access_token": token,
         "token_type": "bearer",
         "artisan": ArtisanProfileResponse.model_validate(artisan).model_dump(),
     }
@@ -135,16 +134,18 @@ async def verify_otp(
     "/profile/{artisan_id}",
     response_model=ArtisanProfileResponse,
     summary="Get artisan profile",
-    description="Fetch an artisan profile by their unique ID.",
+    description="Fetch artisan profile with ownership enforcement.",
 )
 async def get_artisan_profile(
     artisan_id: str,
+    authenticated_artisan: ArtisanDB = Depends(get_current_artisan),
     db: Session = Depends(get_db),
 ):
-    artisan = db.query(ArtisanDB).filter(ArtisanDB.id == artisan_id).first()
-    if not artisan:
+    # Enforce tenant isolation
+    if authenticated_artisan.id != artisan_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Artisan not found.",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: You cannot access another artisan's profile.",
         )
-    return artisan
+
+    return authenticated_artisan

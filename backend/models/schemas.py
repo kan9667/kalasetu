@@ -9,8 +9,8 @@ Designed for full compatibility with Flutter Dart models:
 """
 
 from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from typing import List, Optional, Any
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 # ── Artisan Schemas ─────────────────────────────────────────────────────────
@@ -54,22 +54,68 @@ class ArtisanProfileResponse(BaseModel):
 # ── Product Schemas ─────────────────────────────────────────────────────────
 
 
+class ProductApproveAndPublishRequest(BaseModel):
+    revision: int = Field(..., description="The revision number being approved and published")
+    content_hash: str = Field(
+        ...,
+        pattern=r"^[a-f0-9]{64}$",
+        description="SHA-256 hash of the content revision being approved",
+    )
+    idempotency_key: Optional[str] = Field(default=None, description="Optional client idempotency key")
+
+
+class ProductUnpublishRequest(BaseModel):
+    expected_revision: int = Field(..., ge=1, description="Exact revision expected to unpublish")
+    content_hash: str = Field(
+        ...,
+        pattern=r"^[a-f0-9]{64}$",
+        description="Exact 64-character lowercase SHA-256 content hash",
+    )
+
+
 class ProductBase(BaseModel):
     title: str = Field(..., description="English product title")
     title_hi: Optional[str] = Field(default="", description="Hindi product title")
     description: str = Field(..., description="English product description")
     description_hi: Optional[str] = Field(default="", description="Hindi product description")
     price: float = Field(..., ge=0.0, description="Selling price in INR")
-    image_url: str = Field(..., description="URL or local path to product image")
+    media_id: Optional[str] = Field(default=None, description="Server-owned validated media asset ID")
     category: str = Field(default="General", description="Craft category")
     tags: List[str] = Field(default_factory=list, description="Search and catalog tags")
-    status: str = Field(default="live", description="Status: live, draft, archived")
+
+    # Cost breakdown inputs in INR
+    materials: float = Field(default=0.0, ge=0.0, description="Raw materials cost in INR")
+    labor_hours: float = Field(default=0.0, ge=0.0, description="Hours of craft labor")
+    hourly_rate: float = Field(default=50.0, ge=0.0, description="Fair hourly wage in INR")
+    transport: float = Field(default=0.0, ge=0.0, description="Transport / logistics cost in INR")
+    overhead: float = Field(default=0.0, ge=0.0, description="Miscellaneous overhead in INR")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _map_cost_field_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "materials_cost" in data and "materials" not in data:
+                data["materials"] = data["materials_cost"]
+            if "transport_cost" in data and "transport" not in data:
+                data["transport"] = data["transport_cost"]
+            if "other_overhead" in data and "overhead" not in data:
+                data["overhead"] = data["other_overhead"]
+        return data
 
 
 class ProductCreate(ProductBase):
     id: Optional[str] = Field(default=None, description="Optional custom ID (e.g. from offline queue)")
-    artisan_id: Optional[str] = Field(default=None, description="Owner artisan ID")
+    status: Optional[str] = Field(default="draft", description="Client hint; server strictly enforces draft")
+    floor_price: Optional[float] = Field(default=None, description="Advisory client floor; server recalculates authoritative floor")
     created_at: Optional[datetime] = Field(default=None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_image_url(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "image_url" in data:
+                raise ValueError("Client-supplied image_url is strictly prohibited. Upload images via /api/v1/media/upload and provide media_id instead.")
+        return data
 
 
 class ProductUpdate(BaseModel):
@@ -78,10 +124,29 @@ class ProductUpdate(BaseModel):
     description: Optional[str] = None
     description_hi: Optional[str] = None
     price: Optional[float] = None
-    image_url: Optional[str] = None
+    media_id: Optional[str] = None
+    expected_revision: Optional[int] = Field(default=None, description="Expected server revision for optimistic locking")
     category: Optional[str] = None
     tags: Optional[List[str]] = None
-    status: Optional[str] = None
+    materials: Optional[float] = None
+    labor_hours: Optional[float] = None
+    hourly_rate: Optional[float] = None
+    transport: Optional[float] = None
+    overhead: Optional[float] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_update_payload(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "image_url" in data:
+                raise ValueError("Client-supplied image_url is strictly prohibited. Upload images via /api/v1/media/upload and provide media_id instead.")
+            if "materials_cost" in data and "materials" not in data:
+                data["materials"] = data["materials_cost"]
+            if "transport_cost" in data and "transport" not in data:
+                data["transport"] = data["transport_cost"]
+            if "other_overhead" in data and "overhead" not in data:
+                data["overhead"] = data["other_overhead"]
+        return data
 
 
 class ProductResponse(ProductBase):
@@ -89,13 +154,47 @@ class ProductResponse(ProductBase):
 
     id: str
     artisan_id: Optional[str] = None
+    image_url: str = ""
+    status: str = "draft"
+    revision: int = 1
+    approved_revision: Optional[int] = None
+    approved_at: Optional[datetime] = None
+    approved_by_artisan_id: Optional[str] = None
+    published_at: Optional[datetime] = None
+    content_hash: str = ""
+    floor_price: float = 0.0
     created_at: datetime
     updated_at: Optional[datetime] = None
 
 
+class PublicProductResponse(BaseModel):
+    """Sanitized public catalog item without private cost floor or internal audit hashes."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    title_hi: Optional[str] = ""
+    description: str
+    description_hi: Optional[str] = ""
+    price: float
+    image_url: str
+    category: str
+    tags: List[str] = []
+    status: str = "published"
+    published_at: Optional[datetime] = None
+
+
+class ProductSyncItem(ProductCreate):
+    """Product payload item for offline sync with mandatory optimistic revision check on updates."""
+    expected_revision: Optional[int] = Field(
+        default=None,
+        description="Expected current revision on server for optimistic locking. Required when updating existing server products.",
+    )
+
+
 class ProductSyncBatch(BaseModel):
     """Batch payload sent during offline sync drain."""
-    products: List[ProductCreate]
+    products: List[ProductSyncItem]
 
 
 class ProductSyncResponse(BaseModel):
@@ -233,6 +332,12 @@ class ImageEnhanceResponse(BaseModel):
     original_url: str
     enhanced_url: str
     status: str = "success"
+    media_id: str
+    original_media_id: Optional[str] = None
+    sha256_checksum: Optional[str] = None
+    byte_size: Optional[int] = None
+    is_degraded: bool = False
+    degraded_reason: Optional[str] = None
 
 
 class VoiceToProductResponse(BaseModel):

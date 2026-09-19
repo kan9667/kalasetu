@@ -4,12 +4,22 @@ import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/config/api_config.dart';
+import '../../core/network/authenticated_http_client.dart';
+import '../../core/network/session_expired_exception.dart';
+import '../../core/storage/secure_token_storage.dart';
 
 class TranscriptionResult {
   final String transcript;
   final double confidence; // 0.0–1.0
+  final bool isDegraded;
+  final String? degradedReason;
 
-  const TranscriptionResult({required this.transcript, required this.confidence});
+  const TranscriptionResult({
+    required this.transcript,
+    required this.confidence,
+    this.isDegraded = false,
+    this.degradedReason,
+  });
 }
 
 class AiListingSuggestion {
@@ -23,6 +33,8 @@ class AiListingSuggestion {
   final double? laborHours;
   final double? hourlyRate;
   final double? floorPrice;
+  final bool isDegraded;
+  final String? degradedReason;
 
   const AiListingSuggestion({
     required this.titleEn,
@@ -35,6 +47,8 @@ class AiListingSuggestion {
     this.laborHours,
     this.hourlyRate,
     this.floorPrice,
+    this.isDegraded = false,
+    this.degradedReason,
   });
 }
 
@@ -42,12 +56,14 @@ abstract class SpeechService {
   Future<TranscriptionResult> transcribeAudio({
     required String audioPath,
     required String languageCode,
+    String? idempotencyKey,
   });
 
   Future<AiListingSuggestion> generateListingFromTranscript({
     required String transcript,
     required String languageCode,
     String? categoryHint,
+    String? idempotencyKey,
   });
 }
 
@@ -58,6 +74,7 @@ class MockSpeechService implements SpeechService {
   Future<TranscriptionResult> transcribeAudio({
     required String audioPath,
     required String languageCode,
+    String? idempotencyKey,
   }) async {
     await Future.delayed(const Duration(milliseconds: 1200));
 
@@ -81,6 +98,7 @@ class MockSpeechService implements SpeechService {
     required String transcript,
     required String languageCode,
     String? categoryHint,
+    String? idempotencyKey,
   }) async {
     await Future.delayed(const Duration(milliseconds: 1300));
 
@@ -120,16 +138,14 @@ class MockSpeechService implements SpeechService {
 /// Real HTTP speech service connecting directly to FastAPI `/api/v1/voice/transcribe`
 /// which runs the ML Whisper STT pipeline with domain craft glossary biasing.
 class HttpSpeechService implements SpeechService {
-  HttpSpeechService({Dio? dio})
+  HttpSpeechService({Dio? dio, SecureTokenStorage? tokenStorage})
       : _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: ApiConfig.baseUrl,
-                connectTimeout: const Duration(seconds: 15),
-                sendTimeout: const Duration(seconds: 30),
-                receiveTimeout: const Duration(seconds: 60),
-                headers: {'Accept': 'application/json'},
-              ),
+            AuthenticatedHttpClient.create(
+              baseUrl: ApiConfig.baseUrl,
+              tokenStorage: tokenStorage,
+              connectTimeout: const Duration(seconds: 15),
+              sendTimeout: const Duration(seconds: 30),
+              receiveTimeout: const Duration(seconds: 60),
             );
 
   final Dio _dio;
@@ -158,46 +174,36 @@ class HttpSpeechService implements SpeechService {
       'bye',
       'bye bye',
       'you',
-      'goodbye',
-      'peace',
-      'watching',
-      'so',
-      'the end',
-      'see you next time',
-      'thanks guys',
-      'thank you all',
+      'okay',
+      'ok',
       'धन्यवाद',
-      'बहुत धन्यवाद',
       'शुक्रिया',
-      'बहुत शुक्रिया',
-      'प्रस्तुत',
-      'प्रश्नित',
-      'प्रश्नित प्रश्नित',
-      'झाल',
+      'देखने के लिए धन्यवाद',
+      'सुनने के लिए धन्यवाद',
       'सब्सक्राइब करें',
       'लाइक करें',
-      'शेयर करें',
-      'चैनल को सब्सक्राइब करें',
+      'नमस्ते',
+      'बाय',
+      'நன்றி',
+      'பார்த்ததற்கு நன்றி',
+      'கேட்டதற்கு நன்றி',
+      'வணக்கம்',
+      'பகிர்வும்',
+      'தொடருங்கள்',
+      'பதிவு செய்யவும்',
+      'விடைபெறுகிறேன்',
+      'धन्यवाद।',
+      'शुक्रिया।',
     };
 
     if (silenceArtifacts.contains(clean)) return true;
 
-    final words = clean.split(' ').where((w) => w.isNotEmpty).toList();
-    if (words.length <= 6) {
-      if ((clean.contains('thank') || clean.contains('thanks')) && clean.contains('watching')) {
+    for (final artifact in silenceArtifacts) {
+      if (clean == artifact ||
+          clean == '$artifact.' ||
+          clean == '$artifact!' ||
+          clean.startsWith('$artifact ') && clean.split(' ').length <= 3) {
         return true;
-      }
-      for (final prefix in [
-        'thanks',
-        'thank you',
-        'bye',
-        'goodbye',
-        'subtitles',
-        'subscribe',
-        'धन्यवाद',
-        'शुक्रिया',
-      ]) {
-        if (clean.startsWith(prefix)) return true;
       }
     }
     return false;
@@ -207,12 +213,16 @@ class HttpSpeechService implements SpeechService {
   Future<TranscriptionResult> transcribeAudio({
     required String audioPath,
     required String languageCode,
+    String? idempotencyKey,
   }) async {
     final file = File(audioPath);
     if (!await file.exists()) {
       debugPrint('[HttpSpeechService] Audio file does not exist: $audioPath');
       return const TranscriptionResult(transcript: '', confidence: 0.0);
     }
+
+    final operationKey = idempotencyKey ??
+        'idem_stt_${file.path.hashCode.abs()}';
 
     try {
       final activeUrl = ApiConfig.baseUrl;
@@ -227,10 +237,13 @@ class HttpSpeechService implements SpeechService {
         'language_code': languageCode.isNotEmpty ? languageCode : 'auto',
       });
 
-      debugPrint('[HttpSpeechService] POST $activeUrl/api/v1/voice/transcribe (lang: $languageCode)');
+      debugPrint('[HttpSpeechService] POST $activeUrl/api/v1/voice/transcribe (lang: $languageCode) [Idempotency-Key: $operationKey]');
       final response = await _dio.post(
         '/api/v1/voice/transcribe',
         data: formData,
+        options: Options(
+          headers: {'Idempotency-Key': operationKey},
+        ),
       );
 
       if (response.statusCode == 200 && response.data != null) {
@@ -243,12 +256,40 @@ class HttpSpeechService implements SpeechService {
           return const TranscriptionResult(transcript: '', confidence: 0.0);
         }
 
+        final isDegraded = data['is_degraded'] as bool? ?? data['is_fallback'] as bool? ?? false;
+        final degradedReason = data['degraded_reason'] as String?;
+
         return TranscriptionResult(
           transcript: transcript,
           confidence: transcript.isNotEmpty ? 0.95 : 0.0,
+          isDegraded: isDegraded,
+          degradedReason: degradedReason,
         );
       }
+    } on DioException catch (e) {
+      if (e.error is SessionExpiredException ||
+          e.response?.statusCode == 401 ||
+          e.response?.statusCode == 403) {
+        throw e.error is SessionExpiredException
+            ? e.error as SessionExpiredException
+            : SessionExpiredException(
+                'Session expired (${e.response?.statusCode})',
+                e.response?.statusCode,
+              );
+      }
+      final statusCode = e.response?.statusCode;
+      if (statusCode == 409 || statusCode == 413 || statusCode == 422) {
+        final msg = e.response?.data is Map ? e.response?.data['detail']?.toString() : e.message;
+        throw DioException(
+          requestOptions: e.requestOptions,
+          response: e.response,
+          type: DioExceptionType.badResponse,
+          error: 'Validation error ($statusCode): $msg',
+        );
+      }
+      debugPrint('[HttpSpeechService] Error during voice transcription: $e');
     } catch (e) {
+      if (e is SessionExpiredException || e is DioException) rethrow;
       debugPrint('[HttpSpeechService] Error during voice transcription: $e');
     }
 
@@ -260,6 +301,7 @@ class HttpSpeechService implements SpeechService {
     required String transcript,
     required String languageCode,
     String? categoryHint,
+    String? idempotencyKey,
   }) async {
     final cleanTranscript = transcript.trim();
 
@@ -278,13 +320,16 @@ class HttpSpeechService implements SpeechService {
 
     if (cleanTranscript.isEmpty) return fallback();
 
+    final operationKey = idempotencyKey ??
+        'idem_listing_${cleanTranscript.hashCode.abs()}_${languageCode.hashCode.abs()}';
+
     try {
       final activeUrl = ApiConfig.baseUrl;
       _dio.options.baseUrl = activeUrl;
 
       debugPrint(
         '[HttpSpeechService] POST $activeUrl/api/v1/catalog/generate-listing'
-        ' (lang: $languageCode, category: $categoryHint)',
+        ' (lang: $languageCode, category: $categoryHint) [Idempotency-Key: $operationKey]',
       );
 
       final response = await _dio.post<Map<String, dynamic>>(
@@ -295,6 +340,9 @@ class HttpSpeechService implements SpeechService {
           if (categoryHint != null && categoryHint.isNotEmpty)
             'category_hint': categoryHint,
         },
+        options: Options(
+          headers: {'Idempotency-Key': operationKey},
+        ),
       );
 
       if (response.statusCode == 200 && response.data != null) {
@@ -326,6 +374,9 @@ class HttpSpeechService implements SpeechService {
           floor = m + (h * r);
         }
 
+        final isDegraded = data['is_degraded'] as bool? ?? data['is_fallback'] as bool? ?? false;
+        final degradedReason = data['degraded_reason'] as String?;
+
         return AiListingSuggestion(
           titleEn: (data['title_en'] as String?)?.trim().isNotEmpty == true
               ? data['title_en'] as String
@@ -346,9 +397,34 @@ class HttpSpeechService implements SpeechService {
           laborHours: laborHrs,
           hourlyRate: hourlyRate,
           floorPrice: floor,
+          isDegraded: isDegraded,
+          degradedReason: degradedReason,
         );
       }
+    } on DioException catch (e) {
+      if (e.error is SessionExpiredException ||
+          e.response?.statusCode == 401 ||
+          e.response?.statusCode == 403) {
+        throw e.error is SessionExpiredException
+            ? e.error as SessionExpiredException
+            : SessionExpiredException(
+                'Session expired (${e.response?.statusCode})',
+                e.response?.statusCode,
+              );
+      }
+      final statusCode = e.response?.statusCode;
+      if (statusCode == 409 || statusCode == 413 || statusCode == 422) {
+        final msg = e.response?.data is Map ? e.response?.data['detail']?.toString() : e.message;
+        throw DioException(
+          requestOptions: e.requestOptions,
+          response: e.response,
+          type: DioExceptionType.badResponse,
+          error: 'Validation error ($statusCode): $msg',
+        );
+      }
+      debugPrint('[HttpSpeechService] Listing generation failed: $e');
     } catch (e) {
+      if (e is SessionExpiredException || e is DioException) rethrow;
       debugPrint('[HttpSpeechService] Listing generation failed: $e');
     }
 

@@ -179,11 +179,12 @@ Groq primary → Gemini Vision fallback
 |-----------|-----------|------|
 | Web Framework | FastAPI (`>=0.115.0`) | Async Python 3.11+, OpenAPI docs at `/docs` |
 | ASGI Server | Uvicorn (`>=0.30.0`) | `uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload` |
-| ORM | SQLAlchemy 2.0 (`>=2.0.35`) | `SessionLocal`, `Base.metadata.create_all` |
-| Database | SQLite 3 (`backend/kalasetu.db`) | Three tables: `artisans`, `products`, `social_drafts` |
+| ORM | SQLAlchemy 2.0 (`>=2.0.35`) | `SessionLocal`, strict foreign keys (`PRAGMA foreign_keys = ON`), Alembic migrations |
+| Database | SQLite 3 (`backend/kalasetu.db`) | Tables: `artisans`, `products`, `product_revisions`, `media_assets`, `idempotency_records`, `otp_challenges`, `social_drafts` |
+| Migrations | Alembic (`backend/alembic/`) | Versioned schema migrations (`0001_artisan_approval_and_media`, `0002_baseline_revisions_and_idempotency`) |
 | Validation & Config | Pydantic v2 + pydantic-settings | `backend/config.py` → `Settings(BaseSettings)` |
 | Async HTTP | HTTPX (`>=0.27.0`), aiofiles | Async file streaming and multipart upload handling |
-| Static Files | FastAPI StaticFiles | Mounted at `/uploads` → `backend/uploads/` |
+| Media Storage | Private Uploads + Streaming | Private storage at `backend/uploads/private/`, unauthenticated static mount eliminated; gatekept public access via `/api/v1/media/{id}/public` |
 | Blocking Task Dispatch | `starlette.concurrency.run_in_executor` | Prevents OpenCV/rembg from blocking the async event loop |
 
 ### 3.3 Machine Learning & AI Services
@@ -511,30 +512,33 @@ Standard ASR models trained on news broadcasts consistently misclassify craft te
 
 ---
 
-## 9. Feature 5: Dual Offline-First Storage & Sync Engine
+## 9. Feature 5: Server-Enforced Approval Lifecycle & Offline-First Outbox
 
 ### 9.1 User-Facing Flow
 
 ```mermaid
 flowchart TD
-    UserAction["Artisan Creates / Updates Product"] --> NetworkCheck{"Is Internet Reachable?
+    UserAction["Artisan Creates / Edits Product"] --> NetworkCheck{"Is Internet Reachable?
 (connectivity_plus + /health probe)"}
 
-    subgraph OfflineMode ["Offline State"]
-        HiveWrite["1. Write to Hive products_box (status: pendingSync)
+    subgraph OfflineMode ["Offline State (Durable Queue)"]
+        HiveWrite["1. Write to Hive products_box (status: draft / pendingApprovalSync)
 Instant UI Update (0ms latency)"]
-        PendingMark["2. Record operation in pending_sync_box"]
-        DriftQueue["3. Enqueue media files in Drift SQLite queue
-(status: pending, retryCount: 0)"]
+        PendingMark["2. Enqueue structured OfflineOperation in pending_sync_box
+(CREATE, UPDATE, ATTACH_MEDIA, APPROVE_PUBLISH)"]
     end
 
-    subgraph ReconnectDrain ["Auto-Reconnect Drain"]
+    subgraph ReconnectDrain ["Auto-Reconnect Outbox Drain with State Chaining"]
         NetReturn["Connectivity Restored & Health Check Passes"]
-        MediaUpload["4. SyncManager uploads queued media
-(POST /uploads) → Receives remote URLs"]
-        BatchSync["5. POST /api/v1/products/sync (batch payload)"]
-        ServerPersist["6. Server upserts into ProductDB (status: 'live')"]
-        LocalUpdate["7. Promote Hive status to 'live' & clear pending box"]
+        MediaUpload["3. Upload media asset (POST /api/v1/media/upload)
+Magic bytes + SHA-256 + Idempotency-Key -> returns media_id"]
+        AttachMedia["4. ATTACH_MEDIA (PUT /api/v1/products/{id} with media_id)
+Server returns authoritative revision & content_hash"]
+        ApprovePublish["5. APPROVE_PUBLISH (POST /api/v1/products/{id}/approve-and-publish)
+Submits server-returned revision & content_hash + Idempotency-Key"]
+        ServerPersist["6. Server validates integer paise floor & media integrity,
+persists immutable snapshot in ProductRevisionDB, status -> published"]
+        LocalUpdate["7. Update Hive cache to 'published' & clear pending outbox item"]
     end
 
     NetworkCheck -- "Offline" --> OfflineMode
@@ -542,20 +546,20 @@ Instant UI Update (0ms latency)"]
     OfflineMode -.-> NetReturn --> ReconnectDrain
 ```
 
-### 9.2 Dual Engine Detail
+### 9.2 Outbox & State Chaining Detail
 
-**Drift SQLite Database (`offline_sync.db`)**:
-- Table: `QueueItems` (`localId PK`, `type` [imageEnhance|voiceNote], `localFilePath`, `productDraftId`, `status`, `retryCount`, `createdAt`, `lastAttemptAt`, `jobId`, `errorMessage`, `resultJson`)
-- `kMaxQueueItemRetries = 5` (defined in `models/queue_item.dart`)
-- `isRetryable` getter: `status == failed && retryCount < 5`
-- Exponential backoff: `delay = min(2^retryCount, 60)` seconds
-- WorkManager task `kalasetu-offline-sync-task`: 15-min periodic, `NetworkType.connected` constraint, runs in background isolate even after app kill
-
-**Hive NoSQL Store**:
-- `products_box`: Fast product cache with `pendingSync` / `live` status markers
-- `pending_sync_box`: Tracks pending mutations for batch sync
-- `auth_box`: Authentication token + user profile (`user_id`, `access_token`, `is_authenticated`)
-- `app_settings_box`: `has_selected_language` preference
+**Structured Append-Only Outbox (`pending_sync_box`)**:
+- Record Keying: Records are keyed strictly by unique `OfflineOperation.id` (e.g. `op_create_prod_123_timestamp`), never by `productId`. This ensures sequential operations (such as offline CREATE followed by offline edits or approval) never overwrite one another.
+- Immutable Snapshots: Each operation carries an immutable `payloadSnapshot` at time of capture, ensuring network replay does not suffer from payload tampering or mutation anomalies.
+- Dependency Chaining: Multi-step workflows model explicit dependencies via `dependsOnOpId`:
+  `CREATE -> MEDIA_UPLOAD -> ATTACH_MEDIA -> APPROVE_PUBLISH`.
+- Upstream Result Propagation: Completed operations store authoritative server results in `resultData` (`server_product_id`, `media_id`, `revision`, `content_hash`). Downstream dependent operations resolve their inputs directly from these results.
+- Operation Retention: Completed operations remain in the outbox until all dependent downstream operations successfully finish, preventing dependency breakage on partial drain.
+- Offline State Safety: Offline approval never marks items as approved or published locally; it transitions them to `pendingApprovalSync` with `approvedAt` and `publishedAt` strictly null until the server completes atomic validation and publishing.
+- Preserved Idempotency Keys: The exact `idempotencyKey` assigned at creation is preserved across all network retries and app restarts.
+- Media Upload Atomicity: Uploads write to `uploads/staging/`, validate magic bytes and compute SHA-256, atomically move into `uploads/private/`, and commit both the `MediaAssetDB` and `IdempotencyRecordDB` in a single database transaction with disk cleanup on error.
+- Batch Sync Optimistic Locking: `ProductSyncBatch` accepts `ProductSyncItem` with an optional `expected_revision`. Stale revisions trigger HTTP 409 conflict and cause an atomic transaction rollback.
+- Conflict & Crash Resilience: On HTTP 409 (`StaleRevisionException`) or network interruption, drafts and outbox entries are preserved intact. Offline data is never deleted as generic error recovery.
 
 **Dynamic Network Discovery (`ApiConfig`)**:
 Probes `[LAN_IP:8000, 10.0.2.2:8000, 127.0.0.1:8000, localhost:8000]` against `/api/v1/health`. Binds to first responsive host. Prevents hardcoded IP failures across emulator/physical device/desktop.
@@ -564,64 +568,83 @@ Probes `[LAN_IP:8000, 10.0.2.2:8000, 127.0.0.1:8000, localhost:8000]` against `/
 
 | File | Role |
 |------|------|
-| `frontend/lib/core/offline_sync/database/database.dart` | Drift schema, QueueStatus enum, helper queries |
-| `frontend/lib/core/offline_sync/models/queue_item.dart` | `QueueItem` model, `kMaxQueueItemRetries = 5` |
-| `frontend/lib/core/offline_sync/services/sync_manager.dart` | Queue drain loop, upload, retry, poll |
-| `frontend/lib/core/offline_sync/services/connectivity_service.dart` | Stream + active health probe |
-| `frontend/lib/core/offline_sync/services/upload_api.dart` | Multipart HTTP upload to backend |
-| `frontend/lib/core/offline_sync/offline_sync_service.dart` | Singleton wiring SyncManager + WorkManager |
-| `frontend/lib/core/offline_sync/background_sync.dart` | WorkManager dispatcher (`syncCallbackDispatcher`) |
-| `frontend/lib/core/config/api_config.dart` | `discoverWorkingUrl()` LAN IP probing |
-| `backend/routers/products.py` | `POST /api/v1/products/sync` |
-| `backend/routers/health.py` | `GET /api/v1/health` |
+| `frontend/lib/data/models/offline_operation.dart` | Structured outbox operation model with state chaining |
+| `frontend/lib/data/repositories/product_repository.dart` | Hive cache-aside, outbox dependency drain, 409 conflict handling |
+| `frontend/lib/data/services/api_service.dart` | HTTP client with Idempotency-Key injection and Bearer auth |
+| `backend/routers/products.py` | Draft-only creation, optimistic locking, atomic approval & publish |
+| `backend/routers/media.py` | Validated media upload, private retrieval, gatekept public endpoint |
+| `backend/utils/idempotency.py` | Atomic lease claiming, expiration reclamation, payload tampering checks |
+| `backend/utils/pricing.py` | Server-authoritative cost floor validation in integer paise |
 
 ### 9.4 API Endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/api/v1/health` | Liveness probe — returns `{"status":"healthy"}` |
-| `POST` | `/api/v1/products/sync` | Idempotent batch product creation/update from offline queue |
+| Method | Path | Idempotency | Purpose |
+|--------|------|-------------|---------|
+| `GET` | `/api/v1/health` | No | Liveness probe — returns `{"status":"healthy"}` |
+| `POST` | `/api/v1/products` | Required | Create product draft (revision 1, status='draft') |
+| `PUT` | `/api/v1/products/{id}` | Required | Update product (requires `expected_revision`; unpublishes to draft) |
+| `POST` | `/api/v1/products/{id}/approve-and-publish` | Required | Atomic validation and immutable `ProductRevisionDB` publication |
+| `POST` | `/api/v1/products/{id}/unpublish` | Required | Server-enforced unpublish (requires matching `expected_revision` and 64-char `content_hash`) |
+| `DELETE` | `/api/v1/products/{id}` | Required | Soft-delete tombstone preserving audit revision history |
+| `POST` | `/api/v1/products/sync` | Required | Transactional batch sync for offline drafts |
+| `POST` | `/api/v1/media/upload` | Required | Upload, magic-byte inspection, SHA-256 hash, and private storage |
+| `GET` | `/api/v1/media/{id}/public` | No | Gatekept access: serves media only if referenced in an active published revision |
 
 ---
 
 ## 10. Feature 6: Product Catalogue & Inventory Management
 
-### 10.1 User-Facing Flow
+### 10.1 User-Facing Flow & Security Controls
 
 1. **Catalogue Tab**: User selects "Catalogue" in bottom nav → `CatalogueScreen` (`/catalogue`).
-2. **Offline-First Load**: `ProductRepository.getProducts()` first reads Hive `products_box` for instant display, then fires `GET /api/v1/products?artisan_id=...` and refreshes.
-3. **Filter & Search**: Category pills (Pottery, Textiles, Jewelry, Woodwork) + instant search bar + status toggle (All / Live / Draft / Archived).
-4. **Product Detail**: Tap card → `ProductDetailScreen` (`/product/:id`) → displays enhanced photo, bilingual descriptions, tags, pricing, QR code. Launches Social Launchpad or Edit.
-5. **Status Toggle**: Artisan archives/restores listing → `PUT /api/v1/products/{id}` with new status.
-6. **Delete**: Confirms dialog → `DELETE /api/v1/products/{id}` → removes from Hive + backend.
+2. **Offline-First Load**: `ProductRepository.getProducts()` first reads Hive `products_box` for instant display, then queries `GET /api/v1/products` (authenticated tenant isolation; caller cannot query other artisans' items).
+3. **Public Catalogue**: Unauthenticated buyers query `GET /api/v1/products/public`, which joins `ProductRevisionDB` with `ProductDB` where `status == 'published'` and `is_deleted == False`. Unapproved drafts and unverified legacy items are strictly excluded.
+4. **Client Image URL Rejection**: Direct PUT or POST with client-supplied `image_url` is rejected with HTTP 422 Unprocessable Entity; the published listing and its approved revision remain unchanged. Legitimate image replacement requires a verified owned `media_id`, which bumps revision, clears approval, and unlists the product until re-approved.
+5. **Soft-Delete / Tombstone**: Deleting a product (`DELETE /api/v1/products/{id}`) marks `is_deleted=True, status='deleted'` and clears publication metadata. `ProductRevisionDB` records are deliberately preserved for immutable audit history. The product is immediately excluded from private and public listings.
 
 ### 10.2 Key Files
 
 | File | Role |
 |------|------|
-| `frontend/lib/features/catalogue/screens/catalogue_screen.dart` | Grid/list view, search, filters |
-| `frontend/lib/features/catalogue/screens/product_detail_screen.dart` | Single product detail view |
+| `frontend/lib/features/catalogue/screens/catalogue_screen.dart` | Grid/list view, search, craft filters, status chips |
+| `frontend/lib/features/catalogue/screens/product_detail_screen.dart` | Single product detail view, bilingual display, QR |
 | `frontend/lib/data/repositories/product_repository.dart` | Hive cache-aside + API calls |
-| `frontend/lib/data/models/product.dart` | `Product` Dart model (Hive type adapter) |
-| `backend/routers/products.py` | Product CRUD endpoints |
-| `backend/models/db_models.py` | `ProductDB` SQLAlchemy model |
+| `frontend/lib/data/models/product.dart` | `Product` Dart model (Hive adapter index 0) |
+| `backend/routers/products.py` | Product CRUD, optimistic concurrency, public catalogue |
+| `backend/models/db_models.py` | `ProductDB`, `ProductRevisionDB`, `MediaAssetDB` |
 
-### 10.3 API Endpoints
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/api/v1/products` | List with `?category`, `?status`, `?artisan_id`, `?skip`, `?limit` |
-| `GET` | `/api/v1/products/{product_id}` | Single product fetch |
-| `PUT` | `/api/v1/products/{product_id}` | Update fields (title, price, status, etc.) |
-| `DELETE` | `/api/v1/products/{product_id}` | Remove product |
-| `POST` | `/api/v1/products` | Create new product (used at end of Add Product wizard) |
-
-### 10.4 Data Model: `products` Table
+### 10.3 Authoritative Data Models
 
 ```
-products(id PK, artisan_id FK→artisans, title, title_hi, description, description_hi,
-         price, image_url, category, tags [JSON], status [live|draft|archived],
-         created_at, updated_at)
+products(
+    id PK, artisan_id FK→artisans, title, title_hi, description, description_hi,
+    legacy_price, price_paise, floor_price_paise, materials_paise, labor_hours,
+    hourly_rate_paise, transport_paise, overhead_paise, media_id FK→media_assets,
+    category, tags [JSON], status [draft|awaiting_approval|approved|published|superseded|deleted|legacy_unverified],
+    revision, approved_revision, approved_at, approved_by_artisan_id, published_at,
+    content_hash, is_deleted, created_at, updated_at
+)
+
+product_revisions(
+    id PK (UUID), product_id FK→products, revision, content_hash, title, title_hi,
+    description, description_hi, price_paise, category, tags [JSON],
+    media_id FK→media_assets, media_checksum, media_mime_type, media_byte_size,
+    public_media_url, approved_by_artisan_id, approved_at, published_at,
+    UNIQUE(product_id, revision)
+)
+
+media_assets(
+    id PK, artisan_id FK→artisans, file_path, file_url, mime_type, byte_size,
+    sha256_checksum, processing_provenance, status [ready|quarantined|processing],
+    created_at, updated_at
+)
+
+idempotency_records(
+    id PK, artisan_id FK→artisans, idempotency_key, endpoint, request_hash,
+    status [in_progress|completed], lease_expires_at, response_status_code,
+    response_body, created_at, updated_at,
+    UNIQUE(artisan_id, endpoint, idempotency_key)
+)
 ```
 
 ---
@@ -950,11 +973,13 @@ sequenceDiagram
     alt Artisan Self-Onboarding
         Artisan->>App: Enter Phone (+91 XXXXXXXXXX)
         App->>API: POST /api/v1/auth/login {phone}
-        API-->>App: 200 OK (OTP dispatched / demo: 123456)
+        API->>DB: Check rate limits, generate cryptorandom OTP, save salted SHA-256 OtpChallengeDB
+        API-->>Artisan: SMS dispatch via SmsProvider (demo: 123456 in non-prod only)
+        API-->>App: 200 OK (challenge issued)
         Artisan->>App: Enter OTP
         App->>API: POST /api/v1/auth/verify-otp {phone, otp}
-        API->>DB: Query or create ArtisanDB
-        API-->>App: {token, artisan: ArtisanProfileResponse}
+        API->>DB: Validate hash, expiry, attempts; burn single-use challenge; query/create ArtisanDB
+        API-->>App: {token: HS256 JWT, artisan: ArtisanProfileResponse}
         App->>Hive: Save token + user (auth_box)
     else NGO Assisted Onboarding
         NGO->>App: Enter NGO Coordinator ID
@@ -962,12 +987,27 @@ sequenceDiagram
         NGO->>App: Fill artisan name, craft, cluster details
         App->>API: POST /api/v1/auth/register {name, phone, craft_type, cluster, pehchan_id}
         API->>DB: INSERT ArtisanDB
-        API-->>App: {token, artisan: ArtisanProfileResponse}
+        API-->>App: {token: HS256 JWT, artisan: ArtisanProfileResponse}
         App->>Hive: Save session (auth_box)
     end
 
     App->>App: RouterNotifier fires → GoRouter redirect to /home
 ```
+
+### Cryptographic OTP & JWT Specifications
+
+1. **OTP Challenge Lifecycle (`OtpChallengeDB`)**:
+   - Random 6-digit generation using `secrets.randbelow(900000) + 100000`.
+   - Salted SHA-256 storage (`hashlib.sha256(salt + otp)`); plaintext is never persisted in database or logs.
+   - 5-minute challenge expiration, max 3 verification attempts before permanent burn, single-use invalidation upon success.
+   - Dual-layer rate limiting: max 5 requests per hour per phone; sliding-window per-IP rate limiting (10/min, 30/hr).
+   - Pluggable `SmsProvider` delivery abstraction (`ConsoleSmsProvider`, `MockSmsProvider`).
+   - Demo mode isolation: fixed OTP permitted ONLY when `ALLOW_DEMO_OTP=true` and `ENVIRONMENT != "production"`.
+
+2. **JWT Bearer Token Security**:
+   - Pinned algorithm: `HS256` only (forged `none` or mismatched algorithms strictly rejected).
+   - Required claims: `sub` (artisan ID), `iss` (`kalasetu-backend`), `aud` (`kalasetu-app`), `iat`, `exp`.
+   - Tenant isolation enforced across all private product, media, and social routes. Caller-supplied identity headers (e.g. `X-Artisan-ID`) are prohibited.
 
 ### Route Guard Logic (`app_router.dart`)
 
@@ -1087,12 +1127,13 @@ All files are UUID-prefixed (`uuid.uuid4().hex + extension`) to prevent director
 | Router | Prefix | Key Endpoints |
 |--------|--------|---------------|
 | `health` | `/api/v1/health` | `GET /` — liveness probe for mobile connectivity listener |
-| `auth` | `/api/v1/auth` | Phone registration, OTP validation, profile lookup |
-| `products` | `/api/v1/products` | CRUD + `/sync` idempotent batch offline upload |
+| `auth` | `/api/v1/auth` | Cryptographic OTP challenge, verification with rate-limits, HS256 JWT issuance |
+| `products` | `/api/v1/products` | Authenticated draft CRUD, `POST /{id}/approve-and-publish`, `/sync` batch drain, `GET /public` (sanitized) |
+| `media` | `/api/v1/media` | Authenticated `POST /upload` with magic-byte validation, size limits, and SHA-256 |
 | `catalog` | `/api/v1/catalog` | `/enhance-image`, `/generate-listing`, `/voice-to-product` |
 | `voice` | `/api/v1/voice` | `/transcribe`, `/process` (full pipeline), craft glossary lookup |
 | `pricing` | `/api/v1/pricing` | `/suggest`, `/suggest-upload`, `/suggest-from-voice` |
-| `social` | `/api/v1/social-drafts` | `/lookup`, `/generate`, `/link`, `/{id}` (PUT) |
+| `social` | `/api/v1/social-drafts` | Authenticated `/lookup`, `/generate`, `/link`, `/{id}` (PUT) with tenant isolation |
 | `chat` | `/api/v1/chat` | `/message`, `/voice`, `/quick-topics` |
 
 ### 20.2 CORS & Middleware
@@ -1327,9 +1368,14 @@ The pricing invariant `suggested_price >= cost_floor` is enforced **server-side*
 
 All `GoRouter` navigation must use the named route constants from `frontend/lib/core/router/app_route_constants.dart`. Never hardcode string paths. Use `context.goNamed(AppRouteConstants.X)` or `context.pushNamed(AppRouteConstants.X)`.
 
-### 25.8 Backend Schema Changes Require Manual SQL Migration (for now)
+### 25.8 Backend Schema Changes Managed via Alembic Migrations
 
-There is no Alembic yet. Adding a column to an existing table requires a manual `ALTER TABLE` SQL statement against `backend/kalasetu.db`. The `Base.metadata.create_all` at startup only creates tables that don't exist — it does **not** apply `ALTER TABLE` for new columns on existing tables.
+Schema migrations are managed via Alembic in `backend/alembic/`. Migration revisions:
+- `0001_baseline_schema.py`: Baseline schema and migration of unverified rows to `legacy_unverified`.
+- `0002_revisions_and_idempotency.py`: Idempotency keys table, product revisions, and media quarantine.
+- `0003_media_asset_lineage_and_degradation.py`: Media asset lineage (`source_media_id`) and degradation tracking (`is_degraded`, `degraded_reason`).
+
+Run `alembic upgrade head` before starting new backend instances.
 
 ---
 
@@ -1347,17 +1393,17 @@ There is no Alembic yet. Adding a column to an existing table requires a manual 
 
 **Required work**: Create an NGO partners table or external API integration. Issue scoped NGO session tokens with multi-artisan management privileges.
 
-### 26.3 Database Migrations — No Alembic
+### 26.3 Database Migrations — Alembic Implemented (Phase 1 Complete)
 
-**Current state**: Schema is maintained via `Base.metadata.create_all` at startup. Adding a column to an existing table (e.g., `social_drafts.channel` was added without migration support) requires manual SQL against the live database.
+**Current state**: Schema migrations are fully managed by Alembic (`backend/alembic/`) with SQLite strict foreign keys (`PRAGMA foreign_keys = ON`). Migrations `0001`, `0002`, and `0003` are applied.
 
-**Required work**: `alembic init alembic`, create `alembic/env.py` using `backend/database.py`'s Base, generate and apply initial migration.
+**Required work for Phase 2**: Migrate SQLite schema and Alembic migrations to PostgreSQL/Supabase with Row-Level Security (RLS).
 
 ### 26.4 Production Media Storage — Local Filesystem Only
 
-**Current state**: All enhanced images and voice recordings are stored in `backend/uploads/` on the local server filesystem. This is unsuitable for production (no redundancy, no CDN, tied to single server instance).
+**Current state**: All enhanced images and voice recordings are stored in `backend/uploads/private/` with magic-byte validation, deduplication, and staging moves. This is local server filesystem storage suitable for development/pilot.
 
-**Required work**: Integrate `StorageService` with AWS S3, Cloudflare R2, or Google Cloud Storage via `STORAGE_BACKEND` environment variable toggle. Keep local filesystem as dev default.
+**Required work**: Integrate `StorageService` with AWS S3, Cloudflare R2, or Google Cloud Storage via signed download/upload URLs. Keep local filesystem as dev default.
 
 ### 26.5 Notifications — Client-Side Only
 
@@ -1371,13 +1417,79 @@ There is no Alembic yet. Adding a column to an existing table requires a manual 
 
 **Required work**: Analytics will become real automatically once §26.1 (Orders backend) is implemented — no separate analytics backend required.
 
-### 26.7 SMS OTP Gateway — Hardcoded Demo OTP
+### 26.7 SMS OTP Gateway — Cryptographic Challenges with Rate Limiting (Phase 1 Complete)
 
-**Current state**: `backend/routers/auth.py` returns a static OTP `123456` for all phone numbers. No SMS gateway (Twilio, Gupshup, MSG91) is integrated.
+**Current state**: `backend/routers/auth.py` implements a cryptographic challenge lifecycle (`OtpChallengeDB`, salted SHA-256 hashes, 5-minute expiry, max 3 attempts, per-phone and per-IP rate limiting, pluggable `SmsProvider`). Demo OTP (`123456`) is strictly restricted to non-production environments with `ALLOW_DEMO_OTP=true`.
 
-**Required work**: Integrate SMS provider via `backend/config.py` with `SMS_PROVIDER_API_KEY` and `SMS_SENDER_ID` env vars. Gate behind feature flag to keep demo mode for hackathon.
+**Required work for Phase 2**: Configure production SMS gateway provider (e.g., MSG91, Twilio, Gupshup) in `.env` and set `ALLOW_DEMO_OTP=false`.
+
+---
+
+## 27. Phase 1 Trust & Invariant Protections (Defect Resolutions & Verification)
+
+During Phase 1 hardening and independent architectural review, 7 key defect areas were identified and systematically resolved:
+
+### 27.1 Private Media Security & Isolation
+- **Origin Validation**: `PrivateMediaCache.isConfiguredApiOrigin(uri)` validates scheme, host, and port against `ApiConfig.baseUrl`, preventing bearer credential leakage to third-party endpoints or CDNs.
+- **Path Traversal Guard**: All media ID inputs are sanitized via `^[a-zA-Z0-9_-]+$` regex check, strictly rejecting relative path components (`../`, etc.).
+- **Scoping**: Cache storage is segregated by backend origin (`srv_<hash>`) and user account (`acc_<hash>`).
+- **Lifecycle Deactivation**: `deactivateAccount()` cleanly cancels in-flight download streams and deactivates cache context upon logout or account switch.
+- **Bounded Downloads**: Direct enhancement downloads in `ImageEnhancerService` utilize `PrivateMediaCache.downloadAndCacheMedia(...)` with a 15MB ceiling, streaming chunk aborts, `.tmp` staging, and atomic file renames.
+
+### 27.2 Durable Token Migration & Verification
+- **Fail-Closed Readback**: `SecureTokenStorage` performs exact readback verification against `FlutterSecureStorage` before purging the legacy token from `auth_box`.
+- **Durability Guarantee**: Legacy tokens are never deleted on readback mismatch or platform errors (e.g. `MissingPluginException` on unsupported platforms).
+- **Test Double Support**: Storage double injection allows hermetic test verification.
+- **Single-Flight Concurrency**: A mutex gate ensures concurrent callers await the in-flight migration rather than spawning competing migration routines.
+
+### 27.3 Deterministic AI Operation Identity & Pre-Dispatch Durability
+- **Cryptographic Input Fingerprinting**: Replaced arbitrary timestamps with SHA-256 fingerprints across image bytes (`sha256(File(originalImagePath).readAsBytesSync())`), voice transcripts, audio paths, and pricing cost inputs.
+- **Pre-Dispatch Persistence**: `AiOperationRecord` instances are durably committed to `ai_operations_box` before any network HTTP dispatch, ensuring operations survive crashes and timeouts.
+- **Input Generation Monotonicity**: Distinct generation counters (`imageInputGeneration`, `voiceInputGeneration`, `pricingInputGeneration`) track draft mutations; stale in-flight results from prior inputs are superseded and rejected.
+- **Late Result Reconciliation**: Network futures are decoupled from UI timeouts; background completions persist to `AiOperationRecord` storage, allowing automatic result reattachment when returning to screens if generations match.
+- **Drift ID Preservation**: Unique operation IDs (`explicitLocalId`) are retained when migrating items to the Drift SQLite outbox.
+
+### 27.4 Exact-Media Review Runtime Enforcement
+- **Zero Assertions for Safety**: Debug assertions were completely eliminated from safety-critical preview checks in favor of strict runtime conditionals.
+- **Exact Generation Binding**: `Step5ConfirmWidget` mandates `boundMediaGeneration == imageInputGeneration`. Replacing photo A with photo B immediately invalidates the enhancement `mediaId` and requires fresh review.
+- **Local Media Disk Verification**: Offline raw photos must exist on the local filesystem (`File.existsSync()`); publication is blocked with an actionable banner if the image file is missing or unverified.
+- **Preview Failure Prevention**: Publish actions are strictly disabled if preview generation fails, guaranteeing an artisan can never approve an unseen or misattributed product asset.
+
+### 27.5 Repository Initialization Barrier & Fail-Closed Deserialization
+- **Gated Repository Operations**: `ProductRepository.initialize()` provides an idempotent, single-flight barrier that gates all mutations and reads (`getProducts`, `addProduct`, `updateProduct`, `approveAndPublishProduct`, `deleteProduct`, `unpublishProduct`, `syncPendingQueue`).
+- **Main.dart Wiring**: Awaiting `initialize()` in `main.dart` ensures full database hydration, legacy pending queue migration, and lease reclamation before `KalaSetuApp` renders.
+- **Fail-Closed Deserialization**: `OfflineOperation.fromPendingString` strictly distinguishes modern JSON objects from legacy colon-delimited action strings, throwing a structured `FormatException` on truncated or malformed JSON payloads rather than falling back to invalid operations.
+
+### 27.6 Session-Bound Private Media Cache & Atomic Deduplication
+- **Origin & Account Scoping**: `PrivateMediaCache` namespaces cache paths by normalized origin (`scheme://host:port` with lowercased host and standard default port normalization) and account identity (`acc_<hash>`).
+- **Session Identity Checkpoint**: Downloads capture active session generation and account identity at invocation entry. Any logout, session expiration, or origin change during download immediately halts execution and aborts promotion of `.tmp` staging files via `SessionChangedException`.
+- **Atomic Request Deduplication**: In-flight downloads are deduplicated synchronously via a `Completer` registry before any async gaps, preventing duplicate network streams.
+- **AppImage Session Guard**: `AppImage` validates active session generation prior to rendering cached images from disk.
+
+### 27.7 Transparent Error & Degradation Propagation
+- **Auth Expiration**: HTTP 401/403 responses trigger `AuthNotifier.expireSession()`, prompting re-authentication without clearing local product drafts or the offline outbox.
+- **Validation Errors vs Offline Fallbacks**: HTTP 409 (conflict), 413 (payload too large), and 422 (validation error / cost floor violation) are thrown as permanent validation exceptions rather than being erroneously queued for offline retry.
+- **Granular Degradation Tracking**: Added `isImageDegraded`, `isVoiceDegraded`, `isListingDegraded`, and `isPricingDegraded` along with specific failure reasons across drafts and UI state.
+- **Step 5 Confirm Screen**: Displays the authoritative `mediaId` asset directly from `PrivateMediaCache` and renders clear degradation warning banners for image enhancement, speech transcription, listing copy, and fair-price guidance.
+
+### 27.8 Chatbot Direct Action Navigation
+- **Route Registration**: Registered `/review-product/:id` in `app_router.dart` and `AppRouteConstants`.
+- **Context Preservation**: Action execution in `chat_provider.dart` preserves the target `productId`.
+- **Review Deep-Linking**: Tapping the chatbot review action button navigates directly to `ReviewExistingProductScreen` without triggering unintended auto-publishing.
+
+### 27.9 Verifiable Lifecycle Initialization & Media Reconciliation
+- **Deterministic Initialization**: Removed unawaited asynchronous constructor side-effects (`migrateLegacyPendingQueueIfNeeded`, `reclaimExpiredLeases`) from `ProductRepository`, introducing an explicit, awaitable `initialize({DateTime? now})`.
+- **Checksum Lineage**: Added `sha256_checksum` and `sha256Checksum` into `RealUploadApi.resultPayload` to ensure SHA-256 media hashes survive restart and propagate through Drift queues.
+- **Lease Reclamation**: Expired in-flight approval leases are safely reclaimed across simulated app restarts without losing dependent unpublish operations.
+- **Drift Outbox Watcher**: Production wiring watches the Drift outbox stream via `watchPendingOperations()`, providing live badge count and queue state hydration without manual test injection.
+
+### 27.10 Test Coverage & Environment Demarcation
+- **Backend Test Suite**: 121 passing, 1 skipped across Python 3.14 (covering AI idempotency fingerprints, tenant isolation, approval workflow, SQLite foreign keys, media pipeline, auth security, streaming ingest, and migration upgrades).
+- **Frontend Test Suite**: 162 passing across Flutter 3.44.0 / Dart 3.12.0 (covering unpublish truthfulness, coalescing scenarios, upstream dependency resolution, hash validation, 409 conflict refresh, review screens, secure token fallback, private media cache bounded aborts, drift queue durability, offline media lineage, degradation banners, chatbot review navigation, exact-media review verification, repository initialization barrier, cache session binding, and live HTTP wire test).
+- **Static Analysis**: `flutter analyze` clean with 0 issues.
+- **Demarcation of Test Environment**: All automated test verification reported herein was conducted on local developer workstation harnesses (macOS 15.6 Darwin ARM64, local SQLite with foreign keys, Drift native SQLite, in-memory/mock HTTP adapters, and loopback FastAPI wire tests). Physical field testing on real Android/iOS mobile hardware remains part of Phase 2 validation.
 
 ---
 
 *Document maintained at `docs/ARCHITECTURE.md` — the sole source of truth for KalaSetu system architecture.*
-*Last updated: 2026-09-08 — supersedes refer.md (safe to delete after this update).*
+*Last updated: 2026-09-17 — Phase 1 Invariant Hardening & Defect Correction Complete.*

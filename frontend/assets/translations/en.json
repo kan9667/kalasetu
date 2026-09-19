@@ -165,6 +165,12 @@
   "filter_paintings": "Paintings",
   "status_live": "Live",
   "status_pending_sync": "Pending Sync",
+  "status_pending_approval_sync": "Approval queued for sync",
+  "status_pending_unpublish_sync": "Removal queued for sync",
+  "removal_queued_notice": "Removal queued. This listing may remain public until sync completes.",
+  "approval_queued_offline": "Approval queued offline. Listing will be published once online.",
+  "product_published_successfully": "Listing published successfully.",
+  "review_listing": "Review Listing",
   "status_draft": "Draft",
   "no_products_title": "No products in your catalogue",
   "no_products_desc": "Start showcasing your creations. Add your first craft product in 5 simple guided steps.",
@@ -493,5 +499,6 @@
   "artisan_analytics_tooltip": "Artisan Performance & Analytics",
   "listing_online_desc": "Your craft listing is live and visible to buyers on ONDC.",
   "listing_offline_desc": "Product saved locally. KalaSetu will automatically upload it when internet returns.",
+  "saved_offline_awaiting_sync": "Saved offline — awaiting sync and approval",
   "listing_actions": "Listing Actions"
 }
