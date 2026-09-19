@@ -57,7 +57,7 @@ class PricingService:
             return {
                 "status": "degraded",
                 "indexed_benchmark_products": 0,
-                "error": str(e),
+                "error": "Vector store index unavailable",
             }
 
     def suggest_price(

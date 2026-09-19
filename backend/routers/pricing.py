@@ -38,6 +38,10 @@ from ..utils.idempotency import (
     require_idempotency_key,
 )
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/v1/pricing", tags=["Pricing"])
 pricing_service = PricingService()
 catalog_service = CatalogService()
@@ -106,7 +110,8 @@ async def suggest_price_json(
         release_idempotency_claim(db, artisan.id, endpoint, idempotency_key)
         if isinstance(e, HTTPException):
             raise
-        raise HTTPException(status_code=500, detail=f"Pricing calculation failed: {str(e)}")
+        logger.error("Pricing calculation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Pricing calculation failed")
 
 
 @router.post("/suggest-upload", response_model=PriceSuggestResponse)

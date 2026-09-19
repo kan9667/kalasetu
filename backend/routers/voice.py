@@ -239,4 +239,4 @@ async def get_glossary(
     try:
         return catalog_service.get_craft_glossary(category=category, limit=limit)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch glossary: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch glossary")

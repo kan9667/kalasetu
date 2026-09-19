@@ -118,7 +118,7 @@ async def send_chat_message(
             raise
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process chat message: {str(e)}",
+            detail="Failed to process chat message",
         )
 
 
@@ -344,7 +344,7 @@ async def send_voice_chat_message(
             raise
         raise HTTPException(
             status_code=500,
-            detail=f"Voice chat transcription and answering failed: {str(e)}",
+            detail="Voice chat transcription and answering failed",
         )
     finally:
         staged.cleanup()

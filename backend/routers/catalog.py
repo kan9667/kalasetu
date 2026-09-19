@@ -434,7 +434,7 @@ async def generate_bilingual_listing(
         release_idempotency_claim(db, artisan.id, endpoint, idempotency_key)
         if isinstance(e, HTTPException):
             raise
-        raise HTTPException(status_code=500, detail=f"Listing generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Listing generation failed")
 
 
 @router.post("/voice-to-listing", response_model=ListingGenerateResponse)
