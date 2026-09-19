@@ -1442,29 +1442,50 @@ During Phase 1 hardening and independent architectural review, 7 key defect area
 - **Test Double Support**: Storage double injection allows hermetic test verification.
 - **Single-Flight Concurrency**: A mutex gate ensures concurrent callers await the in-flight migration rather than spawning competing migration routines.
 
-### 27.3 Deterministic AI Operation Identity
-- **Pre-Dispatch Persistence**: Replaced unstable `DateTime.now()` idempotency keys with durable operation IDs (`imageEnhanceOpId`, `voiceListingOpId`, `pricingOpId`) persisted in `AddProductDraft` prior to network dispatch.
-- **Late Timeout Recovery**: If a client-side timeout fires (>30s) while the server continues processing, the persisted operation ID enables retrieval of the completed result upon retry without duplicate LLM/vision inference runs.
+### 27.3 Deterministic AI Operation Identity & Pre-Dispatch Durability
+- **Cryptographic Input Fingerprinting**: Replaced arbitrary timestamps with SHA-256 fingerprints across image bytes (`sha256(File(originalImagePath).readAsBytesSync())`), voice transcripts, audio paths, and pricing cost inputs.
+- **Pre-Dispatch Persistence**: `AiOperationRecord` instances are durably committed to `ai_operations_box` before any network HTTP dispatch, ensuring operations survive crashes and timeouts.
+- **Input Generation Monotonicity**: Distinct generation counters (`imageInputGeneration`, `voiceInputGeneration`, `pricingInputGeneration`) track draft mutations; stale in-flight results from prior inputs are superseded and rejected.
+- **Late Result Reconciliation**: Network futures are decoupled from UI timeouts; background completions persist to `AiOperationRecord` storage, allowing automatic result reattachment when returning to screens if generations match.
+- **Drift ID Preservation**: Unique operation IDs (`explicitLocalId`) are retained when migrating items to the Drift SQLite outbox.
 
-### 27.4 Transparent Error & Degradation Propagation
+### 27.4 Exact-Media Review Runtime Enforcement
+- **Zero Assertions for Safety**: Debug assertions were completely eliminated from safety-critical preview checks in favor of strict runtime conditionals.
+- **Exact Generation Binding**: `Step5ConfirmWidget` mandates `boundMediaGeneration == imageInputGeneration`. Replacing photo A with photo B immediately invalidates the enhancement `mediaId` and requires fresh review.
+- **Local Media Disk Verification**: Offline raw photos must exist on the local filesystem (`File.existsSync()`); publication is blocked with an actionable banner if the image file is missing or unverified.
+- **Preview Failure Prevention**: Publish actions are strictly disabled if preview generation fails, guaranteeing an artisan can never approve an unseen or misattributed product asset.
+
+### 27.5 Repository Initialization Barrier & Fail-Closed Deserialization
+- **Gated Repository Operations**: `ProductRepository.initialize()` provides an idempotent, single-flight barrier that gates all mutations and reads (`getProducts`, `addProduct`, `updateProduct`, `approveAndPublishProduct`, `deleteProduct`, `unpublishProduct`, `syncPendingQueue`).
+- **Main.dart Wiring**: Awaiting `initialize()` in `main.dart` ensures full database hydration, legacy pending queue migration, and lease reclamation before `KalaSetuApp` renders.
+- **Fail-Closed Deserialization**: `OfflineOperation.fromPendingString` strictly distinguishes modern JSON objects from legacy colon-delimited action strings, throwing a structured `FormatException` on truncated or malformed JSON payloads rather than falling back to invalid operations.
+
+### 27.6 Session-Bound Private Media Cache & Atomic Deduplication
+- **Origin & Account Scoping**: `PrivateMediaCache` namespaces cache paths by normalized origin (`scheme://host:port` with lowercased host and standard default port normalization) and account identity (`acc_<hash>`).
+- **Session Identity Checkpoint**: Downloads capture active session generation and account identity at invocation entry. Any logout, session expiration, or origin change during download immediately halts execution and aborts promotion of `.tmp` staging files via `SessionChangedException`.
+- **Atomic Request Deduplication**: In-flight downloads are deduplicated synchronously via a `Completer` registry before any async gaps, preventing duplicate network streams.
+- **AppImage Session Guard**: `AppImage` validates active session generation prior to rendering cached images from disk.
+
+### 27.7 Transparent Error & Degradation Propagation
 - **Auth Expiration**: HTTP 401/403 responses trigger `AuthNotifier.expireSession()`, prompting re-authentication without clearing local product drafts or the offline outbox.
 - **Validation Errors vs Offline Fallbacks**: HTTP 409 (conflict), 413 (payload too large), and 422 (validation error / cost floor violation) are thrown as permanent validation exceptions rather than being erroneously queued for offline retry.
 - **Granular Degradation Tracking**: Added `isImageDegraded`, `isVoiceDegraded`, `isListingDegraded`, and `isPricingDegraded` along with specific failure reasons across drafts and UI state.
 - **Step 5 Confirm Screen**: Displays the authoritative `mediaId` asset directly from `PrivateMediaCache` and renders clear degradation warning banners for image enhancement, speech transcription, listing copy, and fair-price guidance.
 
-### 27.5 Chatbot Direct Action Navigation
+### 27.8 Chatbot Direct Action Navigation
 - **Route Registration**: Registered `/review-product/:id` in `app_router.dart` and `AppRouteConstants`.
 - **Context Preservation**: Action execution in `chat_provider.dart` preserves the target `productId`.
 - **Review Deep-Linking**: Tapping the chatbot review action button navigates directly to `ReviewExistingProductScreen` without triggering unintended auto-publishing.
 
-### 27.6 Verifiable Lifecycle Initialization & Media Reconciliation
+### 27.9 Verifiable Lifecycle Initialization & Media Reconciliation
 - **Deterministic Initialization**: Removed unawaited asynchronous constructor side-effects (`migrateLegacyPendingQueueIfNeeded`, `reclaimExpiredLeases`) from `ProductRepository`, introducing an explicit, awaitable `initialize({DateTime? now})`.
 - **Checksum Lineage**: Added `sha256_checksum` and `sha256Checksum` into `RealUploadApi.resultPayload` to ensure SHA-256 media hashes survive restart and propagate through Drift queues.
 - **Lease Reclamation**: Expired in-flight approval leases are safely reclaimed across simulated app restarts without losing dependent unpublish operations.
+- **Drift Outbox Watcher**: Production wiring watches the Drift outbox stream via `watchPendingOperations()`, providing live badge count and queue state hydration without manual test injection.
 
-### 27.7 Test Coverage & Environment Demarcation
+### 27.10 Test Coverage & Environment Demarcation
 - **Backend Test Suite**: 121 passing, 1 skipped across Python 3.14 (covering AI idempotency fingerprints, tenant isolation, approval workflow, SQLite foreign keys, media pipeline, auth security, streaming ingest, and migration upgrades).
-- **Frontend Test Suite**: 148 passing across Flutter 3.44.0 / Dart 3.12.0 (covering unpublish truthfulness, coalescing scenarios, upstream dependency resolution, hash validation, 409 conflict refresh, review screens, secure token fallback, private media cache bounded aborts, drift queue durability, offline media lineage, degradation banners, chatbot review navigation, and live HTTP wire test).
+- **Frontend Test Suite**: 162 passing across Flutter 3.44.0 / Dart 3.12.0 (covering unpublish truthfulness, coalescing scenarios, upstream dependency resolution, hash validation, 409 conflict refresh, review screens, secure token fallback, private media cache bounded aborts, drift queue durability, offline media lineage, degradation banners, chatbot review navigation, exact-media review verification, repository initialization barrier, cache session binding, and live HTTP wire test).
 - **Static Analysis**: `flutter analyze` clean with 0 issues.
 - **Demarcation of Test Environment**: All automated test verification reported herein was conducted on local developer workstation harnesses (macOS 15.6 Darwin ARM64, local SQLite with foreign keys, Drift native SQLite, in-memory/mock HTTP adapters, and loopback FastAPI wire tests). Physical field testing on real Android/iOS mobile hardware remains part of Phase 2 validation.
 

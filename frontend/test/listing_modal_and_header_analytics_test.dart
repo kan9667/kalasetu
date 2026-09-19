@@ -84,6 +84,15 @@ void main() {
     if (!Hive.isBoxOpen('pending_sync_box')) {
       await Hive.openBox<String>('pending_sync_box');
     }
+    File('test_path.jpg').writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]);
+  });
+
+  tearDownAll(() async {
+    final testFile = File('test_path.jpg');
+    if (testFile.existsSync()) {
+      testFile.deleteSync();
+    }
+    await Hive.close();
   });
 
   group('Product Listed Successfully Modal Overflow Tests', () {

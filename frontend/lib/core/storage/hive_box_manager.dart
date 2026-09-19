@@ -65,6 +65,7 @@ class HiveBoxManager {
     'draft_box',
     'user_profile_box',
     'auth_box',
+    'ai_operations_box',
   };
 
   static const String boxProducts = 'products_box';
@@ -72,6 +73,7 @@ class HiveBoxManager {
   static const String boxDrafts = 'draft_box';
   static const String boxUserProfile = 'user_profile_box';
   static const String boxAuth = 'auth_box';
+  static const String boxAiOperations = 'ai_operations_box';
   static const String boxAppSettings = 'app_settings_box';
 
   static String? _activeDir;
@@ -110,6 +112,7 @@ class HiveBoxManager {
       await _openCriticalBox<UserProfile>(boxUserProfile);
       await _openCriticalBox(boxAuth);
       await _openCriticalBox(boxDrafts);
+      await _openCriticalBox<String>(boxAiOperations);
 
       // Open non-critical box
       await _openNonCriticalBox(boxAppSettings);

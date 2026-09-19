@@ -13,6 +13,7 @@ class AppImage extends StatefulWidget {
   final double? height;
   final Widget? fallbackWidget;
   final PrivateMediaCache? mediaCache;
+  final VoidCallback? onError;
 
   const AppImage({
     super.key,
@@ -22,6 +23,7 @@ class AppImage extends StatefulWidget {
     this.height,
     this.fallbackWidget,
     this.mediaCache,
+    this.onError,
   });
 
   static bool isPrivateMedia(String url) {
@@ -47,6 +49,7 @@ class AppImage extends StatefulWidget {
 
 class _AppImageState extends State<AppImage> {
   Future<File>? _mediaFuture;
+  int? _capturedSessionGen;
 
   @override
   void initState() {
@@ -72,6 +75,7 @@ class _AppImageState extends State<AppImage> {
     if (!kIsWeb && AppImage.isPrivateMedia(resolvedUrl)) {
       final mediaId = AppImage.extractMediaId(resolvedUrl);
       final cache = widget.mediaCache ?? PrivateMediaCache.instance;
+      _capturedSessionGen = cache.sessionGeneration;
       final downloadUrl = resolvedUrl.startsWith('http')
           ? resolvedUrl
           : '${ApiConfig.baseUrl}/api/v1/media/$mediaId';
@@ -81,6 +85,7 @@ class _AppImageState extends State<AppImage> {
       );
     } else {
       _mediaFuture = null;
+      _capturedSessionGen = null;
     }
   }
 
@@ -130,17 +135,28 @@ class _AppImageState extends State<AppImage> {
           }
           if (snapshot.hasError) {
             debugPrint('[AppImage] Future error: ${snapshot.error} ${snapshot.stackTrace}');
+            widget.onError?.call();
             return fallback;
           }
           if (snapshot.hasData && snapshot.data != null) {
+            final cache = widget.mediaCache ?? PrivateMediaCache.instance;
+            if (_capturedSessionGen != null && cache.sessionGeneration != _capturedSessionGen) {
+              debugPrint('[AppImage] Session changed while awaiting media; invalidating pending widget result.');
+              widget.onError?.call();
+              return fallback;
+            }
             return Image.file(
               snapshot.data!,
               width: widget.width,
               height: widget.height,
               fit: widget.fit,
-              errorBuilder: (context, error, stackTrace) => fallback,
+              errorBuilder: (context, error, stackTrace) {
+                widget.onError?.call();
+                return fallback;
+              },
             );
           }
+          widget.onError?.call();
           return fallback;
         },
       );
@@ -158,13 +174,16 @@ class _AppImageState extends State<AppImage> {
     // Local file from camera/gallery capture
     if (!kIsWeb && !isNetwork && !isBlobOrLocalhost) {
       final file = File(resolvedUrl);
-      if (file.existsSync()) {
+      if (file.existsSync() && file.lengthSync() > 0) {
         return Image.file(
           file,
           width: widget.width,
           height: widget.height,
           fit: widget.fit,
-          errorBuilder: (context, error, stackTrace) => fallback,
+          errorBuilder: (context, error, stackTrace) {
+            widget.onError?.call();
+            return fallback;
+          },
         );
       }
       return fallback;
@@ -198,6 +217,7 @@ class _AppImageState extends State<AppImage> {
           debugPrint(
             'AppImage failed to load network image: $resolvedUrl ($error)',
           );
+          widget.onError?.call();
           return fallback;
         },
       );
@@ -215,16 +235,26 @@ class _AppImageState extends State<AppImage> {
           color: AppColors.surfaceVariant,
           child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
         ),
-        errorWidget: (context, url, error) => fallback,
+        errorWidget: (context, url, error) {
+          widget.onError?.call();
+          return fallback;
+        },
       );
     }
 
-    return Image.file(
-      File(resolvedUrl),
-      width: widget.width,
-      height: widget.height,
-      fit: widget.fit,
-      errorBuilder: (context, error, stackTrace) => fallback,
-    );
+    final fallbackFile = File(resolvedUrl);
+    if (!kIsWeb && fallbackFile.existsSync() && fallbackFile.lengthSync() > 0) {
+      return Image.file(
+        fallbackFile,
+        width: widget.width,
+        height: widget.height,
+        fit: widget.fit,
+        errorBuilder: (context, error, stackTrace) {
+          widget.onError?.call();
+          return fallback;
+        },
+      );
+    }
+    return fallback;
   }
 }

@@ -144,17 +144,14 @@ void main() {
       );
 
       // Set max limit to 1000 bytes. Stream is 2500 bytes.
-      expect(
-        () => cache.downloadAndCacheMedia(
+      await expectLater(
+        cache.downloadAndCacheMedia(
           mediaId: 'large_media_123',
           downloadUrl: 'https://api.kalasetu.test/media/large',
           maxBytes: 1000,
         ),
         throwsA(isA<MediaExceedsSizeLimitException>()),
       );
-
-      // Allow async deletion to finish
-      await Future.delayed(const Duration(milliseconds: 50));
 
       // Assert: No .tmp staging files left behind
       final stagingDir = Directory('${cacheDir.path}/staging');

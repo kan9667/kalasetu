@@ -18,6 +18,14 @@ class MediaExceedsSizeLimitException implements Exception {
       'MediaExceedsSizeLimitException: Download exceeded max limit of $maxBytes bytes (received $bytesRead bytes)';
 }
 
+class SessionChangedException implements Exception {
+  final String message;
+  SessionChangedException(this.message);
+
+  @override
+  String toString() => 'SessionChangedException: $message';
+}
+
 /// Durable, authenticated private-media cache.
 ///
 /// Enforces:
@@ -29,6 +37,8 @@ class MediaExceedsSizeLimitException implements Exception {
 /// 6. Path traversal protection on mediaId.
 /// 7. Scoped caching and in-flight download tracking by account and backend.
 /// 8. Strict origin and redirect validation for bearer credentials.
+/// 9. Deduplication of overlapping in-flight downloads for the same media asset.
+/// 10. Verification of authenticated session identity before promoting downloads.
 class PrivateMediaCache {
   static const int defaultMaxBytes = 15 * 1024 * 1024; // 15 MB
   static final RegExp _mediaIdPattern = RegExp(r'^[a-zA-Z0-9_\-]+$');
@@ -42,6 +52,14 @@ class PrivateMediaCache {
   final SecureTokenStorage _tokenStorage;
   final Dio? _customDio;
   final Map<String, CancelToken> _inFlightDownloads = {};
+  final Map<String, Future<File>> _inFlightFutures = {};
+
+  String? _activeAccountId;
+  String? _activeBackendOrigin;
+  int _sessionGeneration = 0;
+
+  int get sessionGeneration => _sessionGeneration;
+  String? get activeAccountId => _activeAccountId;
 
   PrivateMediaCache({
     Directory? cacheDir,
@@ -60,13 +78,27 @@ class PrivateMediaCache {
     }
   }
 
+  /// Normalizes backend origin by scheme, lowercase host, and explicit port.
+  static String normalizeBackendOrigin(String url) {
+    try {
+      final uri = Uri.parse(url.trim());
+      final scheme = uri.scheme.toLowerCase();
+      final host = uri.host.toLowerCase();
+      final int defaultPort = scheme == 'https' ? 443 : 80;
+      final int port = uri.hasPort ? uri.port : defaultPort;
+      return '$scheme://$host:$port';
+    } catch (_) {
+      return url.trim().toLowerCase();
+    }
+  }
+
   /// Verifies if a target URI strictly matches the configured API origin (scheme, host, and port).
   static bool isConfiguredApiOrigin(Uri uri) {
     try {
       final baseUri = Uri.parse(ApiConfig.baseUrl);
       final targetPort = uri.hasPort ? uri.port : (uri.scheme == 'https' ? 443 : 80);
       final basePort = baseUri.hasPort ? baseUri.port : (baseUri.scheme == 'https' ? 443 : 80);
-      return uri.scheme == baseUri.scheme &&
+      return uri.scheme.toLowerCase() == baseUri.scheme.toLowerCase() &&
           uri.host.toLowerCase() == baseUri.host.toLowerCase() &&
           targetPort == basePort;
     } catch (_) {
@@ -74,16 +106,37 @@ class PrivateMediaCache {
     }
   }
 
-  String _getAccountScope(String? token) {
-    if (token == null || token.isEmpty) return 'unauthenticated';
-    final bytes = utf8.encode(token);
+  /// Updates authenticated session identity and backend origin.
+  /// Cancels in-flight requests and increments session generation on account/origin change.
+  /// Preserves cached state and in-flight operations if token renewal occurs for the same account.
+  void updateSession({required String? accountId, String? backendUrl}) {
+    final effectiveBackend = backendUrl ?? ApiConfig.baseUrl;
+    final newOrigin = normalizeBackendOrigin(effectiveBackend);
+    final bool accountChanged = accountId != _activeAccountId;
+    final bool originChanged = _activeBackendOrigin != null && _activeBackendOrigin != newOrigin;
+
+    if (accountChanged || originChanged) {
+      deactivateAccount();
+      _activeAccountId = accountId;
+      _activeBackendOrigin = newOrigin;
+    } else {
+      _activeAccountId = accountId;
+      _activeBackendOrigin = newOrigin;
+    }
+  }
+
+  String _getAccountScope([String? accountId]) {
+    final id = accountId ?? _activeAccountId;
+    if (id == null || id.isEmpty) return 'unauthenticated';
+    final bytes = utf8.encode(id);
     final digest = sha256.convert(bytes);
     return 'acc_${digest.toString().substring(0, 16)}';
   }
 
-  String _getBackendScope() {
-    final origin = ApiConfig.baseUrl;
-    final bytes = utf8.encode(origin);
+  String _getBackendScope([String? origin]) {
+    final rawOrigin = origin ?? _activeBackendOrigin ?? ApiConfig.baseUrl;
+    final normalized = normalizeBackendOrigin(rawOrigin);
+    final bytes = utf8.encode(normalized);
     final digest = sha256.convert(bytes);
     return 'srv_${digest.toString().substring(0, 8)}';
   }
@@ -103,9 +156,11 @@ class PrivateMediaCache {
     return dir;
   }
 
-  Future<Directory> _getScopedCacheDir(String? token) async {
+  Future<Directory> _getScopedCacheDir([String? accountId, String? origin]) async {
     final base = await _baseDir;
-    final scoped = Directory('${base.path}/${_getBackendScope()}/${_getAccountScope(token)}');
+    final backendScope = _getBackendScope(origin);
+    final accountScope = _getAccountScope(accountId);
+    final scoped = Directory('${base.path}/$backendScope/$accountScope');
     if (!await scoped.exists()) {
       await scoped.create(recursive: true);
     }
@@ -147,6 +202,7 @@ class PrivateMediaCache {
 
   /// Cancels in-flight requests and deactivates cached context for an account upon logout or switch.
   void deactivateAccount([String? specificAccountScope]) {
+    _sessionGeneration++;
     if (specificAccountScope != null) {
       final toRemove = <String>[];
       for (final entry in _inFlightDownloads.entries) {
@@ -157,21 +213,35 @@ class PrivateMediaCache {
       }
       for (final key in toRemove) {
         _inFlightDownloads.remove(key);
+        _inFlightFutures.remove(key);
       }
     } else {
       for (final cancelToken in _inFlightDownloads.values) {
         cancelToken.cancel('Account deactivated or switched');
       }
       _inFlightDownloads.clear();
+      _inFlightFutures.clear();
+      _activeAccountId = null;
     }
-    debugPrint('[PrivateMediaCache] In-flight media requests deactivated.');
+    debugPrint('[PrivateMediaCache] In-flight media requests deactivated (gen: $_sessionGeneration).');
+  }
+
+  Future<String?> _resolveEffectiveAccountId() async {
+    if (_activeAccountId != null && _activeAccountId!.isNotEmpty) {
+      return _activeAccountId;
+    }
+    final token = await _tokenStorage.getToken();
+    if (token != null && token.isNotEmpty) {
+      return token;
+    }
+    return null;
   }
 
   /// Get the cached file if it already exists in the current account's scope and is non-empty.
   Future<File?> getCachedFile(String mediaId) async {
     validateMediaId(mediaId);
-    final token = await _tokenStorage.getToken();
-    final scopedDir = await _getScopedCacheDir(token);
+    final accountId = await _resolveEffectiveAccountId();
+    final scopedDir = await _getScopedCacheDir(accountId);
     final cached = File('${scopedDir.path}/media_$mediaId.cached');
     if (await cached.exists() && (await cached.length()) > 0) {
       return cached;
@@ -179,7 +249,13 @@ class PrivateMediaCache {
     return null;
   }
 
+  /// Returns true if the given media asset exists and is cached for the active account.
+  Future<bool> isCached(String mediaId) async {
+    return (await getCachedFile(mediaId)) != null;
+  }
+
   /// Download and cache private media asset securely.
+  /// Deduplicates overlapping requests for the same media ID within the active account scope.
   Future<File> downloadAndCacheMedia({
     required String mediaId,
     String? downloadUrl,
@@ -187,14 +263,79 @@ class PrivateMediaCache {
   }) async {
     validateMediaId(mediaId);
 
-    final existing = await getCachedFile(mediaId);
-    if (existing != null) {
-      return existing;
+    final startSessionGen = _sessionGeneration;
+    final startAccountId = _activeAccountId;
+    final startBackendOrigin = _getBackendScope();
+
+    final accountId = _activeAccountId ?? await _resolveEffectiveAccountId();
+    final accountScope = _getAccountScope(accountId);
+    final inFlightKey = '${accountScope}_$mediaId';
+
+    // Deduplicate overlapping downloads synchronously before any async gap
+    final existingFuture = _inFlightFutures[inFlightKey];
+    if (existingFuture != null) {
+      debugPrint('[PrivateMediaCache] Reusing in-flight download future for $inFlightKey');
+      return await existingFuture;
     }
 
+    final completer = Completer<File>();
+    // Ignore unhandled error on the completer future itself if the operation errors
+    // without concurrent listeners.
+    completer.future.ignore();
+    _inFlightFutures[inFlightKey] = completer.future;
+
+    try {
+      final existing = await getCachedFile(mediaId);
+      if (existing != null) {
+        completer.complete(existing);
+        return existing;
+      }
+
+      if (_sessionGeneration != startSessionGen ||
+          _activeAccountId != startAccountId ||
+          _getBackendScope() != startBackendOrigin) {
+        throw SessionChangedException(
+          'Session or backend origin changed during download of media $mediaId; promotion aborted.',
+        );
+      }
+
+      final file = await _executeDownload(
+        mediaId: mediaId,
+        downloadUrl: downloadUrl,
+        maxBytes: maxBytes,
+        accountId: accountId,
+        accountScope: accountScope,
+        inFlightKey: inFlightKey,
+        startSessionGen: startSessionGen,
+        startAccountId: startAccountId,
+        startBackendOrigin: startBackendOrigin,
+      );
+      completer.complete(file);
+      return file;
+    } catch (e, st) {
+      if (!completer.isCompleted) {
+        completer.completeError(e, st);
+      }
+      rethrow;
+    } finally {
+      _inFlightFutures.remove(inFlightKey);
+    }
+  }
+
+  Future<File> _executeDownload({
+    required String mediaId,
+    String? downloadUrl,
+    required int maxBytes,
+    required String? accountId,
+    required String accountScope,
+    required String inFlightKey,
+    required int startSessionGen,
+    required String? startAccountId,
+    required String startBackendOrigin,
+  }) async {
+
     final token = await _tokenStorage.getToken();
-    final accountScope = _getAccountScope(token);
-    final scopedDir = await _getScopedCacheDir(token);
+    final scopedDir = await _getScopedCacheDir(accountId);
     final staging = await _stagingDir;
     final stagedPath =
         '${staging.path}/staging_${mediaId}_${DateTime.now().microsecondsSinceEpoch}.tmp';
@@ -213,7 +354,6 @@ class PrivateMediaCache {
         'Authorization': 'Bearer $token',
     };
 
-    final inFlightKey = '${accountScope}_$mediaId';
     final cancelToken = CancelToken();
     _inFlightDownloads[inFlightKey] = cancelToken;
 
@@ -291,6 +431,18 @@ class PrivateMediaCache {
       if (!await stagedFile.exists() || await stagedFile.length() == 0) {
         if (await stagedFile.exists()) await stagedFile.delete();
         throw Exception('Download finished with empty file for media $mediaId');
+      }
+
+      // Recheck session identity before promoting the download
+      if (_sessionGeneration != startSessionGen ||
+          _activeAccountId != startAccountId ||
+          _getBackendScope() != startBackendOrigin) {
+        if (await stagedFile.exists()) {
+          await stagedFile.delete();
+        }
+        throw SessionChangedException(
+          'Session or backend origin changed during download of media $mediaId; promotion aborted.',
+        );
       }
 
       // Atomic rename to final cache destination

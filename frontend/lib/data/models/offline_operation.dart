@@ -175,7 +175,12 @@ class OfflineOperation {
   /// Safely decodes either a modern JSON string or a legacy raw action string ('CREATE', 'UPDATE', 'DELETE')
   static OfflineOperation fromPendingString(String raw, String key) {
     final trimmed = raw.trim();
-    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    if (trimmed.startsWith('{')) {
+      if (!trimmed.endsWith('}')) {
+        throw FormatException(
+          'Malformed modern queue record: unclosed JSON object for key "$key"',
+        );
+      }
       try {
         final decoded = jsonDecode(trimmed) as Map<String, dynamic>;
         final op = OfflineOperation.fromJson(decoded);
@@ -183,11 +188,12 @@ class OfflineOperation {
           return op.copyWith(id: key);
         }
         return op;
-      } catch (_) {
-        // Fallback to plain action if JSON parsing fails
+      } catch (e) {
+        throw FormatException('Malformed modern queue record for key "$key": $e');
       }
     }
 
+    // Only non-JSON raw strings are valid legacy actions
     return OfflineOperation(
       id: key,
       action: trimmed.isNotEmpty ? trimmed : actionUpdate,

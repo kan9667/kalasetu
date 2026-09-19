@@ -178,9 +178,42 @@ Status of review findings after Phase 1 Trust & Data Integrity implementation:
 - [RESOLVED] Durable Token Storage Migration: Fail-closed readback verification in `SecureTokenStorage`; legacy token
   in `auth_box` retained and never deleted on readback mismatch or platform errors (`MissingPluginException`);
   explicit storage double injection support; single-flight synchronization preventing concurrent duplicate migrations.
-- [RESOLVED] Persistent AI Operation Identity: Replaced non-deterministic `DateTime.now()` idempotency keys with
-  caller-persisted operation IDs (`imageEnhanceOpId`, `voiceListingOpId`, `pricingOpId`) stored durably in
-  `AddProductDraft` before HTTP dispatch; recovery of late timeouts (>30s) across restarts without re-executing jobs.
+- [RESOLVED] Persistent AI Operation Identity & Complete Pre-Dispatch Storage: Replaced non-deterministic
+  `DateTime.now()` keys with deterministic, SHA-256 fingerprinted `AiOperationRecord` entries durably persisted
+  to `ai_operations_box` before any HTTP dispatch; payload fingerprints calculate cryptographic hashes of raw
+  photo bytes (`sha256(File(originalImagePath).readAsBytesSync())`), voice transcripts, audio paths, and cost
+  inputs; distinct operation types (`image_enhancement`, `voice_to_listing`, `fair_pricing`) prevent key collisions;
+  monotonic input generations (`imageInputGeneration`, `voiceInputGeneration`, `pricingInputGeneration`) ensure
+  stale in-flight operations are superseded and never overwrite newer user inputs.
+- [RESOLVED] Background Future Decoupling & Late Result Reconciliation: Detached UI timeout mechanisms from
+  underlying network futures; in-flight futures run to completion in the background, persisting completed results
+  to durable `AiOperationRecord` storage with exact status and timestamps; on screen re-entry or app resume,
+  completed records are reconciled against the active draft if and only if input generations match, preventing
+  redundant network calls and lost computations while preserving unique operation IDs across Drift outbox transfers.
+- [RESOLVED] Exact-Media Review Runtime Enforcement: Eliminated debug-only assertions in favor of strict runtime
+  checks in `Step5ConfirmWidget`; enforces preview verification against the exact bound asset (`boundMediaGeneration ==
+  imageInputGeneration`); photo retakes immediately invalidate previous enhancement results and require fresh
+  preview generation; unenhanced raw photos require verified local disk existence (`File.existsSync()`); publication
+  is strictly blocked if preview generation fails, the local file is missing, or media generation mismatches,
+  guaranteeing an artisan never approves an unseen or misattributed asset.
+- [RESOLVED] Repository Initialization Barrier & Fail-Closed Deserialization: Single-flight `ProductRepository.initialize()`
+  gates all mutating and read methods (`getProducts`, `addProduct`, `updateProduct`, `approveAndPublishProduct`,
+  `deleteProduct`, `unpublishProduct`, `syncPendingQueue`), awaiting database hydration, schema migrations, and
+  expired lease reclamation before handling requests; `OfflineOperation.fromPendingString` safely distinguishes
+  legacy action strings from modern JSON payloads, throwing structured `FormatException` on truncated or malformed
+  JSON rather than executing corrupt actions; wired directly into `main.dart` root `ProviderContainer` prior to
+  rendering `KalaSetuApp`.
+- [RESOLVED] Session-Bound Private Media Cache & Atomic Deduplication: `PrivateMediaCache` isolates files by
+  authenticated account (`acc_<hash>`) and normalized backend origin (`scheme://host:port` with lowercased host
+  and default port handling); captures session generation and account identity at download invocation entry;
+  concurrent requests for the same media asset are atomically deduplicated via synchronous Completer registration;
+  account logouts, token revocations, or origin changes immediately abort in-flight transfers and reject promotion
+  of staging `.tmp` files via `SessionChangedException`; `AppImage` validates active session generation before
+  rendering cached files on disk.
+- [RESOLVED] Production Wiring & Drift Outbox Hydration: Replaced manual test injection with automatic Drift
+  outbox watching via `watchPendingOperations()`; outbox updates trigger real-time badge count updates and queue
+  state synchronization; verified outbox dependency chaining (`CREATE -> MEDIA_UPLOAD -> ATTACH_MEDIA -> APPROVE_PUBLISH`)
+  and local outbox ID preservation (`explicitLocalId`) through end-to-end integration tests.
 - [RESOLVED] Error Classification & Transparent AI Degradation: HTTP 401/403 session expiration handled via
   `expireSession()` preserving offline drafts and outbox; HTTP 409/413/422 treated as non-retryable validation errors
   instead of offline fallbacks; component-level degradation tracking (`isImageDegraded`, `isVoiceDegraded`,
@@ -196,11 +229,12 @@ Status of review findings after Phase 1 Trust & Data Integrity implementation:
   verified expired in-flight approval lease reclamation across simulated app restart.
 - [RESOLVED] Test Coverage & Verification: 121 backend tests passing under Python 3.14 (covering AI idempotency
   fingerprints, auth security, SQLite FKs, tenant isolation, approval workflow, migrations, concurrency, media
-  privacy, streaming ingest, cost extraction, and e2e integration); 3 migration tests passing; 148 Flutter tests
+  privacy, streaming ingest, cost extraction, and e2e integration); 3 migration tests passing; 162 Flutter tests
   passing (covering unpublish truthfulness, coalescing scenarios a-d, upstream dependency resolution, hash validation,
   409 conflict refresh, review existing product screen, secure token migration fallback, private media cache
   bounded abort, drift queue durability, offline media lineage, degradation banners, chatbot review navigation,
-  and live HTTP wire test) with 0 `flutter analyze` issues.
+  exact-media review verification, repository initialization barrier, cache session binding, and live HTTP wire test)
+  with 0 `flutter analyze` issues.
   *Note on test execution environment*: All automated verification was executed on local macOS developer workstation
   test harnesses (SQLite with foreign keys enabled, Drift native SQLite, in-memory/mock HTTP adapters, and live
   FastAPI server wire test on loopback). Physical Android/iOS hardware field trials remain planned for Phase 2.

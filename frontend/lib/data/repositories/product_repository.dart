@@ -24,9 +24,20 @@ class ProductRepository {
   ProductRepository({ApiService? apiService})
       : _apiService = apiService ?? MockApiService();
 
-  /// Explicit deterministic initialization: upgrades legacy outbox records
+  Future<void>? _initFuture;
+  bool _isInitialized = false;
+
+  /// Explicit single-flight deterministic initialization: upgrades legacy outbox records
   /// and reclaims expired in-flight leases.
-  Future<void> initialize({DateTime? now}) async {
+  Future<void> initialize({DateTime? now}) {
+    if (_isInitialized) return Future.value();
+    if (_initFuture != null) return _initFuture!;
+    return _initFuture = _doInitialize(now).then((_) {
+      _isInitialized = true;
+    });
+  }
+
+  Future<void> _doInitialize(DateTime? now) async {
     await migrateLegacyPendingQueueIfNeeded();
     await reclaimExpiredLeases(now: now);
   }
@@ -42,23 +53,19 @@ class ProductRepository {
   /// Automatically upgrades legacy raw action strings ('CREATE', 'UPDATE', 'DELETE')
   /// or legacy records keyed by productId to modern OfflineOperation records keyed by op.id.
   Future<void> migrateLegacyPendingQueueIfNeeded() async {
-    try {
-      if (!Hive.isBoxOpen(_pendingBoxName)) return;
-      final pendingBox = _getPendingBox();
-      final keys = pendingBox.keys.cast<String>().toList();
-      for (final key in keys) {
-        final raw = pendingBox.get(key);
-        if (raw == null) continue;
-        final op = OfflineOperation.fromPendingString(raw, key);
-        if (key != op.id) {
-          await pendingBox.put(op.id, op.toPendingString());
-          await pendingBox.delete(key);
-        } else if (!raw.trim().startsWith('{')) {
-          await pendingBox.put(op.id, op.toPendingString());
-        }
+    if (!Hive.isBoxOpen(_pendingBoxName)) return;
+    final pendingBox = _getPendingBox();
+    final keys = pendingBox.keys.cast<String>().toList();
+    for (final key in keys) {
+      final raw = pendingBox.get(key);
+      if (raw == null) continue;
+      final op = OfflineOperation.fromPendingString(raw, key);
+      if (key != op.id) {
+        await pendingBox.put(op.id, op.toPendingString());
+        await pendingBox.delete(key);
+      } else if (!raw.trim().startsWith('{')) {
+        await pendingBox.put(op.id, op.toPendingString());
       }
-    } catch (e) {
-      debugPrint('ProductRepository: Pending queue migration notice: $e');
     }
   }
 
@@ -108,6 +115,7 @@ class ProductRepository {
 
   /// Get all products - Hive is the instant source of truth.
   Future<List<Product>> getProducts({bool forceRefresh = false, bool isOnline = true}) async {
+    await initialize();
     final box = _getProductsBox();
 
     // If box is empty and online, populate with remote products
@@ -138,6 +146,7 @@ class ProductRepository {
   /// Add product draft - Writes to Hive first as draft, queues for sync if offline or API fails.
   /// INVARIANT: Client mutations are strictly drafts. Never publishes directly here.
   Future<Product> addProduct(Product product, {bool isOnline = true, String? artisanId}) async {
+    await initialize();
     final productsBox = _getProductsBox();
     final pendingBox = _getPendingBox();
 
@@ -191,6 +200,7 @@ class ProductRepository {
     bool isOnline = true,
     String? idempotencyKey,
   }) async {
+    await initialize();
     final productsBox = _getProductsBox();
     final pendingBox = _getPendingBox();
 
@@ -249,6 +259,7 @@ class ProductRepository {
     bool isOnline = true,
     String? idempotencyKey,
   }) async {
+    await initialize();
     final productsBox = _getProductsBox();
     final pendingBox = _getPendingBox();
     var product = productsBox.get(id);
@@ -403,6 +414,7 @@ class ProductRepository {
 
   /// Delete product.
   Future<void> deleteProduct(String id, {bool isOnline = true}) async {
+    await initialize();
     final productsBox = _getProductsBox();
     final pendingBox = _getPendingBox();
 
@@ -440,6 +452,7 @@ class ProductRepository {
 
   /// Unpublish a published product, resetting server status to draft and revoking approvals.
   Future<Product> unpublishProduct(String productId, {bool isOnline = true, String? idempotencyKey}) async {
+    await initialize();
     final productsBox = _getProductsBox();
     final pendingBox = _getPendingBox();
     final effectiveKey = idempotencyKey ?? 'idem_unpub_${productId}_${DateTime.now().millisecondsSinceEpoch}';
@@ -593,6 +606,7 @@ class ProductRepository {
   /// Preserves idempotency keys across retries, stores upstream results in resultData,
   /// and ensures completed operations are retained while dependents remain.
   Future<int> syncPendingQueue() async {
+    await initialize();
     final productsBox = _getProductsBox();
     final pendingBox = _getPendingBox();
 

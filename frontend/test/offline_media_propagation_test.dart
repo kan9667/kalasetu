@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:kalasetu/core/offline_sync/database/database.dart';
+import 'package:kalasetu/core/offline_sync/offline_sync_service.dart';
 import 'package:kalasetu/core/offline_sync/services/connectivity_service.dart';
 import 'package:kalasetu/core/offline_sync/services/sync_manager.dart';
 import 'package:kalasetu/core/offline_sync/services/upload_api.dart';
@@ -132,7 +133,23 @@ void main() {
       const localId = 'queue_local_prop_202';
       const draftId = 'draft_artisan_202';
 
-      // 1. Queue enhancement in real Drift DB
+      final mockApi = MockUploadApi(failureRate: 0.0);
+      await OfflineSyncService.instance.init(uploadApi: mockApi, db: db);
+
+      final container = ProviderContainer();
+      final notifier = container.read(addProductFlowProvider.notifier);
+
+      // 1. Initialize draft with imageQueueItemId listening to Drift queue
+      notifier.loadSavedDraftState(
+        draftId: draftId,
+        originalImagePath: '/data/local_image.jpg',
+        enhancedImagePath: '',
+        transcript: 'Handmade terracotta pot',
+        category: 'Pottery',
+        imageQueueItemId: localId,
+      );
+
+      // 2. Insert completed enhancement into real Drift DB
       final completedPayload = {
         'enhancedImageUrl': 'https://api.kaarigarconnect.in/uploads/enhanced/terracotta.jpg',
         'mediaId': 'media_asset_uuid_789',
@@ -154,51 +171,38 @@ void main() {
         ),
       );
 
-      // 2. Fetch completed record from Drift DB
-      final driftItem = (await db.findItemByLocalId(localId))!;
-      final resultData = jsonDecode(driftItem.resultJson!) as Map<String, dynamic>;
-
-      // 3. Apply completed Drift queue item to AddProductNotifier
-      final container = ProviderContainer();
-      final notifier = container.read(addProductFlowProvider.notifier);
-
-      notifier.loadSavedDraftState(
-        draftId: draftId,
-        originalImagePath: '/data/local_image.jpg',
-        enhancedImagePath: (resultData['enhancedImageUrl'] as String?) ?? '',
-        transcript: 'Handmade terracotta pot',
-        category: 'Pottery',
-        mediaId: resultData['mediaId'] as String?,
-        originalMediaId: resultData['originalMediaId'] as String?,
-        isDegraded: resultData['isDegraded'] as bool?,
-        degradedReason: resultData['degradedReason'] as String?,
-      );
+      // Allow Drift watch stream to automatically propagate to AddProductNotifier
+      await Future<void>.delayed(const Duration(milliseconds: 150));
 
       final draftState = container.read(addProductFlowProvider);
       expect(draftState.mediaId, 'media_asset_uuid_789');
       expect(draftState.originalMediaId, 'media_asset_uuid_123');
+      expect(draftState.sha256Checksum, 'a1b2c3d4e5f600112233445566778899aabbccddeeff00112233445566778899');
       expect(draftState.isDegraded, isTrue);
       expect(draftState.degradedReason, contains('rembg optional dependency unavailable'));
 
-      // 4. Verify durable persistence in Hive's draft_box
+      // 3. Verify durable persistence in Hive's draft_box
       final draftBox = Hive.box('draft_box');
       expect(draftBox.get('draft_media_id'), 'media_asset_uuid_789');
       expect(draftBox.get('draft_original_media_id'), 'media_asset_uuid_123');
+      expect(draftBox.get('draft_sha256_checksum'), 'a1b2c3d4e5f600112233445566778899aabbccddeeff00112233445566778899');
       expect(draftBox.get('draft_is_degraded'), isTrue);
       expect(draftBox.get('draft_degraded_reason'), contains('rembg optional dependency unavailable'));
 
-      // 5. Simulate app restart / fresh ProviderContainer
+      // 4. Simulate app restart / fresh ProviderContainer with automatic hydration
       final newContainer = ProviderContainer();
       final newNotifier = newContainer.read(addProductFlowProvider.notifier);
       newNotifier.resumeExistingDraft();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
 
       final restoredState = newContainer.read(addProductFlowProvider);
       expect(restoredState.mediaId, 'media_asset_uuid_789');
       expect(restoredState.originalMediaId, 'media_asset_uuid_123');
+      expect(restoredState.sha256Checksum, 'a1b2c3d4e5f600112233445566778899aabbccddeeff00112233445566778899');
       expect(restoredState.isDegraded, isTrue);
       expect(restoredState.degradedReason, contains('rembg optional dependency unavailable'));
 
-      // 6. Ensure Product construction in Step 5 receives authoritative mediaId
+      // 5. Ensure Product construction in Step 5 receives authoritative mediaId
       final step5Product = Product(
         id: 'prod_test_step5',
         title: restoredState.titleEn.isNotEmpty ? restoredState.titleEn : 'Handcrafted Pottery',
@@ -214,7 +218,7 @@ void main() {
 
       container.dispose();
       newContainer.dispose();
-      await db.close();
+      await OfflineSyncService.instance.dispose();
     });
 
     test('Real Drift queue path with Mock HTTP processes upload, persists sha256Checksum, and reconciles across restart', () async {

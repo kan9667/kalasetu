@@ -26,6 +26,7 @@ class Step5ConfirmWidget extends ConsumerStatefulWidget {
 
 class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
   bool _isPublishing = false;
+  bool _previewFailed = false;
   Product? _publishedProduct;
   final AppTtsService _tts = AppTtsService();
 
@@ -91,9 +92,46 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
   }
 
   Future<void> _handleListProduct() async {
+    final draft = ref.read(addProductFlowProvider);
+
+    // INVARIANT: Runtime check (never assert) enforcing exact media review.
+    if (draft.mediaId != null && draft.boundMediaGeneration != draft.imageInputGeneration) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot publish: Media asset belongs to a previous photo. Please retake or re-verify.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final hasValidLocalPhoto = draft.originalImagePath.isNotEmpty &&
+        (draft.originalImagePath.startsWith('http') ||
+            (File(draft.originalImagePath).existsSync() &&
+                File(draft.originalImagePath).lengthSync() > 0));
+
+    if (draft.mediaId == null && !hasValidLocalPhoto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot publish: A valid product photo is required.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_previewFailed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot publish: Image preview could not be verified.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isPublishing = true);
 
-    final draft = ref.read(addProductFlowProvider);
     final isOnline = ref.read(connectivityProvider).value ?? true;
 
     final fallbackCategory = ref.read(userProfileProvider).craftType.trim().isNotEmpty
@@ -104,9 +142,6 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
         ? draft.category.trim()
         : fallbackCategory;
 
-    const fallbackPhoto =
-        'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=600&q=80';
-
     final newProduct = Product(
       id: 'prod_${DateTime.now().millisecondsSinceEpoch}',
       title: draft.titleEn.isNotEmpty ? draft.titleEn : 'Handcrafted $effectiveCategory',
@@ -114,7 +149,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       description: draft.descriptionEn.isNotEmpty ? draft.descriptionEn : draft.voiceTranscript,
       descriptionHi: draft.descriptionHi,
       price: draft.finalPrice,
-      photoPath: draft.originalImagePath.isNotEmpty ? draft.originalImagePath : fallbackPhoto,
+      photoPath: draft.originalImagePath,
       aiEnhancedPhotoPath: draft.isEnhanced ? draft.enhancedImagePath : '',
       additionalPhotoPaths: draft.additionalImagePaths,
       category: effectiveCategory,
@@ -416,21 +451,36 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
     final draft = ref.watch(addProductFlowProvider);
     final currentStatus = _publishedProduct?.status ?? ProductStatus.draft;
     final bool isLive = currentStatus == ProductStatus.published || currentStatus == ProductStatus.live;
+    final bool mediaGenerationMismatch = draft.mediaId != null &&
+        draft.boundMediaGeneration != draft.imageInputGeneration;
+
+    final hasValidLocalPhoto = draft.originalImagePath.isNotEmpty &&
+        (draft.originalImagePath.startsWith('http') ||
+            (File(draft.originalImagePath).existsSync() &&
+                File(draft.originalImagePath).lengthSync() > 0));
+
+    final bool missingPhoto = draft.mediaId == null && !hasValidLocalPhoto;
+    final bool isPublishBlocked = mediaGenerationMismatch || missingPhoto || _previewFailed;
+
     final localEnhancedExists = draft.isEnhanced &&
         draft.enhancedImagePath.isNotEmpty &&
-        (draft.enhancedImagePath.startsWith('http') || File(draft.enhancedImagePath).existsSync());
+        (draft.enhancedImagePath.startsWith('http') ||
+            (File(draft.enhancedImagePath).existsSync() && File(draft.enhancedImagePath).lengthSync() > 0));
     final localOriginalExists = draft.originalImagePath.isNotEmpty &&
-        (draft.originalImagePath.startsWith('http') || File(draft.originalImagePath).existsSync());
+        (draft.originalImagePath.startsWith('http') ||
+            (File(draft.originalImagePath).existsSync() && File(draft.originalImagePath).lengthSync() > 0));
 
-    final displayImage = localEnhancedExists
-        ? draft.enhancedImagePath
-        : (localOriginalExists
-            ? draft.originalImagePath
-            : (draft.mediaId != null && draft.mediaId!.isNotEmpty
-                ? draft.mediaId!
-                : (draft.originalMediaId != null && draft.originalMediaId!.isNotEmpty
-                    ? draft.originalMediaId!
-                    : draft.originalImagePath)));
+    final displayImage = mediaGenerationMismatch
+        ? '' // Never render mismatched media asset
+        : (localEnhancedExists
+            ? draft.enhancedImagePath
+            : (localOriginalExists
+                ? draft.originalImagePath
+                : (draft.mediaId != null && draft.mediaId!.isNotEmpty
+                    ? draft.mediaId!
+                    : (draft.originalMediaId != null && draft.originalMediaId!.isNotEmpty
+                        ? draft.originalMediaId!
+                        : draft.originalImagePath))));
 
     final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
             EasyLocalization.of(context)?.locale.languageCode) ==
@@ -490,7 +540,19 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                     height: 220,
                     width: double.infinity,
                     color: AppColors.parchmentDeep,
-                    child: AppImage(imageUrl: displayImage, fit: BoxFit.cover),
+                    child: AppImage(
+                      imageUrl: displayImage,
+                      fit: BoxFit.cover,
+                      onError: () {
+                        if (mounted && !_previewFailed) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && !_previewFailed) {
+                              setState(() => _previewFailed = true);
+                            }
+                          });
+                        }
+                      },
+                    ),
                   ),
                 ),
 
@@ -809,11 +871,52 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
             const SizedBox(height: 12),
           ],
 
+          if (isPublishBlocked)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.statusActionBg,
+                borderRadius: BorderRadius.circular(AppRadii.card),
+                border: Border.all(color: AppColors.error),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Verification Required Before Publishing',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          mediaGenerationMismatch
+                              ? 'The processed media asset belongs to an earlier photo. Retake or re-enhance the photo before publishing.'
+                              : (missingPhoto
+                                  ? 'A valid product photo is required. Placeholders cannot be published.'
+                                  : 'The photo preview could not be loaded or verified. Please verify the image.'),
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.ink),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           AppButton(
             label: 'list_product_btn'.tr(),
             icon: Icons.cloud_upload_outlined,
             isLoading: _isPublishing,
-            onPressed: _handleListProduct,
+            onPressed: (_isPublishing || isPublishBlocked) ? null : _handleListProduct,
           ),
           const SizedBox(height: 20),
         ],

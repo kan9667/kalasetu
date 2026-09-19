@@ -12,6 +12,14 @@ import 'package:kalasetu/features/social_media/providers/social_media_provider.d
 
 class MockHttpOverrides extends HttpOverrides {}
 
+class _FakeAddProductNotifier extends StateNotifier<AddProductDraft>
+    implements AddProductFlowNotifier {
+  _FakeAddProductNotifier(super.state);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 class _FakeSocialMediaService extends Fake implements SocialMediaService {
   @override
   Future<void> linkDraftsToListing({
@@ -48,7 +56,10 @@ class _FakeProductListNotifier extends StateNotifier<AsyncValue<List<Product>>>
       category: 'Pottery',
       status: publishReturnStatus,
       revision: revision ?? 1,
-      contentHash: contentHash,
+      contentHash: contentHash ?? '1111111111111111111111111111111111111111111111111111111111111111',
+      publishedAt: publishReturnStatus == ProductStatus.published ? DateTime.now() : null,
+      approvedAt: publishReturnStatus == ProductStatus.published ? DateTime.now() : null,
+      approvedRevision: publishReturnStatus == ProductStatus.published ? (revision ?? 1) : null,
     );
   }
 
@@ -72,7 +83,7 @@ class _ThrowingProductListNotifier extends StateNotifier<AsyncValue<List<Product
     String? contentHash,
     String? idempotencyKey,
   }) async {
-    throw Exception('Server 500 error: Internal server failure during publish');
+    throw Exception('Simulated network error during approval');
   }
 
   @override
@@ -83,6 +94,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tempDir;
+  late AddProductDraft testDraft;
 
   setUpAll(() async {
     HttpOverrides.global = MockHttpOverrides();
@@ -98,6 +110,17 @@ void main() {
     if (!Hive.isBoxOpen('pending_sync_box')) await Hive.openBox<String>('pending_sync_box');
     if (!Hive.isBoxOpen('user_profile_box')) await Hive.openBox<UserProfile>('user_profile_box');
     if (!Hive.isBoxOpen('draft_box')) await Hive.openBox('draft_box');
+
+    final samplePhoto = File('${tempDir.path}/sample_pot.jpg')
+      ..writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]);
+
+    testDraft = AddProductDraft(
+      titleEn: 'Handmade Bowl',
+      category: 'Pottery',
+      finalPrice: 500.0,
+      floorPrice: 300.0,
+      originalImagePath: samplePhoto.path,
+    );
   });
 
   tearDownAll(() async {
@@ -116,6 +139,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          addProductFlowProvider.overrideWith((ref) => _FakeAddProductNotifier(testDraft)),
           connectivityProvider.overrideWith((ref) => Stream.value(true)),
           productListProvider.overrideWith((ref) => _FakeProductListNotifier(ProductStatus.pendingApprovalSync)),
           userProfileProvider.overrideWith((ref) => UserProfileNotifier()),
@@ -158,6 +182,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          addProductFlowProvider.overrideWith((ref) => _FakeAddProductNotifier(testDraft)),
           connectivityProvider.overrideWith((ref) => Stream.value(true)),
           productListProvider.overrideWith((ref) => _ThrowingProductListNotifier()),
           userProfileProvider.overrideWith((ref) => UserProfileNotifier()),
@@ -194,6 +219,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          addProductFlowProvider.overrideWith((ref) => _FakeAddProductNotifier(testDraft)),
           connectivityProvider.overrideWith((ref) => Stream.value(true)),
           productListProvider.overrideWith((ref) => _FakeProductListNotifier(ProductStatus.published)),
           userProfileProvider.overrideWith((ref) => UserProfileNotifier()),
