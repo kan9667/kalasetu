@@ -48,14 +48,14 @@ def regex_extract_cost_cues(text: str) -> Dict[str, float]:
 
     # 2. Labor hours: e.g. "4 hours", "3.5 hrs", "2 days", "4 ghante", "4 घंटे", "2 दिन"
     # Days conversion: 1 day = 8 working hours
-    days_match = re.search(r"(?i)(?<!\d)(\d+(?:\.\d+)?)\s*(?:days?|दिन)(?:\D|$)", clean)
+    days_match = re.search(r"(?i)(?<!\d)(\d+(?:\.\d+)?)\s*(?:days?|दिन)(?!\w)", clean)
     if days_match:
         try:
             labor_hours = float(days_match.group(1)) * 8.0
         except ValueError:
             pass
     else:
-        hours_match = re.search(r"(?i)(?<!\d)(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|ghante|ghanta|घंटे|घण्टे|घंटा)(?:\D|$)", clean)
+        hours_match = re.search(r"(?i)(?<!\d)(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|ghante|ghanta|घंटे|घण्टे|घंटा)(?!\w)", clean)
         if hours_match:
             try:
                 labor_hours = float(hours_match.group(1))
