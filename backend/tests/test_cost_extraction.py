@@ -165,3 +165,16 @@ def test_pricing_suggest_defensive_description_extraction():
     assert data["floor_price"] > 0
     assert data["floor_price"] == 450.0 + (2.0 * DEFAULT_HOURLY_RATE)
     assert data["suggested_price"] >= data["floor_price"]
+
+
+def test_cost_extraction_redos_resilience():
+    """Verify that regex cost extraction is immune to polynomial ReDoS attacks on repetitive comma-number inputs."""
+    import time
+    evil_input = "9" + ",9" * 3000
+    start = time.perf_counter()
+    result = regex_extract_cost_cues(evil_input)
+    elapsed = time.perf_counter() - start
+
+    assert result["materials"] == 0.0
+    # Must complete in under 50ms (previously took multiple seconds)
+    assert elapsed < 0.05, f"ReDoS vulnerability detected: execution took {elapsed:.4f}s"
