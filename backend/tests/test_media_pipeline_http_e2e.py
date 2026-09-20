@@ -19,10 +19,13 @@ from unittest.mock import patch, AsyncMock
 import pytest
 from httpx import AsyncClient, ASGITransport
 from PIL import Image
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.orm import sessionmaker
 
 from backend.main import app
-from backend.database import SessionLocal, init_db
-from backend.models.db_models import ArtisanDB, MediaAssetDB, ProductDB, ProductStatus
+from backend.config import get_settings
+from backend.database import get_db
+from backend.models.db_models import ArtisanDB, MediaAssetDB, ProductDB, ProductStatus, Base
 from backend.utils.auth import create_access_token
 from backend.utils.hashing import compute_content_hash
 
@@ -35,53 +38,112 @@ VALID_PNG_BYTES = (
 
 
 @pytest.fixture(scope="module")
-def setup_media_tenants():
-    init_db()
-    db = SessionLocal()
+def media_e2e_env(tmp_path_factory):
+    """
+    Isolate database, media storage settings, and FastAPI dependency injection
+    for end-to-end media pipeline tests.
+    """
+    tmp_path = tmp_path_factory.mktemp("media_e2e_suite")
+    db_file = tmp_path / "media_pipeline_e2e.db"
+    test_db_url = f"sqlite:///{db_file}"
 
-    artisan_a = db.query(ArtisanDB).filter(ArtisanDB.id == "artisan_media_pipe_a").first()
-    if not artisan_a:
-        artisan_a = ArtisanDB(
-            id="artisan_media_pipe_a",
-            name="Artisan Ananya",
-            phone="+919800000001",
-            craft_type="Terracotta",
-        )
-        db.add(artisan_a)
+    test_engine = create_engine(
+        test_db_url,
+        connect_args={"check_same_thread": False},
+    )
 
-    artisan_b = db.query(ArtisanDB).filter(ArtisanDB.id == "artisan_media_pipe_b").first()
-    if not artisan_b:
-        artisan_b = ArtisanDB(
-            id="artisan_media_pipe_b",
-            name="Artisan Bharat",
-            phone="+919800000002",
-            craft_type="Woodcarving",
-        )
-        db.add(artisan_b)
+    @event.listens_for(test_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+    with test_engine.connect() as conn:
+        conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY);"))
+        conn.execute(text("DELETE FROM alembic_version;"))
+        conn.execute(text("INSERT INTO alembic_version (version_num) VALUES ('0004_sms_dispatch_logs');"))
+        conn.commit()
+
+    # Isolate media upload directory
+    test_upload_dir = tmp_path / "uploads"
+    test_upload_dir.mkdir(parents=True, exist_ok=True)
+    orig_upload_dir = get_settings().upload_dir
+    get_settings().upload_dir = str(test_upload_dir)
+
+    # Override dependency injection
+    def _override_get_db():
+        db = TestingSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = _override_get_db
+
+    # Seed required tenants
+    db = TestingSessionLocal()
+    demo_phone = "9876543210"
+    artisan_01 = ArtisanDB(
+        id="artisan_01",
+        name="Rameshwar Lal Kumhar",
+        phone=demo_phone,
+        craft_type="Terracotta Pottery",
+    )
+    db.add(artisan_01)
+
+    artisan_a = ArtisanDB(
+        id="artisan_media_pipe_a",
+        name="Artisan Ananya",
+        phone="+919800000001",
+        craft_type="Terracotta",
+    )
+    db.add(artisan_a)
+
+    artisan_b = ArtisanDB(
+        id="artisan_media_pipe_b",
+        name="Artisan Bharat",
+        phone="+919800000002",
+        craft_type="Woodcarving",
+    )
+    db.add(artisan_b)
 
     db.commit()
-    token_a = create_access_token("artisan_media_pipe_a")
-    token_b = create_access_token("artisan_media_pipe_b")
     db.close()
 
-    return {
-        "artisan_a": "artisan_media_pipe_a",
+    token_a = create_access_token("artisan_media_pipe_a")
+    token_b = create_access_token("artisan_media_pipe_b")
+
+    env_data = {
+        "session_maker": TestingSessionLocal,
         "token_a": token_a,
-        "artisan_b": "artisan_media_pipe_b",
         "token_b": token_b,
+        "upload_dir": test_upload_dir,
+        "tmp_path": tmp_path,
     }
+
+    try:
+        yield env_data
+    finally:
+        # Restore overrides and settings
+        app.dependency_overrides.pop(get_db, None)
+        get_settings().upload_dir = orig_upload_dir
+        test_engine.dispose()
 
 
 @pytest.mark.anyio
-async def test_full_media_pipeline_lifecycle(setup_media_tenants, tmp_path):
+async def test_full_media_pipeline_lifecycle(media_e2e_env):
     """
     Test complete lifecycle from upload -> enhancement -> draft -> approval -> public media access -> unpublish.
     """
     transport = ASGITransport(app=app)
-    token_a = setup_media_tenants["token_a"]
-    token_b = setup_media_tenants["token_b"]
+    token_a = media_e2e_env["token_a"]
+    token_b = media_e2e_env["token_b"]
     headers_a = {"Authorization": f"Bearer {token_a}"}
     headers_b = {"Authorization": f"Bearer {token_b}"}
+    SessionLocal = media_e2e_env["session_maker"]
+    tmp_path = media_e2e_env["tmp_path"]
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Step 1: Upload raw image
@@ -223,14 +285,16 @@ async def test_full_media_pipeline_lifecycle(setup_media_tenants, tmp_path):
 
 
 @pytest.mark.anyio
-async def test_degraded_enhancement_lineage_and_non_collapsing(setup_media_tenants, tmp_path):
+async def test_degraded_enhancement_lineage_and_non_collapsing(media_e2e_env):
     """
     Test that when enhancement falls back, is_degraded is True with degraded_reason,
     source_media_id points to the raw asset, and the asset is NOT collapsed into the raw asset.
     """
     transport = ASGITransport(app=app)
-    token_a = setup_media_tenants["token_a"]
+    token_a = media_e2e_env["token_a"]
     headers_a = {"Authorization": f"Bearer {token_a}"}
+    SessionLocal = media_e2e_env["session_maker"]
+    tmp_path = media_e2e_env["tmp_path"]
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Upload a unique image

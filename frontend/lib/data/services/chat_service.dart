@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/config/api_config.dart';
 import '../../core/network/authenticated_http_client.dart';
+import '../../core/network/request_session_context.dart';
 import '../../core/network/session_expired_exception.dart';
 import '../../core/storage/secure_token_storage.dart';
 import '../models/chat_message.dart';
@@ -61,6 +62,7 @@ class HttpChatService implements ChatService {
     String? artisanCraft,
     String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final activeUrl = ApiConfig.baseUrl;
     _dio.options.baseUrl = activeUrl;
 
@@ -89,6 +91,7 @@ class HttpChatService implements ChatService {
         data: payload,
         options: Options(
           headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
         ),
       );
 
@@ -135,6 +138,7 @@ class HttpChatService implements ChatService {
     String? artisanCraft,
     String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final activeUrl = ApiConfig.baseUrl;
     _dio.options.baseUrl = activeUrl;
 
@@ -163,6 +167,7 @@ class HttpChatService implements ChatService {
         data: formData,
         options: Options(
           headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
         ),
       );
 

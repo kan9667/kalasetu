@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/config/api_config.dart';
 import '../../core/network/authenticated_http_client.dart';
+import '../../core/network/request_session_context.dart';
 import '../../core/network/session_expired_exception.dart';
 import '../../core/storage/secure_token_storage.dart';
 
@@ -149,6 +150,7 @@ class HttpPricingService implements PricingService {
     double? hourlyWage,
     String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final operationKey = idempotencyKey ??
         'idem_price_${category.hashCode.abs()}_${(rawMaterialCost ?? 0).toInt()}_${(laborHours ?? 0).toInt()}';
 
@@ -174,6 +176,7 @@ class HttpPricingService implements PricingService {
         data: payload,
         options: Options(
           headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
         ),
       );
 

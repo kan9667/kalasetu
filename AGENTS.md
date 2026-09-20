@@ -169,7 +169,7 @@ Status of review findings after Phase 1 Trust & Data Integrity implementation:
   /pricing/suggest-from-voice, /chat/message), with lineage-aware deduplication and request-scoped cleanup.
 - [RESOLVED] Client Key Ownership & Durable Media Cache: AuthInterceptor generation eliminated; caller-owned
   persisted idempotency keys; retryable SecureTokenStorage migration with legacy fallback; PrivateMediaCache
-  bounded to 15MB with atomic rename, staging cleanup, and zero token leakage; POSIX 0600 quarantine enforcement.
+  bounded to 15MB with atomic rename, staging cleanup, and verified credential isolation; POSIX 0600 quarantine enforcement.
 - [RESOLVED] Private Media Access Security: Origin verification (`isConfiguredApiOrigin`) enforcing scheme, host,
   and port matching against `ApiConfig.baseUrl` preventing bearer leakage to third-party endpoints; strict regex
   `^[a-zA-Z0-9_-]+$` preventing directory traversal; backend (`srv_<hash>`) and account (`acc_<hash>`) directory
@@ -195,7 +195,7 @@ Status of review findings after Phase 1 Trust & Data Integrity implementation:
   imageInputGeneration`); photo retakes immediately invalidate previous enhancement results and require fresh
   preview generation; unenhanced raw photos require verified local disk existence (`File.existsSync()`); publication
   is strictly blocked if preview generation fails, the local file is missing, or media generation mismatches,
-  guaranteeing an artisan never approves an unseen or misattributed asset.
+  preventing approval of unverified assets in the tested review flow.
 - [RESOLVED] Repository Initialization Barrier & Fail-Closed Deserialization: Single-flight `ProductRepository.initialize()`
   gates all mutating and read methods (`getProducts`, `addProduct`, `updateProduct`, `approveAndPublishProduct`,
   `deleteProduct`, `unpublishProduct`, `syncPendingQueue`), awaiting database hydration, schema migrations, and
@@ -350,22 +350,43 @@ Status of review findings after Phase 1 Trust & Data Integrity implementation:
   `ProductRepository` mutations (`addProduct`, `updateProduct`, `deleteProduct`, `unpublishProduct`, `approveAndPublishProduct`) capture initiating owner, backend, and session generation before asynchronous initialization/preparation. Validates initialized artisan mode, originating owner, backend origin, and session generation after preparation and before each network stage (including multi-stage `upload -> attach -> publish`). Carries expected operation identity across async boundaries into request options via `Zone.current` and options extra, preventing late authorization under replacement accounts during token retrieval. On session invalidation, stops dispatch and safely preserves recoverable work under its original identity and idempotency key without exposing or executing it under replacement accounts.
 - [RESOLVED] Test Repeatability & Media Deduplication Isolation:
   Investigated transient failure in `test_full_media_pipeline_lifecycle` in `backend/tests/test_media_pipeline_http_e2e.py`. Discovered that database records pointing to ephemeral temporary files from prior test runs (e.g. `tmp_path`) could cause deduplication to reuse non-existent files on disk, returning downstream 404s. Hardened `backend/routers/catalog.py` and `backend/routers/media.py` to check `Path.exists()` before reusing existing raw and derived media records, and isolated test runs with unique image payload bytes.
-- [RESOLVED] Test Coverage & Verification: 144 backend tests passing under Python 3.14 (1 skipped:
+- [RESOLVED] Queue-to-HTTP Identity Binding, Stale-Revision Recovery Guards & Suite Storage Isolation:
+  Audit of all 7 protected client callers (`HttpApiService`, `UploadApi`/`RealUploadApi`, `SpeechService`, `PricingService`,
+  `ImageEnhancerService`, `ChatService`, `SocialMediaService`) captures initiating session identity before asynchronous preparation
+  via `RequestSessionContext.capture()`. `AuthInterceptor` strictly enforces mandatory mutation context (`expected_user_id`,
+  `expected_session_gen`, `expected_backend_origin`) for all mutating HTTP calls (`POST`, `PUT`, `PATCH`, `DELETE`) and never
+  manufactures context from the active account. Outgoing request URI origin (`options.uri`) and active backend (`ApiConfig.baseUrl`)
+  are both validated against `expected_backend_origin` before and after token retrieval. On logout, account switch, session generation
+  change, or simulation mode, requests fail closed (HTTP 401 `SessionExpiredException`) with zero network dispatch.
+  In `HttpApiService._sessionExtra()`, inherited operation backend or owner from Zone context cannot be overridden by client configuration
+  or method arguments, failing closed with `StateError` to preserve operation provenance. `uploadMediaFile` captures context
+  before its first `await`. In `ProductRepository.syncPendingQueue()`, stale-revision (HTTP 409) recovery validates the initiating session
+  at 3 distinct boundaries: before `getProduct`, after its response, and before cache/fallback writes; invalidation preserves the original
+  queued operation, dependencies, payload, and idempotency key without incrementing `retryCount`. `frontend/test/queued_dispatch_test.dart`
+  adds 11 deterministic regressions covering pre-interceptor and mid-token-retrieval session transitions, conflict-recovery races, all 7
+  queued mutation types, cross-origin URI rejection, explicit client URL override rejection, pre-interceptor account-switch race,
+  and successful replay after account restoration. On the backend, `backend/tests/conftest.py` establishes complete test database
+  and media storage isolation in a process-owned temporary directory (`sys._kalasetu_test_storage_dir`), strictly prevents deletion
+  of paths from environment variables, verifies cleanup only touches system temp subdirectories, validates that database engine and upload
+  paths point strictly inside test storage, and fails closed immediately if an engine points outside test-owned storage (`test_backend_isolation.py`).
+- [RESOLVED] Test Coverage & Verification: 150 backend tests passing under Python 3.14 (1 skipped:
   `test_stage1_standalone_image_pipeline` in `backend/tests/test_image_pipeline_integration.py`, opt-in via
   `RUN_REMBG_TESTS=1` to isolate heavy rembg u2net ONNX model weight downloads); 3 migration tests passing
-  (fresh DB upgrade, upgrade from 0001, and downgrade/re-upgrade of 0004); 216 Flutter tests passing
-  (including all 6 in `actual_dispatch_test.dart`, all 6 in `ownership_lifecycle_test.dart`, all 6 in
-  `session_boundary_adversarial_test.dart`, all 6 in `replay_identity_test.dart`, all 4 in `session_race_test.dart`,
-  all 13 in `coalescing_and_unpublish_adversarial_test.dart`, all 6 in `offline_outbox_durability_test.dart`, and live
-  FastAPI wire test `real_http_outbox_integration_test.dart`) with 0 `flutter analyze` issues and clean
-  `git diff --check`. Earlier counts (138 backend / 186 Flutter, 144 backend / 198 Flutter, 144 backend / 204 Flutter,
-  and 144 backend / 210 Flutter) represent previous baseline checkpoints.
+  (fresh DB upgrade, upgrade from 0001, and downgrade/re-upgrade of 0004); 227 Flutter tests passing
+  (including all 11 in `queued_dispatch_test.dart`, all 6 in `actual_dispatch_test.dart`, all 6 in `ownership_lifecycle_test.dart`,
+  all 6 in `session_boundary_adversarial_test.dart`, all 6 in `replay_identity_test.dart`, all 4 in `session_race_test.dart`,
+  all 13 in `coalescing_and_unpublish_adversarial_test.dart`, all 6 in `offline_outbox_durability_test.dart`, all 6 in
+  `authenticated_http_client_test.dart`, and live FastAPI wire test `real_http_outbox_integration_test.dart`) with 0 `flutter analyze`
+  issues and clean `git diff --check`. Developer storage isolation is proven by explicit process-scoped path isolation and
+  fail-closed engine URL assertions (`engine.url.database.is_relative_to(_TEST_STORAGE_DIR)`) verifying developer files are neither
+  opened nor mutated. Earlier counts (138 backend / 186 Flutter, 144 backend / 198 Flutter, 144 backend / 204 Flutter,
+  144 backend / 210 Flutter, 144 backend / 216 Flutter, and 144 backend / 224 Flutter) represent previous baseline checkpoints.
 
 ### Verification Status & Operational Boundaries
 
 To maintain strict truthfulness, the repository distinguishes five operational boundaries:
 1. **Implemented and automatically tested**: Full end-to-end integration and unit tests passing in automated CI/CD
-   and local developer test harnesses (144 backend tests and 216 Flutter tests with SQLite foreign keys, Alembic migrations,
+   and local developer test harnesses (150 backend tests and 227 Flutter tests with SQLite foreign keys, Alembic migrations,
    Drift SQLite disk queue, mocked HTTP adapters, and live FastAPI wire test on loopback).
 2. **Reproduced and resolved**: Independent review findings reproduced and resolved with regression tests:
    HTTPX URL logging credential leak (`test_real_httpx_logging_does_not_expose_fixture_credentials`), concurrent quota
@@ -375,8 +396,14 @@ To maintain strict truthfulness, the repository distinguishes five operational b
    (`test_rejected_concurrent_request_preserves_delivered_otp`), post-dispatch read error / timeout quota retention
    (`test_post_dispatch_read_error_keeps_budget_reserved`), changed image replay failure
    (`changed image bytes must not replay under the old identity`), actual HTTP client simulation token attachment
-   (`test real product API client cannot use retained artisan token in simulation`), and account switch during repository
-   initialization (`test account switch during repository initialization blocks online create dispatch`).
+   (`test real product API client cannot use retained artisan token in simulation`), account switch during repository
+   initialization (`test account switch during repository initialization blocks online create dispatch`), cross-account
+   in-flight/queued claim (`test artisan B cannot claim or dispatch artisan A's in-flight or queued request`), ownerless
+   outbox record quarantine (`test ownerless operation does not replay under replacement account`), cross-backend
+   replay prevention (`test operation queued on backend A does not replay against backend B`), mid-token retrieval
+   backend transition abort (`backend switch during token read must prevent transport`), client URL override rejection
+   (`explicit client URL must not override queued backend provenance`), and pre-interceptor account-switch race
+   (`account-switch race: pause after repository session check but before AuthInterceptor starts`).
 3. **Simulated demo behavior**: Demo OTP (`123456`) is explicitly restricted to non-production environments where
    `ALLOW_DEMO_OTP=true` and `ENVIRONMENT != "production"`. NGO/coordinator logins are explicitly tagged as simulated
    (`isNgoSimulation: true`) and isolated from artisan bearer token authorization. Speech-to-text is tested via mock

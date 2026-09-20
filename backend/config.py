@@ -189,5 +189,6 @@ def validate_production_secrets(settings: Settings = None) -> None:
 
 def ensure_upload_dir() -> Path:
     """Ensure media upload directory exists."""
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    return UPLOAD_DIR
+    upload_path = Path(get_settings().upload_dir)
+    upload_path.mkdir(parents=True, exist_ok=True)
+    return upload_path

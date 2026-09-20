@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:kalasetu/core/config/api_config.dart';
 import 'package:kalasetu/core/network/authenticated_http_client.dart';
 import 'package:kalasetu/core/storage/secure_token_storage.dart';
 
@@ -10,8 +11,11 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tempDir;
+  late String originalBaseUrl;
 
   setUp(() async {
+    originalBaseUrl = ApiConfig.baseUrl;
+    ApiConfig.setBaseUrl('https://example.com');
     tempDir = await Directory.systemTemp.createTemp('auth_http_test_');
     Hive.init(tempDir.path);
     final authBox = await Hive.openBox('auth_box');
@@ -21,6 +25,7 @@ void main() {
   });
 
   tearDown(() async {
+    ApiConfig.setBaseUrl(originalBaseUrl);
     await Hive.close();
     if (tempDir.existsSync()) {
       tempDir.deleteSync(recursive: true);
@@ -86,6 +91,11 @@ void main() {
         data: {'name': 'test'},
         options: Options(
           headers: {'Idempotency-Key': 'my_preserved_stable_key_456'},
+          extra: {
+            'expected_user_id': 'artisan_test',
+            'expected_session_gen': 0,
+            'expected_backend_origin': 'https://example.com',
+          },
         ),
       );
 
@@ -111,7 +121,17 @@ void main() {
         ),
       );
 
-      await dio.post('/create-item', data: {});
+      await dio.post(
+        '/create-item',
+        data: {},
+        options: Options(
+          extra: {
+            'expected_user_id': 'artisan_test',
+            'expected_session_gen': 0,
+            'expected_backend_origin': 'https://example.com',
+          },
+        ),
+      );
 
       expect(captured, isNotNull);
       expect(captured!.headers['Idempotency-Key'], isNull);

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/network/authenticated_http_client.dart';
+import '../../core/network/request_session_context.dart';
 import '../../core/network/session_expired_exception.dart';
 import '../../core/offline_sync/offline_sync_service.dart';
 import '../../core/storage/secure_token_storage.dart';
@@ -108,6 +109,8 @@ class HttpImageEnhancerService implements ImageEnhancerService {
       );
     }
 
+    final sessionExtra = RequestSessionContext.capture().toExtra();
+
     // If already a web URL, return directly
     if (inputPathOrUrl.startsWith('http://') ||
         inputPathOrUrl.startsWith('https://')) {
@@ -158,6 +161,7 @@ class HttpImageEnhancerService implements ImageEnhancerService {
           data: formData,
           options: Options(
             headers: {'Idempotency-Key': operationKey},
+            extra: sessionExtra,
           ),
         );
 

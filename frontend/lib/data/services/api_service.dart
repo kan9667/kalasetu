@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/config/api_config.dart';
+import '../../core/network/active_session_manager.dart';
 import '../../core/network/authenticated_http_client.dart';
+import '../../core/storage/private_media_cache.dart';
 import '../../core/storage/secure_token_storage.dart';
 import '../models/product.dart';
 
@@ -63,6 +65,45 @@ class HttpApiService implements ApiService {
     _dio.options.baseUrl = activeUrl;
   }
 
+  Map<String, dynamic> _sessionExtra({String? overrideUserId}) {
+    // 1. Owner: Check if operation owner was inherited from Zone
+    final inheritedZoneUser = Zone.current[#kalasetuExpectedUserId] as String?;
+    if (inheritedZoneUser != null && inheritedZoneUser.isNotEmpty) {
+      if (overrideUserId != null && overrideUserId.isNotEmpty && inheritedZoneUser != overrideUserId) {
+        throw StateError(
+          'Cannot override inherited operation owner "$inheritedZoneUser" with "$overrideUserId"',
+        );
+      }
+    }
+
+    // 2. Backend: Check if operation backend was inherited from Zone
+    final inheritedZoneBackend = Zone.current[#kalasetuExpectedBackend] as String?;
+    final explicitBase = _explicitBaseUrl;
+    if (inheritedZoneBackend != null && inheritedZoneBackend.isNotEmpty) {
+      if (explicitBase != null && explicitBase.isNotEmpty) {
+        final normInherited = PrivateMediaCache.normalizeBackendOrigin(inheritedZoneBackend);
+        final normExplicit = PrivateMediaCache.normalizeBackendOrigin(explicitBase);
+        if (normInherited != normExplicit) {
+          throw StateError(
+            'Cannot override inherited operation backend "$normInherited" with explicit client URL "$normExplicit"',
+          );
+        }
+      }
+    }
+
+    final zoneGen = Zone.current[#kalasetuExpectedSessionGen] as int?;
+
+    final effectiveUser = inheritedZoneUser ?? overrideUserId ?? ActiveSessionManager.getCurrentUserIdSync();
+    final effectiveGen = zoneGen ?? ActiveSessionManager.sessionGeneration;
+    final effectiveBackend = inheritedZoneBackend ?? explicitBase ?? ApiConfig.baseUrl;
+
+    return {
+      if (effectiveUser != null && effectiveUser.isNotEmpty) 'expected_user_id': effectiveUser,
+      'expected_session_gen': effectiveGen,
+      'expected_backend_origin': effectiveBackend,
+    };
+  }
+
   @override
   Future<List<Product>> getProducts({String? artisanId, String? category}) async {
     _syncBaseUrl();
@@ -112,17 +153,6 @@ class HttpApiService implements ApiService {
     }
   }
 
-  Map<String, dynamic> _sessionExtra() {
-    final extra = <String, dynamic>{};
-    final expectedUserId = Zone.current[#kalasetuExpectedUserId] as String?;
-    final expectedSessionGen = Zone.current[#kalasetuExpectedSessionGen] as int?;
-    final expectedBackendOrigin = Zone.current[#kalasetuExpectedBackend] as String?;
-    if (expectedUserId != null) extra['expected_user_id'] = expectedUserId;
-    if (expectedSessionGen != null) extra['expected_session_gen'] = expectedSessionGen;
-    if (expectedBackendOrigin != null) extra['expected_backend_origin'] = expectedBackendOrigin;
-    return extra;
-  }
-
   @override
   Future<Product> createProduct(Product product, {String? artisanId, String? idempotencyKey}) async {
     _syncBaseUrl();
@@ -134,7 +164,7 @@ class HttpApiService implements ApiService {
         headers: {
           'Idempotency-Key': effectiveKey,
         },
-        extra: _sessionExtra(),
+        extra: _sessionExtra(overrideUserId: artisanId),
       );
       debugPrint('[HttpApiService] POST ${_dio.options.baseUrl}/api/v1/products: ${product.title}');
       final response = await _dio.post('/api/v1/products', data: payload, options: options);
@@ -264,6 +294,8 @@ class HttpApiService implements ApiService {
 
   @override
   Future<Map<String, dynamic>> uploadMediaFile(String filePath, {String? idempotencyKey}) async {
+    // Capture session context synchronously before the first await!
+    final extra = _sessionExtra();
     _syncBaseUrl();
     try {
       final file = File(filePath);
@@ -280,7 +312,7 @@ class HttpApiService implements ApiService {
         headers: {
           'Idempotency-Key': effectiveKey,
         },
-        extra: _sessionExtra(),
+        extra: extra,
       );
       debugPrint('[HttpApiService] POST ${_dio.options.baseUrl}/api/v1/media/upload');
       final response = await _dio.post('/api/v1/media/upload', data: formData, options: options);

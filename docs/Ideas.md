@@ -32,29 +32,47 @@ Status vocabulary:
 | 3 — Marketplace and operations integration | Approved listings reach real channels; orders and operations become authoritative | Channel-by-channel rollout, not an all-at-once launch |
 | Future scope — Optional expansion | More languages, immersive discovery and partner-led services | Requires separate prioritization and approval |
 
-### Current checkpoint — not a release sign-off
+### Current checkpoint — Phase 1 verification closed, physical pilot pending
 
-The latest independent local verification in this review thread reported
-**144 backend tests passed, 1 skipped; 204 Flutter tests passed; clean Flutter
-analysis and git diff whitespace checks**. The skipped real image-model test
-is opt-in through `RUN_REMBG_TESTS=1`. These are historical checkpoint results,
-not a fresh run performed while editing this roadmap or proof of CI execution.
+The latest comprehensive local verification on the Phase 1 branch reported
+**150 backend tests passed, 1 skipped; 227 Flutter tests passed; clean Flutter
+analysis (0 issues) and git diff whitespace checks (0 issues)**. The skipped real
+image-model test is opt-in through `RUN_REMBG_TESTS=1`.
 
-Three additional mocked regressions remain open from the latest review:
+The three previously open queue-identity regressions are now resolved and verified
+with deterministic regression tests:
 
-1. A request started by artisan A can be queued as artisan B after an account
-   switch and online failure.
-2. Existing outbox records without an owner can replay under the current artisan.
-3. An operation queued against backend A can replay against backend B because
-   backend identity is not persisted on the operation.
+1. **Originating artisan binding**: Synchronous identity capture at the repository
+   boundary (`RequestSessionContext.capture()`) and execution zone inheritance prevent
+   a request started by artisan A from ever being queued or dispatched as artisan B
+   after an account switch or online failure (`ownership_lifecycle_test.dart`,
+   `queued_dispatch_test.dart`).
+2. **Ownerless outbox quarantine**: Outbox records without an owner strictly fail closed
+   (“missing owner is not authorization”). Recoverable records are restored from payload
+   snapshots; unrecoverable records transition to `statusUserActionRequired` quarantine
+   rather than replaying under the active artisan (`ownership_lifecycle_test.dart`).
+3. **Backend scope enforcement**: Operations persist originating `backend` origin at
+   enqueue time. `AuthInterceptor` validates both outgoing request URI origin
+   (`options.uri`) and active client configuration (`ApiConfig.baseUrl`) against
+   the operation's captured backend origin both before and after token retrieval,
+   blocking cross-backend replay (`queued_dispatch_test.dart`).
+4. **Pre-interceptor race protection**: Pausing between repository session validation
+   and `AuthInterceptor` dispatch during an account switch proves 0 transport requests
+   reach the wire, preserving queued work and idempotency keys with `retryCount == 0`.
 
-Therefore Phase 1 is **awaiting closure of durable operation identity**, even
-where broader “resolved” summaries exist elsewhere. Close each finding using
-code and test evidence; do not infer closure from total test counts.
+**Operational boundaries and verification separation**:
+- **Automated verification**: Confirms correctness of data structures, cryptographic
+  hashes, cost-floor enforcement, session boundary transitions, and HTTP contracts in
+  isolated SQLite/mock/loopback environments.
+- **Physical-device testing**: Camera hardware sensors, microphone background interruptions,
+  WorkManager OS scheduling, low-memory pressure, and battery restrictions are separate
+  verification boundaries requiring execution on physical mobile hardware (see Section 4.7).
+- **Carrier SMS delivery**: Live cellular delivery via 2Factor remains disabled
+  (`ENABLE_REAL_SMS=false`) to protect API credits and budget; carrier delivery is a
+  separately authorized pilot step.
+- **Future architectural phases**: PostgreSQL/Supabase with RLS, cloud object storage,
+  durable worker queues, and GeM/ONDC marketplace integration remain deferred to Phase 2 and 3.
 
-Real cellular delivery, physical-device field behavior, hosted storage/database
-operation, and GeM/ONDC integration are separate verification boundaries.
-Real SMS must remain disabled unless the user explicitly authorizes a delivery test.
 
 ## 2. Rules that apply to every phase
 
@@ -223,21 +241,45 @@ interruption. Build on the existing prototype; completion is evidence-based.
 - Regression fixtures for every reproduced defect, including the three current blockers.
 - Updated architecture/API documentation and a bounded local-prototype verification report.
 
-### Exit criteria
+### Exit criteria (Automated Verification)
 
-- [ ] The three current queue-identity failures are fixed and independently reproduced as passing.
-- [ ] Unauthorized/cross-account/cross-backend replay is rejected without data loss.
-- [ ] No public revision bypasses exact-content approval or the cost floor.
-- [ ] Restart, duplicate retry, response loss, stale input and storage corruption tests pass.
-- [ ] Both full suites and Flutter analysis pass; skipped model tests are explained.
-- [ ] Documented simulations and unverified external capabilities remain clearly labelled.
-- [ ] Sign-off names the tested revision and limitations rather than asserting universal safety.
+- [x] The three queue-identity failures are fixed and independently reproduced as passing (`ownership_lifecycle_test.dart`, `queued_dispatch_test.dart`).
+- [x] Unauthorized/cross-account/cross-backend replay is rejected without data loss (verified in unit and integration suites).
+- [x] No public revision bypasses exact-content approval or the cost floor (server-enforced at mutation and publish boundaries).
+- [x] Restart, duplicate retry, response loss, stale input, and storage corruption tests pass.
+- [x] Both full suites (150 backend, 227 Flutter) and Flutter analysis pass; skipped model test (`test_stage1_standalone_image_pipeline`) explained.
+- [x] Documented simulations (demo OTP, coordinator mode, mock SMS, mock ASR) remain clearly labelled.
+- [x] Sign-off names the tested revision and operational boundaries rather than asserting universal safety.
 
-### Out of scope
+### 4.7 Physical-Device Smoke-Test Checklist (Pending Field Execution)
 
-PostgreSQL/Supabase deployment, cloud object storage, registered OS background
-workers, live GeM/ONDC integration and authoritative commerce operations.
-These must not be used to postpone unresolved Phase 1 integrity defects.
+> [!IMPORTANT]
+> **Verification Status: PENDING EXECUTION ON PHYSICAL HARDWARE.**
+> The following checklist defines the required physical smoke test sequence for Phase 2 pilot onboarding. These steps are verified in automated/mocked environments but have **NOT** yet been executed on physical hardware; do not claim them as passed without running them on target physical Android/iOS devices.
+
+**Environment Prerequisites**:
+- **Isolated Non-Production Backend**: Configured strictly with `ENVIRONMENT=development` (or `test`), `SMS_PROVIDER=mock`, `ENABLE_REAL_SMS=false`, and `ALLOW_DEMO_OTP=true`.
+- **OTP Acquisition**: Fixed OTP `123456` applies **ONLY** to primary demo number `9876543210`. For Account B (e.g. `9876543211`), backend generates a random 6-digit cryptographic OTP; obtain its generated `demo_otp` from the authorized isolated non-production login challenge response (`response["demo_otp"]`). `MockSmsProvider` records messages in memory; it does not log OTPs. Do not add OTP logging, weaken authentication, or introduce another fixed OTP.
+- **Package Verification**: Verify installed package identifier via `adb shell pm list packages | grep kalasetu` (configured as `applicationId = "com.kalasetu.kalasetu"` in `frontend/android/app/build.gradle.kts`) rather than assuming it.
+
+| Step | Action | Expected Invariant & Verification | Field Result |
+| --- | --- | --- | --- |
+| **1. Test-Mode Login (Account A)** | Enter primary demo phone (`9876543210`), request OTP under `ALLOW_DEMO_OTP=true`, enter fixed `123456`. | Receives JWT bearer token, transitions to authenticated artisan mode, persists credentials in `flutter_secure_storage`. Invalid OTP shows typed failure and creates no fake profile. | Pending Physical Run |
+| **2. Offline Capture** | Enable Airplane mode (cellular + Wi-Fi off). Tap "+" to create new listing. Take photo via device camera, record voice note or enter description, input labor hours and materials cost. | Camera frame decodes properly into byte slice. Draft snapshot serialized in `draft_box`. Step 1–4 inputs preserved. Queue badge shows pending items. No crash on lost connection. | Pending Physical Run |
+| **3a. Task-Switcher Dismissal** | While offline with active draft, swipe away app from Android overview / iOS app switcher, then reopen. | Activity resumes; draft controllers, inputs, and unenhanced photo remain intact without state destruction. | Pending Physical Run |
+| **3b. Hard Force-Stop Recovery** | While offline with active draft, verify package ID and execute `adb shell am force-stop com.kalasetu.kalasetu`. Relaunch app. | `active_draft_snapshot` restored intact from disk on startup; Step 5 review screen displays saved inputs; Drift SQLite queue retains outbox operations across process death without truncation. | Pending Physical Run |
+| **4a. Reconnect Sync (Unapproved Draft)** | Create draft offline without tapping "Approve & Publish". Re-enable connectivity and trigger sync. | Draft and media sync to backend (`status='draft'`, `is_live=False`). Product remains strictly unpublished and unlisted in public catalog; no public revision is created. | Pending Physical Run |
+| **4b. Reconnect Sync (Approved Operation)** | Complete Step 5 review offline, verify preview, tap "Approve & Publish", enqueueing outbox chain. Re-enable connectivity. | Outbox drains in dependency order (`CREATE -> MEDIA_UPLOAD -> ATTACH_MEDIA -> APPROVE_PUBLISH`). Submits `revision` and `content_hash`. Server verifies revision, content hash, ready media asset, and recalculates integer paise cost floor from stored parameters (`materials_paise + labor_hours * hourly_rate_paise + transport_paise + overhead_paise`), verifying `price_paise >= cost_floor_paise`. Product publishes only on server confirmation. | Pending Physical Run |
+| **5. Account Switch with Pending Work** | Queue work as Account A offline. Log out while offline. Temporarily connect network for login screen only; authenticate Account B (`9876543211`, obtaining `demo_otp` from the authorized isolated non-production login challenge response). Trigger sync under Account B. Log out and reconnect Account A. | While authenticated as Account B, Account A's pending outbox operations do **NOT** drain or dispatch under Account B's token. Cache partitions isolate Account A (`acc_<hash_A>`). Logging back into Account A resumes drain under Account A. | Pending Physical Run |
+| **6. Exact-Media Review** | In Step 5 review screen, inspect displayed preview image against selected asset. Retake photo. | Preview renders byte-verified image matching selected asset. Photo retake invalidates previous enhancement, clears verified media ID, and disables publishing until fresh preview is verified. | Pending Physical Run |
+| **7. Explicit Publication Boundary** | On Step 5 review screen, tap "Publish" / "Approve & Publish". | Submits `POST /api/v1/products/{id}/approve-and-publish` containing `revision` and canonical `content_hash`. Server validates stored listing price against recalculated integer paise floor, ready media asset, and content hash parity. Catalog marks item `published` only on server confirmation. | Pending Physical Run |
+| **8. Unpublish** | From catalog or product details, select "Unpublish" on a published product. | UI marks status as `pendingUnpublishSync` until server confirms. Server receives `POST /api/v1/products/{id}/unpublish` with `expected_revision` and `content_hash`, transitions item to `draft`, and removes from public view. | Pending Physical Run |
+
+### Out of scope (Deferred to Phase 2 & 3)
+
+PostgreSQL/Supabase deployment with RLS, cloud object storage (S3/GCS), registered OS background
+workers (WorkManager), live GeM/ONDC integration, and authoritative commerce operations.
+These remain deferred to their respective phases and must not be used to bypass Phase 1 integrity checks.
 
 ## 5. Phase 2 — Production foundation and controlled pilot
 
@@ -509,4 +551,3 @@ Suggested execution order:
 > publishing without separate authorization. Report exact implementation/test
 > evidence, migration implications and unresolved risks. Do not declare a phase
 > complete from a green test count alone.
-

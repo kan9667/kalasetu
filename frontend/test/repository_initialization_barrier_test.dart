@@ -100,6 +100,10 @@ void main() {
 
     productsBox = await Hive.openBox<Product>('products_box');
     pendingBox = await Hive.openBox<String>('pending_sync_box');
+    final authBox = await Hive.openBox('auth_box');
+    await authBox.put('is_authenticated', true);
+    await authBox.put('user_id', 'artisan_barrier_test');
+    await authBox.put('phone_number', '+919876543210');
   });
 
   tearDownAll(() async {

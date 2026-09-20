@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/config/api_config.dart';
 import '../../core/network/authenticated_http_client.dart';
+import '../../core/network/request_session_context.dart';
 import '../../core/network/session_expired_exception.dart';
 import '../../core/storage/secure_token_storage.dart';
 
@@ -215,6 +216,7 @@ class HttpSpeechService implements SpeechService {
     required String languageCode,
     String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final file = File(audioPath);
     if (!await file.exists()) {
       debugPrint('[HttpSpeechService] Audio file does not exist: $audioPath');
@@ -243,6 +245,7 @@ class HttpSpeechService implements SpeechService {
         data: formData,
         options: Options(
           headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
         ),
       );
 
@@ -318,6 +321,7 @@ class HttpSpeechService implements SpeechService {
           tags: ['handcrafted', 'artisan', 'kalasetu'],
         );
 
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     if (cleanTranscript.isEmpty) return fallback();
 
     final operationKey = idempotencyKey ??
@@ -342,6 +346,7 @@ class HttpSpeechService implements SpeechService {
         },
         options: Options(
           headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
         ),
       );
 

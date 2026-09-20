@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:dio/dio.dart';
 import '../../config/api_config.dart';
 import '../../network/authenticated_http_client.dart';
+import '../../network/request_session_context.dart';
 import '../../../../data/services/speech_service.dart';
 import '../models/queue_item.dart';
 
@@ -181,6 +182,7 @@ class RealUploadApi implements UploadApi {
     required String idempotencyKey,
     required String productDraftId,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final activeUrl = baseUrl.isNotEmpty ? baseUrl : ApiConfig.baseUrl;
     _dio.options.baseUrl = activeUrl;
 
@@ -195,6 +197,7 @@ class RealUploadApi implements UploadApi {
       data: formData,
       options: Options(
         headers: {'Idempotency-Key': idempotencyKey},
+        extra: sessionExtra,
       ),
     );
     final data = response.data as Map<String, dynamic>;
@@ -227,6 +230,7 @@ class RealUploadApi implements UploadApi {
     required String idempotencyKey,
     required String productDraftId,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final activeUrl = baseUrl.isNotEmpty ? baseUrl : ApiConfig.baseUrl;
     _dio.options.baseUrl = activeUrl;
 
@@ -245,6 +249,7 @@ class RealUploadApi implements UploadApi {
         data: formData,
         options: Options(
           headers: {'Idempotency-Key': idempotencyKey},
+          extra: sessionExtra,
         ),
       );
       final data = response.data as Map<String, dynamic>;
@@ -271,6 +276,7 @@ class RealUploadApi implements UploadApi {
           data: formData,
           options: Options(
             headers: {'Idempotency-Key': idempotencyKey},
+            extra: sessionExtra,
           ),
         );
         final data = fallbackResponse.data as Map<String, dynamic>;

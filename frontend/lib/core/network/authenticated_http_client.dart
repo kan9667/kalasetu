@@ -37,7 +37,11 @@ class AuthInterceptor extends Interceptor {
       return handler.reject(
         DioException(
           requestOptions: options,
-          error: StateError('Session initialization is incomplete (auth_box not initialized).'),
+          response: Response(requestOptions: options, statusCode: 401),
+          type: DioExceptionType.badResponse,
+          error: StateError(
+            'Session initialization is incomplete (auth_box not initialized).',
+          ),
         ),
       );
     }
@@ -51,15 +55,113 @@ class AuthInterceptor extends Interceptor {
     final expectedSessionGen = options.extra['expected_session_gen'] as int?;
     final expectedBackend = options.extra['expected_backend_origin'] as String?;
 
+    final method = options.method.toUpperCase();
+    final bool isMutation = method == 'POST' || method == 'PUT' || method == 'DELETE' || method == 'PATCH';
+
+    // Requirement 1: Protected mutations MUST have explicit, non-empty session context.
+    // Never manufacture missing context from the current account inside the interceptor.
+    if (isMutation) {
+      if (expectedUserId == null ||
+          expectedUserId.trim().isEmpty ||
+          expectedSessionGen == null ||
+          expectedSessionGen < 0 ||
+          expectedBackend == null ||
+          expectedBackend.trim().isEmpty) {
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
+            error: SessionExpiredException(
+              'Missing required session context for protected mutation ($method ${options.path}).',
+              401,
+            ),
+          ),
+        );
+      }
+    }
+
+    // Requirement 2: Validate the actual outgoing request URI's origin against the operation's expected backend
+    if (expectedBackend != null && expectedBackend.isNotEmpty) {
+      String? expectedNormalized;
+      try {
+        expectedNormalized = PrivateMediaCache.normalizeBackendOrigin(expectedBackend);
+      } catch (_) {
+        expectedNormalized = null;
+      }
+      if (expectedNormalized == null || expectedNormalized.isEmpty) {
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
+            error: SessionExpiredException(
+              'Malformed expected backend origin: $expectedBackend',
+              401,
+            ),
+          ),
+        );
+      }
+
+      // 1) Validate actual outgoing request URI origin
+      String? requestOrigin;
+      try {
+        requestOrigin = PrivateMediaCache.normalizeBackendOrigin(options.uri.toString());
+      } catch (_) {
+        requestOrigin = null;
+      }
+      if (requestOrigin == null || requestOrigin != expectedNormalized) {
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
+            error: SessionExpiredException(
+              'Request URI origin ($requestOrigin) does not match expected backend ($expectedNormalized).',
+              401,
+            ),
+          ),
+        );
+      }
+
+      // 2) Validate currently active backend origin
+      String? activeBackendOrigin;
+      try {
+        activeBackendOrigin = PrivateMediaCache.normalizeBackendOrigin(ApiConfig.baseUrl);
+      } catch (_) {
+        activeBackendOrigin = null;
+      }
+      if (activeBackendOrigin == null || activeBackendOrigin != expectedNormalized) {
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
+            error: SessionExpiredException(
+              'Currently active backend ($activeBackendOrigin) does not match expected backend ($expectedNormalized).',
+              401,
+            ),
+          ),
+        );
+      }
+    }
+
+    // Requirement 3: On logout, account/backend/generation changes, or entry into NGO simulation,
+    // reject bound operations completely. Merely removing Authorization and forwarding the request is insufficient.
     if (expectedUserId != null && expectedUserId.isNotEmpty) {
-      // Bound operation must run strictly under initialized artisan session matching initiating identity
       if (modeBefore != ActiveSessionMode.artisan) {
         options.headers.remove('Authorization');
         return handler.reject(
           DioException(
             requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
             error: SessionExpiredException(
-              'Protected operation requires active artisan session, but current mode is $modeBefore.',
+              'Bound operation requires active artisan session, but current mode is $modeBefore.',
               401,
             ),
           ),
@@ -70,6 +172,8 @@ class AuthInterceptor extends Interceptor {
         return handler.reject(
           DioException(
             requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
             error: SessionExpiredException(
               'Operation owner mismatch before dispatch (expected $expectedUserId, active is $userIdBefore).',
               401,
@@ -82,6 +186,8 @@ class AuthInterceptor extends Interceptor {
         return handler.reject(
           DioException(
             requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
             error: SessionExpiredException(
               'Session generation mismatch before dispatch (expected $expectedSessionGen, active is $genBefore).',
               401,
@@ -89,32 +195,17 @@ class AuthInterceptor extends Interceptor {
           ),
         );
       }
-      if (expectedBackend != null && expectedBackend.isNotEmpty) {
-        final activeBackend = ApiConfig.baseUrl;
-        if (PrivateMediaCache.normalizeBackendOrigin(activeBackend) !=
-            PrivateMediaCache.normalizeBackendOrigin(expectedBackend)) {
-          options.headers.remove('Authorization');
-          return handler.reject(
-            DioException(
-              requestOptions: options,
-              error: SessionExpiredException(
-                'Backend origin mismatch before dispatch (expected $expectedBackend, active is $activeBackend).',
-                401,
-              ),
-            ),
-          );
-        }
+    } else {
+      // Unbound request (e.g. read-only GET without explicit context)
+      if (modeBefore == ActiveSessionMode.ngoSimulation) {
+        options.headers.remove('Authorization');
+        return handler.next(options);
       }
-    }
 
-    if (modeBefore == ActiveSessionMode.ngoSimulation) {
-      options.headers.remove('Authorization');
-      return handler.next(options);
-    }
-
-    if (modeBefore == ActiveSessionMode.unauthenticated) {
-      options.headers.remove('Authorization');
-      return handler.next(options);
+      if (modeBefore == ActiveSessionMode.unauthenticated) {
+        options.headers.remove('Authorization');
+        return handler.next(options);
+      }
     }
 
     // modeBefore == ActiveSessionMode.artisan
@@ -126,7 +217,9 @@ class AuthInterceptor extends Interceptor {
       return handler.reject(
         DioException(
           requestOptions: options,
-          error: StateError('Session storage invalidated during token retrieval.'),
+          response: Response(requestOptions: options, statusCode: 401),
+          type: DioExceptionType.badResponse,
+          error: SessionExpiredException('Session storage invalidated during token retrieval.', 401),
         ),
       );
     }
@@ -135,17 +228,23 @@ class AuthInterceptor extends Interceptor {
     final userIdAfter = ActiveSessionManager.getCurrentUserIdSync();
     final genAfter = ActiveSessionManager.sessionGeneration;
 
-    if (modeAfter == ActiveSessionMode.ngoSimulation) {
-      // Switched into NGO simulation during token retrieval: MUST NOT attach artisan token!
-      options.headers.remove('Authorization');
-      return handler.next(options);
-    }
-
+    // Re-verify after async token retrieval:
     if (expectedUserId != null && expectedUserId.isNotEmpty) {
-      if (modeAfter != ActiveSessionMode.artisan ||
-          userIdAfter != expectedUserId ||
-          userIdAfter != userIdBefore) {
-        // Switched account or logged out during token retrieval: fail closed
+      if (modeAfter != ActiveSessionMode.artisan) {
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
+            error: SessionExpiredException(
+              'Session transitioned to $modeAfter during token retrieval for bound operation.',
+              401,
+            ),
+          ),
+        );
+      }
+      if (userIdAfter != expectedUserId || userIdAfter != userIdBefore) {
         options.headers.remove('Authorization');
         return handler.reject(
           DioException(
@@ -174,9 +273,9 @@ class AuthInterceptor extends Interceptor {
         );
       }
       if (expectedBackend != null && expectedBackend.isNotEmpty) {
-        final activeBackend = ApiConfig.baseUrl;
-        if (PrivateMediaCache.normalizeBackendOrigin(activeBackend) !=
-            PrivateMediaCache.normalizeBackendOrigin(expectedBackend)) {
+        final expectedNorm = PrivateMediaCache.normalizeBackendOrigin(expectedBackend);
+        final reqBackend = PrivateMediaCache.normalizeBackendOrigin(options.uri.toString());
+        if (reqBackend != expectedNorm) {
           options.headers.remove('Authorization');
           return handler.reject(
             DioException(
@@ -184,7 +283,22 @@ class AuthInterceptor extends Interceptor {
               response: Response(requestOptions: options, statusCode: 401),
               type: DioExceptionType.badResponse,
               error: SessionExpiredException(
-                'Backend origin changed during token retrieval.',
+                'Request URI origin changed during token retrieval ($reqBackend != $expectedNorm).',
+                401,
+              ),
+            ),
+          );
+        }
+        final activeBackendAfter = PrivateMediaCache.normalizeBackendOrigin(ApiConfig.baseUrl);
+        if (activeBackendAfter != expectedNorm) {
+          options.headers.remove('Authorization');
+          return handler.reject(
+            DioException(
+              requestOptions: options,
+              response: Response(requestOptions: options, statusCode: 401),
+              type: DioExceptionType.badResponse,
+              error: SessionExpiredException(
+                'Active backend origin changed during token retrieval ($activeBackendAfter != $expectedNorm).',
                 401,
               ),
             ),
@@ -192,8 +306,11 @@ class AuthInterceptor extends Interceptor {
         }
       }
     } else {
-      if (modeAfter != ActiveSessionMode.artisan || userIdAfter != userIdBefore) {
-        // Switched account or logged out during token retrieval: fail closed
+      if (modeAfter == ActiveSessionMode.ngoSimulation) {
+        options.headers.remove('Authorization');
+        return handler.next(options);
+      }
+      if (modeAfter != ActiveSessionMode.artisan || userIdAfter != userIdBefore || genAfter != genBefore) {
         options.headers.remove('Authorization');
         return handler.reject(
           DioException(
@@ -246,6 +363,7 @@ class AuthenticatedHttpClient {
     Duration connectTimeout = const Duration(seconds: 15),
     Duration receiveTimeout = const Duration(seconds: 30),
     Duration sendTimeout = const Duration(seconds: 30),
+    HttpClientAdapter? adapter,
   }) {
     final dio = Dio(
       BaseOptions(
@@ -256,6 +374,10 @@ class AuthenticatedHttpClient {
         responseType: ResponseType.json,
       ),
     );
+
+    if (adapter != null) {
+      dio.httpClientAdapter = adapter;
+    }
 
     dio.interceptors.add(
       AuthInterceptor(

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:kalasetu/core/config/api_config.dart';
 import 'package:kalasetu/data/models/product.dart';
 import 'package:kalasetu/data/models/offline_operation.dart';
 import 'package:kalasetu/data/services/api_service.dart';
@@ -27,10 +28,11 @@ void main() {
   late String tempUploadDir;
   late int serverPort;
   late String baseUrl;
+  late String originalBaseUrl;
   late Process serverProcess;
   late Dio dioClient;
   late String artisanToken;
-  final serverLogs = StringBuffer();
+  final StringBuffer serverLogs = StringBuffer();
 
   // Minimal valid 1x1 JPEG image bytes for magic byte validation and SHA-256 calculation
   final validJpegBytes = <int>[
@@ -50,6 +52,7 @@ void main() {
   ];
 
   setUpAll(() async {
+    originalBaseUrl = ApiConfig.baseUrl;
     tempDir = await Directory.systemTemp.createTemp('kalasetu_http_outbox_e2e_');
     tempDbPath = '${tempDir.path}/test_kalasetu.db';
     tempUploadDir = '${tempDir.path}/uploads';
@@ -73,6 +76,7 @@ void main() {
     // 2. Select port and launch FastAPI via Uvicorn
     serverPort = getUnusedPort();
     baseUrl = 'http://127.0.0.1:$serverPort';
+    ApiConfig.setBaseUrl(baseUrl);
 
     serverProcess = await Process.start(
       '/Library/Frameworks/Python.framework/Versions/3.14/bin/python3',
@@ -162,6 +166,7 @@ void main() {
   });
 
   tearDownAll(() async {
+    ApiConfig.setBaseUrl(originalBaseUrl);
     try {
       serverProcess.kill(ProcessSignal.sigterm);
     } catch (_) {}

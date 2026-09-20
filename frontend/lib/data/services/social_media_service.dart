@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'dart:io';
 import '../../core/config/api_config.dart';
 import '../../core/network/authenticated_http_client.dart';
+import '../../core/network/request_session_context.dart';
 import '../../core/network/session_expired_exception.dart';
 import '../../core/storage/secure_token_storage.dart';
 import '../models/social_draft.dart';
@@ -174,6 +175,7 @@ class HttpSocialMediaService implements SocialMediaService {
     bool editedByUser = true,
     String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final body = {
       'caption': caption,
       'hashtags': hashtags,
@@ -187,6 +189,7 @@ class HttpSocialMediaService implements SocialMediaService {
         data: body,
         options: Options(
           headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
         ),
       );
       return SocialDraft.fromJson(response.data as Map<String, dynamic>);
@@ -235,6 +238,7 @@ class HttpSocialMediaService implements SocialMediaService {
     required String listingId,
     String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final operationKey = idempotencyKey ??
         'idem_soclink_${DateTime.now().microsecondsSinceEpoch}_${listingId.hashCode.abs()}';
     try {
@@ -243,6 +247,7 @@ class HttpSocialMediaService implements SocialMediaService {
         queryParameters: {'draft_key': draftKey, 'listing_id': listingId},
         options: Options(
           headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
         ),
       );
     } on DioException catch (e) {
@@ -252,6 +257,7 @@ class HttpSocialMediaService implements SocialMediaService {
 
   @override
   Future<String> uploadImage(String imagePath, {String? idempotencyKey}) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final operationKey = idempotencyKey ??
         'idem_socup_${DateTime.now().microsecondsSinceEpoch}_${imagePath.hashCode.abs()}';
     try {
@@ -266,6 +272,7 @@ class HttpSocialMediaService implements SocialMediaService {
         }),
         options: Options(
           headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
         ),
       );
       final imageUrl = (response.data as Map<String, dynamic>)['image_url'] as String;
@@ -278,6 +285,7 @@ class HttpSocialMediaService implements SocialMediaService {
   // ── Internal ────────────────────────────────────────────────────────────
 
   Future<SocialDraft> _post(String url, Map<String, dynamic> body, {String? idempotencyKey}) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final operationKey = idempotencyKey ??
         'idem_soc_${DateTime.now().microsecondsSinceEpoch}_${url.hashCode.abs()}';
     try {
@@ -286,6 +294,7 @@ class HttpSocialMediaService implements SocialMediaService {
         data: body,
         options: Options(
           headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
         ),
       );
       return SocialDraft.fromJson(response.data as Map<String, dynamic>);

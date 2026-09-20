@@ -50,6 +50,12 @@ void main() {
     if (!Hive.isBoxOpen('pending_sync_box')) {
       await Hive.openBox<String>('pending_sync_box');
     }
+    if (!Hive.isBoxOpen('auth_box')) {
+      final authBox = await Hive.openBox('auth_box');
+      await authBox.put('is_authenticated', true);
+      await authBox.put('user_id', 'artisan_approval_test');
+      await authBox.put('phone_number', '+919876543210');
+    }
   });
 
   tearDownAll(() async {

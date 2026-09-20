@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../../core/config/api_config.dart';
 import '../../core/network/active_session_manager.dart';
+import '../../core/network/session_expired_exception.dart';
 import '../../core/storage/private_media_cache.dart';
 import '../models/product.dart';
 import '../models/offline_operation.dart';
@@ -239,7 +241,7 @@ class ProductRepository {
 
       bool isSessionValid() {
         if (!ActiveSessionManager.isSessionReady()) {
-          return true; // Headless/test environment without auth box
+          return false;
         }
         return ActiveSessionManager.validateArtisanSession(
           expectedUserId: initiatingUserId,
@@ -325,7 +327,7 @@ class ProductRepository {
 
       bool isSessionValid() {
         if (!ActiveSessionManager.isSessionReady()) {
-          return true; // Headless/test environment without auth box
+          return false;
         }
         return ActiveSessionManager.validateArtisanSession(
           expectedUserId: initiatingUserId,
@@ -417,7 +419,7 @@ class ProductRepository {
 
       bool isSessionValid() {
         if (!ActiveSessionManager.isSessionReady()) {
-          return true; // Headless/test environment without auth box
+          return false;
         }
         return ActiveSessionManager.validateArtisanSession(
           expectedUserId: initiatingUserId,
@@ -711,7 +713,7 @@ class ProductRepository {
 
       bool isSessionValid() {
         if (!ActiveSessionManager.isSessionReady()) {
-          return true; // Headless/test environment without auth box
+          return false;
         }
         return ActiveSessionManager.validateArtisanSession(
           expectedUserId: initiatingUserId,
@@ -786,7 +788,7 @@ class ProductRepository {
 
       bool isSessionValid() {
         if (!ActiveSessionManager.isSessionReady()) {
-          return true; // Headless/test environment without auth box
+          return false;
         }
         return ActiveSessionManager.validateArtisanSession(
           expectedUserId: initiatingUserId,
@@ -1103,433 +1105,512 @@ class ProductRepository {
         await pendingBox.put(op.id, claimedOp.toPendingString());
         allOps[op.id] = claimedOp;
 
-        // Upstream dependencies are satisfied! Execute this operation:
-        try {
-          if (op.action == OfflineOperation.actionCreate) {
-            Product? product;
-            if (op.payloadSnapshot != null) {
-              product = Product.fromJson(op.payloadSnapshot!);
-            } else {
-              product = productsBox.get(op.productId);
-            }
-            if (product != null) {
-              if (!isSessionValid()) {
-                debugPrint('[ProductRepository] Session changed after async preparation for CREATE ${op.id}; reverting lease and halting.');
-                final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-                await pendingBox.put(op.id, revertedOp.toPendingString());
-                return totalSynced;
-              }
-
-              final created = await _apiService.createProduct(
-                product.copyWith(status: ProductStatus.draft),
-                idempotencyKey: op.idempotencyKey,
-              );
-
-              if (!isSessionValid()) {
-                debugPrint('[ProductRepository] Session changed between server success and local response application for CREATE ${op.id}; preserving operation and halting.');
-                final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-                await pendingBox.put(op.id, preservedOp.toPendingString());
-                return totalSynced;
-              }
-
-              final existingLocal = productsBox.get(created.id);
-              if (existingLocal == null || existingLocal.revision <= created.revision) {
-                await productsBox.put(created.id, created);
-              }
-              final updatedOp = op.copyWith(
-                status: OfflineOperation.statusCompleted,
-                clearLeaseExpiresAt: true,
-                resultData: {
-                  'server_product_id': created.id,
-                  'revision': created.revision,
-                  'content_hash': created.contentHash,
-                },
-              );
-              await pendingBox.put(op.id, updatedOp.toPendingString());
-              allOps[op.id] = updatedOp;
-              totalSynced++;
-              progressMade = true;
-            }
-          } else if (op.action == OfflineOperation.actionMediaUpload) {
-            final filePath = op.mediaLocalId;
-            if (filePath == null || !File(filePath).existsSync()) {
-              debugPrint('[ProductRepository] Media upload failed closed: file "$filePath" does not exist.');
-              final failedOp = op.copyWith(
-                status: OfflineOperation.statusFailed,
-                clearLeaseExpiresAt: true,
-                errorMessage: 'Media file missing on device: $filePath',
-              );
-              await pendingBox.put(op.id, failedOp.toPendingString());
-              allOps[op.id] = failedOp;
-              continue;
-            }
-
-            final fileBytes = await File(filePath).readAsBytes();
-            final actualSha256 = sha256.convert(fileBytes).toString();
-            final expectedSha256 = op.payloadSnapshot?['media_sha256'] as String?;
-            if (expectedSha256 != null && expectedSha256.isNotEmpty && actualSha256 != expectedSha256) {
-              debugPrint('[ProductRepository] Media upload failed closed: SHA-256 mismatch (actual $actualSha256 != expected $expectedSha256).');
-              final failedOp = op.copyWith(
-                status: OfflineOperation.statusFailed,
-                clearLeaseExpiresAt: true,
-                errorMessage: 'Media file mutated on device (SHA-256 mismatch)',
-              );
-              await pendingBox.put(op.id, failedOp.toPendingString());
-              allOps[op.id] = failedOp;
-              continue;
-            }
-
-            final snapshotDir = Directory('${Directory.systemTemp.path}/kalasetu_sync_uploads');
-            if (!snapshotDir.existsSync()) {
-              snapshotDir.createSync(recursive: true);
-            }
-            final snapshotPath = '${snapshotDir.path}/sync_upload_${op.id}_${DateTime.now().microsecondsSinceEpoch}.tmp';
-            final snapshotFile = File(snapshotPath)..writeAsBytesSync(fileBytes, flush: true);
-
-            if (!isSessionValid()) {
-              try { snapshotFile.deleteSync(); } catch (_) {}
-              debugPrint('[ProductRepository] Session changed after async preparation for MEDIA_UPLOAD ${op.id}; reverting lease and halting.');
-              final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-              await pendingBox.put(op.id, revertedOp.toPendingString());
-              return totalSynced;
-            }
-
-            Map<String, dynamic> mediaRes;
+        // Upstream dependencies are satisfied! Execute this operation with bound identity context:
+        bool shouldHaltDrain = false;
+        await runZoned(
+          () async {
             try {
-              mediaRes = await _apiService.uploadMediaFile(
-                snapshotPath,
-                idempotencyKey: op.idempotencyKey,
-              );
-            } finally {
-              try { snapshotFile.deleteSync(); } catch (_) {}
-            }
+              if (op.action == OfflineOperation.actionCreate) {
+                Product? product;
+                if (op.payloadSnapshot != null) {
+                  product = Product.fromJson(op.payloadSnapshot!);
+                } else {
+                  product = productsBox.get(op.productId);
+                }
+                if (product != null) {
+                  if (!isSessionValid()) {
+                    debugPrint('[ProductRepository] Session changed after async preparation for CREATE ${op.id}; reverting lease and halting.');
+                    final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                    await pendingBox.put(op.id, revertedOp.toPendingString());
+                    shouldHaltDrain = true;
+                    return;
+                  }
 
-            if (!isSessionValid()) {
-              debugPrint('[ProductRepository] Session changed between server success and local response application for MEDIA_UPLOAD ${op.id}; preserving operation and halting.');
-              final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-              await pendingBox.put(op.id, preservedOp.toPendingString());
-              return totalSynced;
-            }
+                  final created = await _apiService.createProduct(
+                    product.copyWith(status: ProductStatus.draft),
+                    idempotencyKey: op.idempotencyKey,
+                  );
 
-            final serverChecksum = mediaRes['sha256_checksum'] as String? ?? mediaRes['sha256Checksum'] as String?;
-            if (expectedSha256 != null && expectedSha256.isNotEmpty) {
-              if (serverChecksum == null || serverChecksum.toLowerCase() != expectedSha256.toLowerCase()) {
-                debugPrint('[ProductRepository] Server media checksum mismatch during sync: server ($serverChecksum) != expected ($expectedSha256)');
-                final failedOp = op.copyWith(
-                  status: OfflineOperation.statusFailed,
+                  if (!isSessionValid()) {
+                    debugPrint('[ProductRepository] Session changed between server success and local response application for CREATE ${op.id}; preserving operation and halting.');
+                    final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                    await pendingBox.put(op.id, preservedOp.toPendingString());
+                    shouldHaltDrain = true;
+                    return;
+                  }
+
+                  final existingLocal = productsBox.get(created.id);
+                  if (existingLocal == null || existingLocal.revision <= created.revision) {
+                    await productsBox.put(created.id, created);
+                  }
+                  final updatedOp = op.copyWith(
+                    status: OfflineOperation.statusCompleted,
+                    clearLeaseExpiresAt: true,
+                    resultData: {
+                      'server_product_id': created.id,
+                      'revision': created.revision,
+                      'content_hash': created.contentHash,
+                    },
+                  );
+                  await pendingBox.put(op.id, updatedOp.toPendingString());
+                  allOps[op.id] = updatedOp;
+                  totalSynced++;
+                  progressMade = true;
+                }
+              } else if (op.action == OfflineOperation.actionMediaUpload) {
+                final filePath = op.mediaLocalId;
+                if (filePath == null || !File(filePath).existsSync()) {
+                  debugPrint('[ProductRepository] Media upload failed closed: file "$filePath" does not exist.');
+                  final failedOp = op.copyWith(
+                    status: OfflineOperation.statusFailed,
+                    clearLeaseExpiresAt: true,
+                    errorMessage: 'Media file missing on device: $filePath',
+                  );
+                  await pendingBox.put(op.id, failedOp.toPendingString());
+                  allOps[op.id] = failedOp;
+                  return;
+                }
+
+                final fileBytes = await File(filePath).readAsBytes();
+                final actualSha256 = sha256.convert(fileBytes).toString();
+                final expectedSha256 = op.payloadSnapshot?['media_sha256'] as String?;
+                if (expectedSha256 != null && expectedSha256.isNotEmpty && actualSha256 != expectedSha256) {
+                  debugPrint('[ProductRepository] Media upload failed closed: SHA-256 mismatch (actual $actualSha256 != expected $expectedSha256).');
+                  final failedOp = op.copyWith(
+                    status: OfflineOperation.statusFailed,
+                    clearLeaseExpiresAt: true,
+                    errorMessage: 'Media file mutated on device (SHA-256 mismatch)',
+                  );
+                  await pendingBox.put(op.id, failedOp.toPendingString());
+                  allOps[op.id] = failedOp;
+                  return;
+                }
+
+                final snapshotDir = Directory('${Directory.systemTemp.path}/kalasetu_sync_uploads');
+                if (!snapshotDir.existsSync()) {
+                  snapshotDir.createSync(recursive: true);
+                }
+                final snapshotPath = '${snapshotDir.path}/sync_upload_${op.id}_${DateTime.now().microsecondsSinceEpoch}.tmp';
+                final snapshotFile = File(snapshotPath)..writeAsBytesSync(fileBytes, flush: true);
+
+                if (!isSessionValid()) {
+                  try { snapshotFile.deleteSync(); } catch (_) {}
+                  debugPrint('[ProductRepository] Session changed after async preparation for MEDIA_UPLOAD ${op.id}; reverting lease and halting.');
+                  final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                  await pendingBox.put(op.id, revertedOp.toPendingString());
+                  shouldHaltDrain = true;
+                  return;
+                }
+
+                Map<String, dynamic> mediaRes;
+                try {
+                  mediaRes = await _apiService.uploadMediaFile(
+                    snapshotPath,
+                    idempotencyKey: op.idempotencyKey,
+                  );
+                } finally {
+                  try { snapshotFile.deleteSync(); } catch (_) {}
+                }
+
+                if (!isSessionValid()) {
+                  debugPrint('[ProductRepository] Session changed between server success and local response application for MEDIA_UPLOAD ${op.id}; preserving operation and halting.');
+                  final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                  await pendingBox.put(op.id, preservedOp.toPendingString());
+                  shouldHaltDrain = true;
+                  return;
+                }
+
+                final serverChecksum = mediaRes['sha256_checksum'] as String? ?? mediaRes['sha256Checksum'] as String?;
+                if (expectedSha256 != null && expectedSha256.isNotEmpty) {
+                  if (serverChecksum == null || serverChecksum.toLowerCase() != expectedSha256.toLowerCase()) {
+                    debugPrint('[ProductRepository] Server media checksum mismatch during sync: server ($serverChecksum) != expected ($expectedSha256)');
+                    final failedOp = op.copyWith(
+                      status: OfflineOperation.statusFailed,
+                      clearLeaseExpiresAt: true,
+                      errorMessage: 'Server-returned media checksum mismatch: $serverChecksum != $expectedSha256',
+                    );
+                    await pendingBox.put(op.id, failedOp.toPendingString());
+                    allOps[op.id] = failedOp;
+                    return;
+                  }
+                }
+
+                final serverMediaId = mediaRes['media_id'] as String?;
+                final updatedOp = op.copyWith(
+                  status: OfflineOperation.statusCompleted,
                   clearLeaseExpiresAt: true,
-                  errorMessage: 'Server-returned media checksum mismatch: $serverChecksum != $expectedSha256',
+                  mediaId: serverMediaId,
+                  resultData: mediaRes,
                 );
-                await pendingBox.put(op.id, failedOp.toPendingString());
-                allOps[op.id] = failedOp;
-                continue;
+                await pendingBox.put(op.id, updatedOp.toPendingString());
+                allOps[op.id] = updatedOp;
+                totalSynced++;
+                progressMade = true;
+              } else if (op.action == OfflineOperation.actionAttachMedia) {
+                // Resolve mediaId from parent media op if needed
+                String? resolvedMediaId = op.mediaId;
+                if ((resolvedMediaId == null || resolvedMediaId.isEmpty) && op.mediaIdFromOpId != null) {
+                  final parentMediaOp = allOps[op.mediaIdFromOpId];
+                  resolvedMediaId = parentMediaOp?.resultData?['media_id'] as String? ?? parentMediaOp?.mediaId;
+                }
+
+                var product = productsBox.get(op.productId);
+                if (product != null && resolvedMediaId != null && resolvedMediaId.isNotEmpty) {
+                  if (!isSessionValid()) {
+                    debugPrint('[ProductRepository] Session changed after async preparation for ATTACH_MEDIA ${op.id}; reverting lease and halting.');
+                    final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                    await pendingBox.put(op.id, revertedOp.toPendingString());
+                    shouldHaltDrain = true;
+                    return;
+                  }
+
+                  final attachedProduct = product.copyWith(mediaId: resolvedMediaId);
+                  final updated = await _apiService.updateProduct(
+                    attachedProduct,
+                    expectedRevision: product.revision,
+                    idempotencyKey: op.idempotencyKey,
+                  );
+
+                  if (!isSessionValid()) {
+                    debugPrint('[ProductRepository] Session changed between server success and local response application for ATTACH_MEDIA ${op.id}; preserving operation and halting.');
+                    final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                    await pendingBox.put(op.id, preservedOp.toPendingString());
+                    shouldHaltDrain = true;
+                    return;
+                  }
+
+                  await productsBox.put(updated.id, updated);
+                  final updatedOp = op.copyWith(
+                    status: OfflineOperation.statusCompleted,
+                    clearLeaseExpiresAt: true,
+                    mediaId: resolvedMediaId,
+                    resultData: {
+                      'server_product_id': updated.id,
+                      'revision': updated.revision,
+                      'content_hash': updated.contentHash,
+                      'media_id': resolvedMediaId,
+                    },
+                  );
+                  await pendingBox.put(op.id, updatedOp.toPendingString());
+                  allOps[op.id] = updatedOp;
+                  totalSynced++;
+                  progressMade = true;
+                } else {
+                  // Mark completed if product or media already handled
+                  final updatedOp = op.copyWith(
+                    status: OfflineOperation.statusCompleted,
+                    clearLeaseExpiresAt: true,
+                  );
+                  await pendingBox.put(op.id, updatedOp.toPendingString());
+                  allOps[op.id] = updatedOp;
+                  progressMade = true;
+                }
+              } else if (op.action == OfflineOperation.actionUpdate) {
+                Product? product;
+                if (op.payloadSnapshot != null) {
+                  product = Product.fromJson(op.payloadSnapshot!);
+                  if (product.id.isEmpty) {
+                    product = product.copyWith(id: op.productId);
+                  }
+                } else {
+                  product = productsBox.get(op.productId);
+                }
+                if (product != null) {
+                  final parentOp = op.dependsOnOpId != null ? allOps[op.dependsOnOpId] : null;
+                  final effectiveExpectedRevision = parentOp?.resultData?['revision'] as int? ?? product.revision;
+
+                  if (!isSessionValid()) {
+                    debugPrint('[ProductRepository] Session changed after async preparation for UPDATE ${op.id}; reverting lease and halting.');
+                    final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                    await pendingBox.put(op.id, revertedOp.toPendingString());
+                    shouldHaltDrain = true;
+                    return;
+                  }
+
+                  final updated = await _apiService.updateProduct(
+                    product,
+                    expectedRevision: effectiveExpectedRevision,
+                    idempotencyKey: op.idempotencyKey,
+                  );
+
+                  if (!isSessionValid()) {
+                    debugPrint('[ProductRepository] Session changed between server success and local response application for UPDATE ${op.id}; preserving operation and halting.');
+                    final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                    await pendingBox.put(op.id, preservedOp.toPendingString());
+                    shouldHaltDrain = true;
+                    return;
+                  }
+
+                  final existingLocal = productsBox.get(updated.id);
+                  if (existingLocal == null || existingLocal.revision <= updated.revision) {
+                    await productsBox.put(updated.id, updated);
+                  }
+                  final updatedOp = op.copyWith(
+                    status: OfflineOperation.statusCompleted,
+                    clearLeaseExpiresAt: true,
+                    resultData: {
+                      'server_product_id': updated.id,
+                      'revision': updated.revision,
+                      'content_hash': updated.contentHash,
+                    },
+                  );
+                  await pendingBox.put(op.id, updatedOp.toPendingString());
+                  allOps[op.id] = updatedOp;
+                  totalSynced++;
+                  progressMade = true;
+                }
+              } else if (op.action == OfflineOperation.actionApprovePublish) {
+                var product = productsBox.get(op.productId);
+                if (product != null) {
+                  // Retrieve server-returned revision and hash from upstream operations if available
+                  int pubRevision = product.revision;
+                  String pubHash = product.contentHash ?? op.contentHash ?? '';
+
+                  if (op.dependsOnOpId != null) {
+                    final parentOp = allOps[op.dependsOnOpId];
+                    if (parentOp != null && parentOp.resultData != null) {
+                      final serverRev = parentOp.resultData!['revision'] as int?;
+                      final serverHash = parentOp.resultData!['content_hash'] as String?;
+                      if (serverRev != null) pubRevision = serverRev;
+                      if (serverHash != null && serverHash.isNotEmpty) pubHash = serverHash;
+                    }
+                  }
+
+                  if (!isSessionValid()) {
+                    debugPrint('[ProductRepository] Session changed after async preparation for APPROVE_PUBLISH ${op.id}; reverting lease and halting.');
+                    final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                    await pendingBox.put(op.id, revertedOp.toPendingString());
+                    shouldHaltDrain = true;
+                    return;
+                  }
+
+                  final published = await _apiService.approveAndPublishProduct(
+                    op.productId,
+                    revision: pubRevision,
+                    contentHash: pubHash,
+                    idempotencyKey: op.idempotencyKey,
+                  );
+
+                  if (!isSessionValid()) {
+                    debugPrint('[ProductRepository] Session changed between server success and local response application for APPROVE_PUBLISH ${op.id}; preserving operation and halting.');
+                    final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                    await pendingBox.put(op.id, preservedOp.toPendingString());
+                    shouldHaltDrain = true;
+                    return;
+                  }
+
+                  await productsBox.put(published.id, published);
+                  final updatedOp = op.copyWith(
+                    status: OfflineOperation.statusCompleted,
+                    clearLeaseExpiresAt: true,
+                    resultData: {
+                      'server_product_id': published.id,
+                      'revision': published.revision,
+                      'content_hash': published.contentHash,
+                      'status': 'published',
+                    },
+                  );
+                  await pendingBox.put(op.id, updatedOp.toPendingString());
+                  allOps[op.id] = updatedOp;
+                  totalSynced++;
+                  progressMade = true;
+                }
+              } else if (op.action == OfflineOperation.actionDelete) {
+                if (!isSessionValid()) {
+                  debugPrint('[ProductRepository] Session changed after async preparation for DELETE ${op.id}; reverting lease and halting.');
+                  final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                  await pendingBox.put(op.id, revertedOp.toPendingString());
+                  shouldHaltDrain = true;
+                  return;
+                }
+
+                await _apiService.deleteProduct(
+                  op.productId,
+                  idempotencyKey: op.idempotencyKey,
+                );
+
+                if (!isSessionValid()) {
+                  debugPrint('[ProductRepository] Session changed between server success and local response application for DELETE ${op.id}; preserving operation and halting.');
+                  final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                  await pendingBox.put(op.id, preservedOp.toPendingString());
+                  shouldHaltDrain = true;
+                  return;
+                }
+
+                final updatedOp = op.copyWith(
+                  status: OfflineOperation.statusCompleted,
+                  clearLeaseExpiresAt: true,
+                );
+                await pendingBox.put(op.id, updatedOp.toPendingString());
+                allOps[op.id] = updatedOp;
+                totalSynced++;
+                progressMade = true;
+              } else if (op.action == OfflineOperation.actionUnpublish) {
+                int? expectedRevision = op.revision;
+                String? contentHash = op.contentHash;
+
+                if (op.dependsOnOpId != null && allOps.containsKey(op.dependsOnOpId)) {
+                  final parentOp = allOps[op.dependsOnOpId]!;
+                  if (parentOp.resultData != null && parentOp.resultData!.containsKey('revision')) {
+                    expectedRevision = (parentOp.resultData!['revision'] as num?)?.toInt();
+                    contentHash = parentOp.resultData!['content_hash'] as String?;
+                  }
+                }
+
+                final sha256Pattern = RegExp(r'^[a-f0-9]{64}$');
+                if (expectedRevision == null ||
+                    contentHash == null ||
+                    !sha256Pattern.hasMatch(contentHash.toLowerCase())) {
+                  debugPrint('ProductRepository: Unpublish op ${op.id} missing valid revision ($expectedRevision) or contentHash ($contentHash). Stopping with user_action_required.');
+                  final updatedOp = op.copyWith(
+                    status: OfflineOperation.statusUserActionRequired,
+                    clearLeaseExpiresAt: true,
+                    errorMessage: 'Cannot unpublish: authoritative revision ($expectedRevision) or content hash ($contentHash) is missing or not a valid 64-char SHA-256.',
+                  );
+                  await pendingBox.put(op.id, updatedOp.toPendingString());
+                  allOps[op.id] = updatedOp;
+                  return;
+                }
+
+                if (!isSessionValid()) {
+                  debugPrint('[ProductRepository] Session changed after async preparation for UNPUBLISH ${op.id}; reverting lease and halting.');
+                  final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                  await pendingBox.put(op.id, revertedOp.toPendingString());
+                  shouldHaltDrain = true;
+                  return;
+                }
+
+                final unpublished = await _apiService.unpublishProduct(
+                  op.productId,
+                  expectedRevision: expectedRevision,
+                  contentHash: contentHash.toLowerCase(),
+                  idempotencyKey: op.idempotencyKey,
+                );
+
+                if (!isSessionValid()) {
+                  debugPrint('[ProductRepository] Session changed between server success and local response application for UNPUBLISH ${op.id}; preserving operation and halting.');
+                  final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                  await pendingBox.put(op.id, preservedOp.toPendingString());
+                  shouldHaltDrain = true;
+                  return;
+                }
+
+                await productsBox.put(unpublished.id, unpublished);
+                final updatedOp = op.copyWith(
+                  status: OfflineOperation.statusCompleted,
+                  clearLeaseExpiresAt: true,
+                  resultData: {
+                    'server_product_id': unpublished.id,
+                    'revision': unpublished.revision,
+                    'content_hash': unpublished.contentHash,
+                  },
+                );
+                await pendingBox.put(op.id, updatedOp.toPendingString());
+                allOps[op.id] = updatedOp;
+                totalSynced++;
+                progressMade = true;
               }
-            }
-
-            final serverMediaId = mediaRes['media_id'] as String?;
-            final updatedOp = op.copyWith(
-              status: OfflineOperation.statusCompleted,
-              clearLeaseExpiresAt: true,
-              mediaId: serverMediaId,
-              resultData: mediaRes,
-            );
-            await pendingBox.put(op.id, updatedOp.toPendingString());
-            allOps[op.id] = updatedOp;
-            totalSynced++;
-            progressMade = true;
-          } else if (op.action == OfflineOperation.actionAttachMedia) {
-            // Resolve mediaId from parent media op if needed
-            String? resolvedMediaId = op.mediaId;
-            if ((resolvedMediaId == null || resolvedMediaId.isEmpty) && op.mediaIdFromOpId != null) {
-              final parentMediaOp = allOps[op.mediaIdFromOpId];
-              resolvedMediaId = parentMediaOp?.resultData?['media_id'] as String? ?? parentMediaOp?.mediaId;
-            }
-
-            var product = productsBox.get(op.productId);
-            if (product != null && resolvedMediaId != null && resolvedMediaId.isNotEmpty) {
+            } on StaleRevisionException catch (e) {
+              debugPrint('ProductRepository: Stale revision during sync for op ${op.id}: $e');
               if (!isSessionValid()) {
-                debugPrint('[ProductRepository] Session changed after async preparation for ATTACH_MEDIA ${op.id}; reverting lease and halting.');
-                final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                debugPrint('[ProductRepository] Session changed before stale refresh for ${op.id}; reverting lease without incrementing retryCount and halting.');
+                final revertedOp = op.copyWith(
+                  status: OfflineOperation.statusPending,
+                  clearLeaseExpiresAt: true,
+                );
                 await pendingBox.put(op.id, revertedOp.toPendingString());
-                return totalSynced;
+                shouldHaltDrain = true;
+                return;
               }
 
-              final attachedProduct = product.copyWith(mediaId: resolvedMediaId);
-              final updated = await _apiService.updateProduct(
-                attachedProduct,
-                expectedRevision: product.revision,
-                idempotencyKey: op.idempotencyKey,
-              );
-
-              if (!isSessionValid()) {
-                debugPrint('[ProductRepository] Session changed between server success and local response application for ATTACH_MEDIA ${op.id}; preserving operation and halting.');
-                final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-                await pendingBox.put(op.id, preservedOp.toPendingString());
-                return totalSynced;
-              }
-
-              await productsBox.put(updated.id, updated);
-              final updatedOp = op.copyWith(
-                status: OfflineOperation.statusCompleted,
-                clearLeaseExpiresAt: true,
-                mediaId: resolvedMediaId,
-                resultData: {
-                  'server_product_id': updated.id,
-                  'revision': updated.revision,
-                  'content_hash': updated.contentHash,
-                  'media_id': resolvedMediaId,
-                },
-              );
-              await pendingBox.put(op.id, updatedOp.toPendingString());
-              allOps[op.id] = updatedOp;
-              totalSynced++;
-              progressMade = true;
-            } else {
-              // Mark completed if product or media already handled
-              final updatedOp = op.copyWith(
-                status: OfflineOperation.statusCompleted,
-                clearLeaseExpiresAt: true,
-              );
-              await pendingBox.put(op.id, updatedOp.toPendingString());
-              allOps[op.id] = updatedOp;
-              progressMade = true;
-            }
-          } else if (op.action == OfflineOperation.actionUpdate) {
-            Product? product;
-            if (op.payloadSnapshot != null) {
-              product = Product.fromJson(op.payloadSnapshot!);
-              if (product.id.isEmpty) {
-                product = product.copyWith(id: op.productId);
-              }
-            } else {
-              product = productsBox.get(op.productId);
-            }
-            if (product != null) {
-              final parentOp = op.dependsOnOpId != null ? allOps[op.dependsOnOpId] : null;
-              final effectiveExpectedRevision = parentOp?.resultData?['revision'] as int? ?? product.revision;
-
-              if (!isSessionValid()) {
-                debugPrint('[ProductRepository] Session changed after async preparation for UPDATE ${op.id}; reverting lease and halting.');
-                final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-                await pendingBox.put(op.id, revertedOp.toPendingString());
-                return totalSynced;
-              }
-
-              final updated = await _apiService.updateProduct(
-                product,
-                expectedRevision: effectiveExpectedRevision,
-                idempotencyKey: op.idempotencyKey,
-              );
-
-              if (!isSessionValid()) {
-                debugPrint('[ProductRepository] Session changed between server success and local response application for UPDATE ${op.id}; preserving operation and halting.');
-                final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-                await pendingBox.put(op.id, preservedOp.toPendingString());
-                return totalSynced;
-              }
-
-              final existingLocal = productsBox.get(updated.id);
-              if (existingLocal == null || existingLocal.revision <= updated.revision) {
-                await productsBox.put(updated.id, updated);
-              }
-              final updatedOp = op.copyWith(
-                status: OfflineOperation.statusCompleted,
-                clearLeaseExpiresAt: true,
-                resultData: {
-                  'server_product_id': updated.id,
-                  'revision': updated.revision,
-                  'content_hash': updated.contentHash,
-                },
-              );
-              await pendingBox.put(op.id, updatedOp.toPendingString());
-              allOps[op.id] = updatedOp;
-              totalSynced++;
-              progressMade = true;
-            }
-          } else if (op.action == OfflineOperation.actionApprovePublish) {
-            var product = productsBox.get(op.productId);
-            if (product != null) {
-              // Retrieve server-returned revision and hash from upstream operations if available
-              int pubRevision = product.revision;
-              String pubHash = product.contentHash ?? op.contentHash ?? '';
-
-              if (op.dependsOnOpId != null) {
-                final parentOp = allOps[op.dependsOnOpId];
-                if (parentOp != null && parentOp.resultData != null) {
-                  final serverRev = parentOp.resultData!['revision'] as int?;
-                  final serverHash = parentOp.resultData!['content_hash'] as String?;
-                  if (serverRev != null) pubRevision = serverRev;
-                  if (serverHash != null && serverHash.isNotEmpty) pubHash = serverHash;
+              try {
+                final refreshedProduct = await _apiService.getProduct(op.productId);
+                if (!isSessionValid()) {
+                  debugPrint('[ProductRepository] Session changed after stale getProduct for ${op.id}; reverting lease without incrementing retryCount and halting.');
+                  final revertedOp = op.copyWith(
+                    status: OfflineOperation.statusPending,
+                    clearLeaseExpiresAt: true,
+                  );
+                  await pendingBox.put(op.id, revertedOp.toPendingString());
+                  shouldHaltDrain = true;
+                  return;
+                }
+                await productsBox.put(op.productId, refreshedProduct);
+              } catch (fetchErr) {
+                debugPrint('ProductRepository: Failed to refresh stale product ${op.productId}: $fetchErr');
+                if (!isSessionValid()) {
+                  debugPrint('[ProductRepository] Session changed before fallback cache write for ${op.id}; reverting lease without incrementing retryCount and halting.');
+                  final revertedOp = op.copyWith(
+                    status: OfflineOperation.statusPending,
+                    clearLeaseExpiresAt: true,
+                  );
+                  await pendingBox.put(op.id, revertedOp.toPendingString());
+                  shouldHaltDrain = true;
+                  return;
+                }
+                final existing = productsBox.get(op.productId);
+                if (existing != null) {
+                  final fallbackStatus = op.action == OfflineOperation.actionUnpublish
+                      ? ProductStatus.pendingUnpublishSync
+                      : ProductStatus.awaitingApproval;
+                  await productsBox.put(op.productId, existing.copyWith(status: fallbackStatus));
                 }
               }
 
               if (!isSessionValid()) {
-                debugPrint('[ProductRepository] Session changed after async preparation for APPROVE_PUBLISH ${op.id}; reverting lease and halting.');
-                final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
+                debugPrint('[ProductRepository] Session changed before marking user_action_required for ${op.id}; reverting lease without incrementing retryCount and halting.');
+                final revertedOp = op.copyWith(
+                  status: OfflineOperation.statusPending,
+                  clearLeaseExpiresAt: true,
+                );
                 await pendingBox.put(op.id, revertedOp.toPendingString());
-                return totalSynced;
+                shouldHaltDrain = true;
+                return;
               }
 
-              final published = await _apiService.approveAndPublishProduct(
-                op.productId,
-                revision: pubRevision,
-                contentHash: pubHash,
-                idempotencyKey: op.idempotencyKey,
-              );
-
-              if (!isSessionValid()) {
-                debugPrint('[ProductRepository] Session changed between server success and local response application for APPROVE_PUBLISH ${op.id}; preserving operation and halting.');
-                final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-                await pendingBox.put(op.id, preservedOp.toPendingString());
-                return totalSynced;
-              }
-
-              await productsBox.put(published.id, published);
-              final updatedOp = op.copyWith(
-                status: OfflineOperation.statusCompleted,
-                clearLeaseExpiresAt: true,
-                resultData: {
-                  'server_product_id': published.id,
-                  'revision': published.revision,
-                  'content_hash': published.contentHash,
-                  'status': 'published',
-                },
-              );
-              await pendingBox.put(op.id, updatedOp.toPendingString());
-              allOps[op.id] = updatedOp;
-              totalSynced++;
-              progressMade = true;
-            }
-          } else if (op.action == OfflineOperation.actionDelete) {
-            if (!isSessionValid()) {
-              debugPrint('[ProductRepository] Session changed after async preparation for DELETE ${op.id}; reverting lease and halting.');
-              final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-              await pendingBox.put(op.id, revertedOp.toPendingString());
-              return totalSynced;
-            }
-
-            await _apiService.deleteProduct(
-              op.productId,
-              idempotencyKey: op.idempotencyKey,
-            );
-
-            if (!isSessionValid()) {
-              debugPrint('[ProductRepository] Session changed between server success and local response application for DELETE ${op.id}; preserving operation and halting.');
-              final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-              await pendingBox.put(op.id, preservedOp.toPendingString());
-              return totalSynced;
-            }
-
-            final updatedOp = op.copyWith(
-              status: OfflineOperation.statusCompleted,
-              clearLeaseExpiresAt: true,
-            );
-            await pendingBox.put(op.id, updatedOp.toPendingString());
-            allOps[op.id] = updatedOp;
-            totalSynced++;
-            progressMade = true;
-          } else if (op.action == OfflineOperation.actionUnpublish) {
-            // Resolve expected_revision and content_hash:
-            // When an upstream dependency changes revision/hash, use its authoritative resultData.
-            // If dependency output lacks either value, stop with user_action_required rather than guessing.
-            int? expectedRevision = op.revision;
-            String? contentHash = op.contentHash;
-
-            if (op.dependsOnOpId != null && allOps.containsKey(op.dependsOnOpId)) {
-              final parentOp = allOps[op.dependsOnOpId]!;
-              if (parentOp.resultData != null && parentOp.resultData!.containsKey('revision')) {
-                expectedRevision = (parentOp.resultData!['revision'] as num?)?.toInt();
-                contentHash = parentOp.resultData!['content_hash'] as String?;
-              }
-            }
-
-            final sha256Pattern = RegExp(r'^[a-f0-9]{64}$');
-            if (expectedRevision == null ||
-                contentHash == null ||
-                !sha256Pattern.hasMatch(contentHash.toLowerCase())) {
-              debugPrint('ProductRepository: Unpublish op ${op.id} missing valid revision ($expectedRevision) or contentHash ($contentHash). Stopping with user_action_required.');
               final updatedOp = op.copyWith(
                 status: OfflineOperation.statusUserActionRequired,
                 clearLeaseExpiresAt: true,
-                errorMessage: 'Cannot unpublish: authoritative revision ($expectedRevision) or content hash ($contentHash) is missing or not a valid 64-char SHA-256.',
+                errorMessage: e.toString(),
               );
               await pendingBox.put(op.id, updatedOp.toPendingString());
               allOps[op.id] = updatedOp;
-              continue;
+            } catch (e) {
+              debugPrint('ProductRepository: Failed to sync pending op ${op.id}: $e');
+              if (!isSessionValid() || e is SessionExpiredException || (e is DioException && e.error is SessionExpiredException)) {
+                debugPrint('[ProductRepository] Session invalidated during op ${op.id}; reverting lease without incrementing retryCount and halting.');
+                final revertedOp = op.copyWith(
+                  status: OfflineOperation.statusPending,
+                  clearLeaseExpiresAt: true,
+                );
+                await pendingBox.put(op.id, revertedOp.toPendingString());
+                shouldHaltDrain = true;
+                return;
+              }
+              final updatedOp = op.copyWith(
+                status: OfflineOperation.statusPending,
+                clearLeaseExpiresAt: true,
+                retryCount: op.retryCount + 1,
+                errorMessage: e.toString(),
+              );
+              await pendingBox.put(op.id, updatedOp.toPendingString());
+              allOps[op.id] = updatedOp;
+              if (!isSessionValid()) {
+                debugPrint('[ProductRepository] Session changed during op ${op.id} error; halting queue drain.');
+                shouldHaltDrain = true;
+                return;
+              }
             }
+          },
+          zoneValues: {
+            #kalasetuExpectedUserId: op.owner,
+            #kalasetuExpectedSessionGen: initiatingSessionGen,
+            #kalasetuExpectedBackend: op.backend ?? initiatingBackend,
+          },
+        );
 
-            if (!isSessionValid()) {
-              debugPrint('[ProductRepository] Session changed after async preparation for UNPUBLISH ${op.id}; reverting lease and halting.');
-              final revertedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-              await pendingBox.put(op.id, revertedOp.toPendingString());
-              return totalSynced;
-            }
-
-            final unpublished = await _apiService.unpublishProduct(
-              op.productId,
-              expectedRevision: expectedRevision,
-              contentHash: contentHash.toLowerCase(),
-              idempotencyKey: op.idempotencyKey,
-            );
-
-            if (!isSessionValid()) {
-              debugPrint('[ProductRepository] Session changed between server success and local response application for UNPUBLISH ${op.id}; preserving operation and halting.');
-              final preservedOp = op.copyWith(status: OfflineOperation.statusPending, clearLeaseExpiresAt: true);
-              await pendingBox.put(op.id, preservedOp.toPendingString());
-              return totalSynced;
-            }
-
-            await productsBox.put(unpublished.id, unpublished);
-            final updatedOp = op.copyWith(
-              status: OfflineOperation.statusCompleted,
-              clearLeaseExpiresAt: true,
-              resultData: {
-                'server_product_id': unpublished.id,
-                'revision': unpublished.revision,
-                'content_hash': unpublished.contentHash,
-              },
-            );
-            await pendingBox.put(op.id, updatedOp.toPendingString());
-            allOps[op.id] = updatedOp;
-            totalSynced++;
-            progressMade = true;
-          }
-        } on StaleRevisionException catch (e) {
-          debugPrint('ProductRepository: Stale revision during sync for op ${op.id}: $e');
-          try {
-            final refreshedProduct = await _apiService.getProduct(op.productId);
-            await productsBox.put(op.productId, refreshedProduct);
-          } catch (fetchErr) {
-            debugPrint('ProductRepository: Failed to refresh stale product ${op.productId}: $fetchErr');
-            final existing = productsBox.get(op.productId);
-            if (existing != null) {
-              final fallbackStatus = op.action == OfflineOperation.actionUnpublish
-                  ? ProductStatus.pendingUnpublishSync
-                  : ProductStatus.awaitingApproval;
-              await productsBox.put(op.productId, existing.copyWith(status: fallbackStatus));
-            }
-          }
-          final updatedOp = op.copyWith(
-            status: OfflineOperation.statusUserActionRequired,
-            clearLeaseExpiresAt: true,
-            errorMessage: e.toString(),
-          );
-          await pendingBox.put(op.id, updatedOp.toPendingString());
-          allOps[op.id] = updatedOp;
-        } catch (e) {
-          debugPrint('ProductRepository: Failed to sync pending op ${op.id}: $e');
-          final updatedOp = op.copyWith(
-            status: OfflineOperation.statusPending,
-            clearLeaseExpiresAt: true,
-            retryCount: op.retryCount + 1,
-            errorMessage: e.toString(),
-          );
-          await pendingBox.put(op.id, updatedOp.toPendingString());
-          allOps[op.id] = updatedOp;
-          if (!isSessionValid()) {
-            debugPrint('[ProductRepository] Session changed during op ${op.id} error; halting queue drain.');
-            return totalSynced;
-          }
+        if (shouldHaltDrain) {
+          return totalSynced;
         }
       }
     }
