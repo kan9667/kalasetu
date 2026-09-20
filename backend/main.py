@@ -50,9 +50,9 @@ def check_schema_readiness():
     with engine.connect() as conn:
         try:
             result = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            if result != "0003_media_asset_lineage_and_degradation":
+            if result != "0004_sms_dispatch_logs":
                 raise RuntimeError(
-                    f"Database schema is out of date (current: {result}, required: 0003_media_asset_lineage_and_degradation). "
+                    f"Database schema is out of date (current: {result}, required: 0004_sms_dispatch_logs). "
                     f"Run 'PYTHONPATH=. alembic -c backend/alembic.ini upgrade head' before starting the application."
                 )
         except Exception as e:

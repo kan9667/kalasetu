@@ -46,13 +46,14 @@ class ProductAdapter extends TypeAdapter<Product> {
       hourlyRate: fields[26] as double?,
       transportCost: fields[27] as double?,
       otherOverhead: fields[28] as double?,
+      reviewedMediaChecksum: fields[29] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Product obj) {
     writer
-      ..writeByte(29)
+      ..writeByte(30)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -110,7 +111,9 @@ class ProductAdapter extends TypeAdapter<Product> {
       ..writeByte(27)
       ..write(obj.transportCost)
       ..writeByte(28)
-      ..write(obj.otherOverhead);
+      ..write(obj.otherOverhead)
+      ..writeByte(29)
+      ..write(obj.reviewedMediaChecksum);
   }
 
   @override

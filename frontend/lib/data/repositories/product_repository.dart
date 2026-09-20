@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
+import '../../core/network/active_session_manager.dart';
 import '../models/product.dart';
 import '../models/offline_operation.dart';
 import '../services/api_service.dart';
@@ -258,6 +260,7 @@ class ProductRepository {
     String? contentHash,
     bool isOnline = true,
     String? idempotencyKey,
+    String? reviewedChecksum,
   }) async {
     await initialize();
     final productsBox = _getProductsBox();
@@ -279,6 +282,20 @@ class ProductRepository {
     final effectiveRevision = revision ?? product.revision;
     final effectiveHash = contentHash ?? product.contentHash ?? '';
     final effectiveIdempotencyKey = idempotencyKey ?? 'idem_pub_${id}_$effectiveRevision';
+    final effectiveReviewedChecksum = reviewedChecksum ?? product.reviewedMediaChecksum;
+
+    if (effectiveReviewedChecksum != null && effectiveReviewedChecksum.isNotEmpty) {
+      if (product.displayPhotoPath.isNotEmpty && File(product.displayPhotoPath).existsSync()) {
+        final currentBytes = File(product.displayPhotoPath).readAsBytesSync();
+        final currentSha256 = sha256.convert(currentBytes).toString();
+        if (currentSha256 != effectiveReviewedChecksum) {
+          throw StateError(
+            'Approval failed: Image on disk was modified or replaced after preview verification '
+            '($currentSha256 != $effectiveReviewedChecksum)',
+          );
+        }
+      }
+    }
 
     if (isOnline) {
       try {
@@ -286,23 +303,67 @@ class ProductRepository {
         if ((product.mediaId == null || product.mediaId!.isEmpty) &&
             product.displayPhotoPath.isNotEmpty &&
             File(product.displayPhotoPath).existsSync()) {
-          final mediaUploadKey = 'idem_upload_${id}_${DateTime.now().millisecondsSinceEpoch}';
-          final mediaRes = await _apiService.uploadMediaFile(
-            product.displayPhotoPath,
-            idempotencyKey: mediaUploadKey,
-          );
-          final serverMediaId = mediaRes['media_id'] as String?;
-          if (serverMediaId != null) {
-            product = product.copyWith(mediaId: serverMediaId);
-            final attachKey = 'idem_attach_${id}_${product.revision}_${DateTime.now().millisecondsSinceEpoch}';
-            final attached = await _apiService.updateProduct(
-              product,
-              expectedRevision: product.revision,
-              idempotencyKey: attachKey,
+          final photoBytes = File(product.displayPhotoPath).readAsBytesSync();
+          final photoSha256 = sha256.convert(photoBytes).toString();
+          if (effectiveReviewedChecksum != null &&
+              effectiveReviewedChecksum.isNotEmpty &&
+              photoSha256 != effectiveReviewedChecksum) {
+            throw StateError(
+              'Approval failed: Image on disk was modified or replaced after preview verification '
+              '($photoSha256 != $effectiveReviewedChecksum)',
             );
-            await productsBox.put(attached.id, attached);
-            product = attached;
           }
+          final snapshotDir = Directory('${Directory.systemTemp.path}/kalasetu_reviewed_uploads');
+          if (!snapshotDir.existsSync()) {
+            snapshotDir.createSync(recursive: true);
+          }
+          final snapshotPath = '${snapshotDir.path}/reviewed_${product.id}_${DateTime.now().microsecondsSinceEpoch}.tmp';
+          final snapshotFile = File(snapshotPath)..writeAsBytesSync(photoBytes, flush: true);
+
+          final snapshotSha256 = sha256.convert(snapshotFile.readAsBytesSync()).toString();
+          if (snapshotSha256 != photoSha256 ||
+              (effectiveReviewedChecksum != null &&
+               effectiveReviewedChecksum.isNotEmpty &&
+               snapshotSha256 != effectiveReviewedChecksum)) {
+            try { snapshotFile.deleteSync(); } catch (_) {}
+            throw StateError(
+              'Approval failed: Snapshot checksum mismatch ($snapshotSha256 != $effectiveReviewedChecksum)',
+            );
+          }
+
+          final mediaUploadKey = 'idem_upload_${id}_${DateTime.now().millisecondsSinceEpoch}';
+          Map<String, dynamic> mediaRes;
+          try {
+            mediaRes = await _apiService.uploadMediaFile(
+              snapshotPath,
+              idempotencyKey: mediaUploadKey,
+            );
+          } finally {
+            try { snapshotFile.deleteSync(); } catch (_) {}
+          }
+
+          final serverChecksum = mediaRes['sha256_checksum'] as String? ?? mediaRes['sha256Checksum'] as String?;
+          final expectedChecksum = effectiveReviewedChecksum ?? photoSha256;
+          if (serverChecksum == null || serverChecksum.toLowerCase() != expectedChecksum.toLowerCase()) {
+            throw StateError(
+              'Approval failed: Server-returned media checksum does not match reviewed checksum '
+              '($serverChecksum != $expectedChecksum)',
+            );
+          }
+          final serverMediaId = mediaRes['media_id'] as String?;
+          if (serverMediaId == null || serverMediaId.isEmpty) {
+            throw StateError('Approval failed: Server did not return a valid media ID');
+          }
+
+          product = product.copyWith(mediaId: serverMediaId);
+          final attachKey = 'idem_attach_${id}_${product.revision}_${DateTime.now().millisecondsSinceEpoch}';
+          final attached = await _apiService.updateProduct(
+            product,
+            expectedRevision: product.revision,
+            idempotencyKey: attachKey,
+          );
+          await productsBox.put(attached.id, attached);
+          product = attached;
         }
 
         final pubRevision = product.revision;
@@ -317,6 +378,8 @@ class ProductRepository {
         return published;
       } on StaleRevisionException {
         rethrow;
+      } on StateError {
+        rethrow;
       } catch (e) {
         debugPrint('ProductRepository: Online publish failed, queueing approve & publish: $e');
       }
@@ -330,6 +393,7 @@ class ProductRepository {
       approvedRevision: null,
       approvedAt: null,
       publishedAt: null,
+      reviewedMediaChecksum: effectiveReviewedChecksum,
     );
     await productsBox.put(queuedLocal.id, queuedLocal);
 
@@ -349,6 +413,16 @@ class ProductRepository {
     if ((queuedLocal.mediaId == null || queuedLocal.mediaId!.isEmpty) &&
         queuedLocal.displayPhotoPath.isNotEmpty &&
         File(queuedLocal.displayPhotoPath).existsSync()) {
+      final photoBytes = File(queuedLocal.displayPhotoPath).readAsBytesSync();
+      final photoSha256 = sha256.convert(photoBytes).toString();
+      if (effectiveReviewedChecksum != null &&
+          effectiveReviewedChecksum.isNotEmpty &&
+          photoSha256 != effectiveReviewedChecksum) {
+        throw StateError(
+          'Approval failed: Image on disk was modified or replaced after preview verification '
+          '($photoSha256 != $effectiveReviewedChecksum)',
+        );
+      }
       final mediaOpId = 'op_media_${queuedLocal.id}_${DateTime.now().microsecondsSinceEpoch}';
       final mediaUploadKey = 'idem_media_${queuedLocal.id}';
       final mediaOp = OfflineOperation(
@@ -358,6 +432,11 @@ class ProductRepository {
         idempotencyKey: mediaUploadKey,
         mediaLocalId: queuedLocal.displayPhotoPath,
         dependsOnOpId: latestUpstreamOpId,
+        payloadSnapshot: {
+          'media_sha256': effectiveReviewedChecksum ?? photoSha256,
+          'expected_revision': effectiveRevision,
+          'content_hash': effectiveHash,
+        },
       );
       await pendingBox.put(mediaOp.id, mediaOp.toPendingString());
 
@@ -370,6 +449,11 @@ class ProductRepository {
         idempotencyKey: attachKey,
         dependsOnOpId: mediaOpId,
         mediaIdFromOpId: mediaOpId,
+        payloadSnapshot: {
+          'expected_revision': effectiveRevision,
+          'content_hash': effectiveHash,
+          'media_sha256': effectiveReviewedChecksum ?? photoSha256,
+        },
       );
       await pendingBox.put(attachOp.id, attachOp.toPendingString());
 
@@ -385,6 +469,7 @@ class ProductRepository {
         payloadSnapshot: {
           'expected_revision': effectiveRevision,
           'content_hash': effectiveHash,
+          'media_sha256': effectiveReviewedChecksum ?? photoSha256,
         },
       );
       await pendingBox.put(pubOp.id, pubOp.toPendingString());
@@ -613,6 +698,12 @@ class ProductRepository {
     // Reclaim any expired in-flight leases before draining
     await reclaimExpiredLeases();
 
+    // Invariant: Never sync artisan operations while simulated!
+    if (ActiveSessionManager.isNgoSimulation()) {
+      debugPrint('[ProductRepository] Skipping queue sync: active session is in NGO simulation mode.');
+      return 0;
+    }
+
     if (pendingBox.isEmpty) return 0;
 
     int totalSynced = 0;
@@ -704,33 +795,76 @@ class ProductRepository {
             }
           } else if (op.action == OfflineOperation.actionMediaUpload) {
             final filePath = op.mediaLocalId;
-            if (filePath != null && File(filePath).existsSync()) {
-              final mediaRes = await _apiService.uploadMediaFile(
-                filePath,
+            if (filePath == null || !File(filePath).existsSync()) {
+              debugPrint('[ProductRepository] Media upload failed closed: file "$filePath" does not exist.');
+              final failedOp = op.copyWith(
+                status: OfflineOperation.statusFailed,
+                clearLeaseExpiresAt: true,
+                errorMessage: 'Media file missing on device: $filePath',
+              );
+              await pendingBox.put(op.id, failedOp.toPendingString());
+              allOps[op.id] = failedOp;
+              continue;
+            }
+
+            final fileBytes = await File(filePath).readAsBytes();
+            final actualSha256 = sha256.convert(fileBytes).toString();
+            final expectedSha256 = op.payloadSnapshot?['media_sha256'] as String?;
+            if (expectedSha256 != null && expectedSha256.isNotEmpty && actualSha256 != expectedSha256) {
+              debugPrint('[ProductRepository] Media upload failed closed: SHA-256 mismatch (actual $actualSha256 != expected $expectedSha256).');
+              final failedOp = op.copyWith(
+                status: OfflineOperation.statusFailed,
+                clearLeaseExpiresAt: true,
+                errorMessage: 'Media file mutated on device (SHA-256 mismatch)',
+              );
+              await pendingBox.put(op.id, failedOp.toPendingString());
+              allOps[op.id] = failedOp;
+              continue;
+            }
+
+            final snapshotDir = Directory('${Directory.systemTemp.path}/kalasetu_sync_uploads');
+            if (!snapshotDir.existsSync()) {
+              snapshotDir.createSync(recursive: true);
+            }
+            final snapshotPath = '${snapshotDir.path}/sync_upload_${op.id}_${DateTime.now().microsecondsSinceEpoch}.tmp';
+            final snapshotFile = File(snapshotPath)..writeAsBytesSync(fileBytes, flush: true);
+
+            Map<String, dynamic> mediaRes;
+            try {
+              mediaRes = await _apiService.uploadMediaFile(
+                snapshotPath,
                 idempotencyKey: op.idempotencyKey,
               );
-              final serverMediaId = mediaRes['media_id'] as String?;
-              final updatedOp = op.copyWith(
-                status: OfflineOperation.statusCompleted,
-                clearLeaseExpiresAt: true,
-                mediaId: serverMediaId,
-                resultData: mediaRes,
-              );
-              await pendingBox.put(op.id, updatedOp.toPendingString());
-              allOps[op.id] = updatedOp;
-              totalSynced++;
-              progressMade = true;
-            } else {
-              // File missing or not needed
-              final updatedOp = op.copyWith(
-                status: OfflineOperation.statusCompleted,
-                clearLeaseExpiresAt: true,
-                resultData: {'media_id': op.mediaId ?? ''},
-              );
-              await pendingBox.put(op.id, updatedOp.toPendingString());
-              allOps[op.id] = updatedOp;
-              progressMade = true;
+            } finally {
+              try { snapshotFile.deleteSync(); } catch (_) {}
             }
+
+            final serverChecksum = mediaRes['sha256_checksum'] as String? ?? mediaRes['sha256Checksum'] as String?;
+            if (expectedSha256 != null && expectedSha256.isNotEmpty) {
+              if (serverChecksum == null || serverChecksum.toLowerCase() != expectedSha256.toLowerCase()) {
+                debugPrint('[ProductRepository] Server media checksum mismatch during sync: server ($serverChecksum) != expected ($expectedSha256)');
+                final failedOp = op.copyWith(
+                  status: OfflineOperation.statusFailed,
+                  clearLeaseExpiresAt: true,
+                  errorMessage: 'Server-returned media checksum mismatch: $serverChecksum != $expectedSha256',
+                );
+                await pendingBox.put(op.id, failedOp.toPendingString());
+                allOps[op.id] = failedOp;
+                continue;
+              }
+            }
+
+            final serverMediaId = mediaRes['media_id'] as String?;
+            final updatedOp = op.copyWith(
+              status: OfflineOperation.statusCompleted,
+              clearLeaseExpiresAt: true,
+              mediaId: serverMediaId,
+              resultData: mediaRes,
+            );
+            await pendingBox.put(op.id, updatedOp.toPendingString());
+            allOps[op.id] = updatedOp;
+            totalSynced++;
+            progressMade = true;
           } else if (op.action == OfflineOperation.actionAttachMedia) {
             // Resolve mediaId from parent media op if needed
             String? resolvedMediaId = op.mediaId;

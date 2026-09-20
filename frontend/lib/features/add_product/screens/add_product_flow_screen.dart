@@ -6,6 +6,7 @@ import 'package:easy_localization/easy_localization.dart';
 import '../../../core/router/app_route_constants.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../widgets/step_progress_bar.dart';
 import '../widgets/step1_capture_widget.dart';
@@ -22,6 +23,43 @@ class AddProductFlowScreen extends ConsumerWidget {
     final draft = ref.watch(addProductFlowProvider);
     final isOnline = ref.watch(connectivityProvider).value ?? true;
     final currentStep = draft.currentStep;
+
+    if (draft.hasCorruptedDraft) {
+      return AppScaffold(
+        title: 'tab_add_product'.tr(),
+        automaticallyImplyLeading: false,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.warning_amber_rounded, size: 64, color: AppColors.terracotta),
+                const SizedBox(height: 16),
+                Text(
+                  'Draft Recovery Needed',
+                  style: AppTextStyles.headlineMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'A saved draft was corrupted and could not be loaded safely. To protect data integrity, please start a fresh draft.',
+                  style: AppTextStyles.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    ref.read(addProductFlowProvider.notifier).discardPreviousDraft();
+                  },
+                  child: const Text('Start Fresh Draft'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     // ── Full-screen: Pricing loading/offline (Step 3 → 4) ───────────────────
     // These replace the whole tree because submitForPricingAndAdvance() awaits

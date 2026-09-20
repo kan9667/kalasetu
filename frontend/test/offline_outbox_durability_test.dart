@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:kalasetu/data/models/product.dart';
@@ -45,12 +46,14 @@ class ChainingMockApiService extends MockApiService {
     if (idempotencyKey != null) {
       capturedUploadKeys.add(idempotencyKey);
     }
+    final file = File(filePath);
+    final fileSha = file.existsSync() ? sha256.convert(file.readAsBytesSync()).toString() : 'abc_checksum_999';
     return {
       'media_id': 'med_server_12345',
       'file_url': '/api/v1/media/med_server_12345',
       'mime_type': 'image/jpeg',
       'byte_size': 20480,
-      'sha256_checksum': 'abc_checksum_999',
+      'sha256_checksum': fileSha,
       'status': 'ready',
     };
   }

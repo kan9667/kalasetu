@@ -185,7 +185,7 @@ class AiOperationStorage {
     await box.put(record.id, jsonEncode(record.toJson()));
   }
 
-  /// Retrieves an operation record by ID.
+  /// Retrieves an operation record by ID. Throws [CorruptAiOperationException] if record data is corrupt.
   static Future<AiOperationRecord?> get(String id) async {
     final box = await _getBox();
     final raw = box.get(id);
@@ -195,7 +195,7 @@ class AiOperationStorage {
       return AiOperationRecord.fromJson(json);
     } catch (e) {
       debugPrint('[AiOperationStorage] Error decoding record $id: $e');
-      return null;
+      throw CorruptAiOperationException(id, e);
     }
   }
 
@@ -207,7 +207,9 @@ class AiOperationStorage {
     required int inputGeneration,
   }) async {
     final box = await _getBox();
-    for (final raw in box.values) {
+    for (final key in box.keys) {
+      final raw = box.get(key);
+      if (raw == null) continue;
       try {
         final json = jsonDecode(raw) as Map<String, dynamic>;
         final rec = AiOperationRecord.fromJson(json);
@@ -218,7 +220,9 @@ class AiOperationStorage {
             rec.status != AiOperationRecord.statusSuperseded) {
           return rec;
         }
-      } catch (_) {}
+      } catch (e) {
+        throw CorruptAiOperationException(key.toString(), e);
+      }
     }
     return null;
   }
@@ -227,14 +231,18 @@ class AiOperationStorage {
   static Future<List<AiOperationRecord>> getOperationsForDraft(String draftId) async {
     final box = await _getBox();
     final list = <AiOperationRecord>[];
-    for (final raw in box.values) {
+    for (final key in box.keys) {
+      final raw = box.get(key);
+      if (raw == null) continue;
       try {
         final json = jsonDecode(raw) as Map<String, dynamic>;
         final rec = AiOperationRecord.fromJson(json);
         if (rec.draftId == draftId) {
           list.add(rec);
         }
-      } catch (_) {}
+      } catch (e) {
+        throw CorruptAiOperationException(key.toString(), e);
+      }
     }
     list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return list;
@@ -260,7 +268,9 @@ class AiOperationStorage {
           final updated = rec.copyWith(status: AiOperationRecord.statusSuperseded);
           await box.put(key, jsonEncode(updated.toJson()));
         }
-      } catch (_) {}
+      } catch (e) {
+        throw CorruptAiOperationException(key, e);
+      }
     }
   }
 
@@ -273,11 +283,27 @@ class AiOperationStorage {
   }) async {
     final existing = await get(id);
     if (existing == null) return;
+    // INVARIANT: Never revive an operation that has been superseded by newer user input.
+    final effectiveStatus = existing.status == AiOperationRecord.statusSuperseded
+        ? AiOperationRecord.statusSuperseded
+        : status;
     final updated = existing.copyWith(
-      status: status,
-      resultData: resultData,
-      errorMessage: errorMessage,
+      status: effectiveStatus,
+      resultData: resultData ?? existing.resultData,
+      errorMessage: errorMessage ?? existing.errorMessage,
     );
     await save(updated);
   }
+}
+
+/// Thrown when a persisted AI operation record cannot be decoded or is corrupt.
+class CorruptAiOperationException implements Exception {
+  final String recordId;
+  final Object cause;
+
+  const CorruptAiOperationException(this.recordId, this.cause);
+
+  @override
+  String toString() =>
+      'CorruptAiOperationException: Failed to decode durable AI operation record "$recordId": $cause';
 }

@@ -358,3 +358,26 @@ class IdempotencyRecordDB(Base):
     response_body = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class SmsDispatchStatus(str, enum.Enum):
+    RESERVED = "reserved"
+    DISPATCHED = "dispatched"
+    AMBIGUOUS_TIMEOUT = "ambiguous_timeout"
+    FAILED = "failed"
+
+
+class SmsDispatchLogDB(Base):
+    """
+    Durable, concurrency-safe dispatch ledger for SMS budget tracking.
+    Enforces daily global and per-phone limits over a rolling 24-hour window.
+    """
+
+    __tablename__ = "sms_dispatch_logs"
+
+    id = Column(String(64), primary_key=True, index=True)
+    phone_hash = Column(String(64), nullable=False, index=True)
+    provider = Column(String(32), nullable=False)
+    status = Column(String(32), default=SmsDispatchStatus.RESERVED.value, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    error_detail = Column(String(255), nullable=True)

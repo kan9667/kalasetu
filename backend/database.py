@@ -46,6 +46,8 @@ def get_db() -> Generator[Session, None, None]:
 
 def init_db() -> None:
     """Ensure baseline seed data (demo artisan) exists for local development and testing."""
+    from .models import db_models  # noqa: F401
+    Base.metadata.create_all(bind=engine)
     from .models.db_models import ArtisanDB
     from datetime import datetime
 

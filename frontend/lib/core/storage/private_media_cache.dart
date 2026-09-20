@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import '../config/api_config.dart';
+import '../network/active_session_manager.dart';
 import 'secure_token_storage.dart';
 
 class MediaExceedsSizeLimitException implements Exception {
@@ -347,10 +348,14 @@ class PrivateMediaCache {
     final isTargetConfigured = isConfiguredApiOrigin(targetUri);
     final isPrivateMediaPath = targetUri.path.contains('/api/v1/media/') || targetUri.path.contains('/media/');
 
-    // Security invariant: NEVER attach bearer credentials to arbitrary external origins!
+    // Security invariant: NEVER attach bearer credentials to arbitrary external origins or during simulation!
     final headers = <String, dynamic>{
       'Accept': '*/*',
-      if (isTargetConfigured && isPrivateMediaPath && token != null && token.isNotEmpty)
+      if (!ActiveSessionManager.isNgoSimulation() &&
+          isTargetConfigured &&
+          isPrivateMediaPath &&
+          token != null &&
+          token.isNotEmpty)
         'Authorization': 'Bearer $token',
     };
 

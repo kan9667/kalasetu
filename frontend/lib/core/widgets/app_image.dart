@@ -1,10 +1,19 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:crypto/crypto.dart';
+import 'package:image/image.dart' as img;
 import '../theme/app_colors.dart';
 import '../config/api_config.dart';
 import '../storage/private_media_cache.dart';
+
+typedef ImageRenderCallback = void Function({
+  required String assetIdentity,
+  required String sha256Checksum,
+  int? sessionGeneration,
+});
 
 class AppImage extends StatefulWidget {
   final String imageUrl;
@@ -14,6 +23,7 @@ class AppImage extends StatefulWidget {
   final Widget? fallbackWidget;
   final PrivateMediaCache? mediaCache;
   final VoidCallback? onError;
+  final ImageRenderCallback? onRenderSuccess;
 
   const AppImage({
     super.key,
@@ -24,23 +34,31 @@ class AppImage extends StatefulWidget {
     this.fallbackWidget,
     this.mediaCache,
     this.onError,
+    this.onRenderSuccess,
   });
 
-  static bool isPrivateMedia(String url) {
-    if (url.startsWith('med_')) return true;
-    if (url.contains('/api/v1/media/')) return true;
-    return false;
-  }
-
   static String extractMediaId(String url) {
-    if (url.startsWith('med_')) {
-      return url.split('.').first;
+    if (url.startsWith('med_')) return url;
+    if (url.startsWith('/uploads/')) {
+      final segments = url.split('/');
+      return segments.isNotEmpty ? segments.last : '';
     }
     final match = RegExp(r'/api/v1/media/([^/?#]+)').firstMatch(url);
     if (match != null) {
       return match.group(1)!;
     }
-    return url;
+    final uri = Uri.tryParse(url);
+    if (uri != null && uri.pathSegments.isNotEmpty) {
+      return uri.pathSegments.last;
+    }
+    return '';
+  }
+
+  static bool isPrivateMedia(String url) {
+    if (url.startsWith('med_')) return true;
+    final uri = Uri.tryParse(url);
+    final path = uri != null ? uri.path : url;
+    return path.startsWith('/api/v1/media/') || path.startsWith('/uploads/');
   }
 
   @override
@@ -50,6 +68,7 @@ class AppImage extends StatefulWidget {
 class _AppImageState extends State<AppImage> {
   Future<File>? _mediaFuture;
   int? _capturedSessionGen;
+  String? _lastReportedAsset;
 
   @override
   void initState() {
@@ -60,10 +79,29 @@ class _AppImageState extends State<AppImage> {
   @override
   void didUpdateWidget(AppImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.imageUrl != widget.imageUrl ||
-        oldWidget.mediaCache != widget.mediaCache) {
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _lastReportedAsset = null;
       _resolveMediaFuture();
     }
+  }
+
+  void _notifyRenderSuccess({
+    required String assetIdentity,
+    required String sha256Checksum,
+    int? sessionGeneration,
+  }) {
+    if (sha256Checksum.isEmpty) return;
+    if (_lastReportedAsset == assetIdentity) return;
+    _lastReportedAsset = assetIdentity;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.onRenderSuccess?.call(
+          assetIdentity: assetIdentity,
+          sha256Checksum: sha256Checksum,
+          sessionGeneration: sessionGeneration,
+        );
+      }
+    });
   }
 
   void _resolveMediaFuture() {
@@ -142,20 +180,62 @@ class _AppImageState extends State<AppImage> {
             final cache = widget.mediaCache ?? PrivateMediaCache.instance;
             if (_capturedSessionGen != null && cache.sessionGeneration != _capturedSessionGen) {
               debugPrint('[AppImage] Session changed while awaiting media; invalidating pending widget result.');
+              _lastReportedAsset = null;
               widget.onError?.call();
               return fallback;
             }
-            return Image.file(
-              snapshot.data!,
+            Uint8List? mediaBytes;
+            String fileSha256 = '';
+            try {
+              if (snapshot.data!.existsSync()) {
+                mediaBytes = snapshot.data!.readAsBytesSync();
+                if (mediaBytes.isNotEmpty) {
+                  fileSha256 = sha256.convert(mediaBytes).toString();
+                }
+              }
+            } catch (_) {
+              mediaBytes = null;
+            }
+            if (mediaBytes == null || mediaBytes.isEmpty || fileSha256.isEmpty) {
+              _lastReportedAsset = null;
+              widget.onError?.call();
+              return fallback;
+            }
+            final decoded = img.decodeImage(mediaBytes);
+            if (decoded == null) {
+              _lastReportedAsset = null;
+              widget.onError?.call();
+              return fallback;
+            }
+            _notifyRenderSuccess(
+              assetIdentity: resolvedUrl,
+              sha256Checksum: fileSha256,
+              sessionGeneration: _capturedSessionGen,
+            );
+            return Image.memory(
+              mediaBytes,
+              key: ValueKey('${resolvedUrl}_$fileSha256'),
               width: widget.width,
               height: widget.height,
               fit: widget.fit,
+              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                if (frame != null || wasSynchronouslyLoaded) {
+                  _notifyRenderSuccess(
+                    assetIdentity: resolvedUrl,
+                    sha256Checksum: fileSha256,
+                    sessionGeneration: _capturedSessionGen,
+                  );
+                }
+                return child;
+              },
               errorBuilder: (context, error, stackTrace) {
+                _lastReportedAsset = null;
                 widget.onError?.call();
                 return fallback;
               },
             );
           }
+          _lastReportedAsset = null;
           widget.onError?.call();
           return fallback;
         },
@@ -175,17 +255,58 @@ class _AppImageState extends State<AppImage> {
     if (!kIsWeb && !isNetwork && !isBlobOrLocalhost) {
       final file = File(resolvedUrl);
       if (file.existsSync() && file.lengthSync() > 0) {
-        return Image.file(
-          file,
+        Uint8List? fileBytes;
+        String fileSha256 = '';
+        try {
+          fileBytes = file.readAsBytesSync();
+          if (fileBytes.isNotEmpty) {
+            fileSha256 = sha256.convert(fileBytes).toString();
+          }
+        } catch (_) {
+          fileBytes = null;
+        }
+        if (fileBytes == null || fileBytes.isEmpty || fileSha256.isEmpty) {
+          _lastReportedAsset = null;
+          widget.onError?.call();
+          return fallback;
+        }
+        final decoded = img.decodeImage(fileBytes);
+        if (decoded == null) {
+          _lastReportedAsset = null;
+          widget.onError?.call();
+          return fallback;
+        }
+        _notifyRenderSuccess(
+          assetIdentity: resolvedUrl,
+          sha256Checksum: fileSha256,
+          sessionGeneration: null,
+        );
+
+        return Image.memory(
+          fileBytes,
+          key: ValueKey('${resolvedUrl}_$fileSha256'),
           width: widget.width,
           height: widget.height,
           fit: widget.fit,
+          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+            if (frame != null || wasSynchronouslyLoaded) {
+              _notifyRenderSuccess(
+                assetIdentity: resolvedUrl,
+                sha256Checksum: fileSha256,
+                sessionGeneration: null,
+              );
+            }
+            return child;
+          },
           errorBuilder: (context, error, stackTrace) {
+            _lastReportedAsset = null;
             widget.onError?.call();
             return fallback;
           },
         );
       }
+      _lastReportedAsset = null;
+      widget.onError?.call();
       return fallback;
     }
 
@@ -195,6 +316,16 @@ class _AppImageState extends State<AppImage> {
         width: widget.width,
         height: widget.height,
         fit: widget.fit,
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (frame != null || wasSynchronouslyLoaded) {
+            _notifyRenderSuccess(
+              assetIdentity: resolvedUrl,
+              sha256Checksum: '',
+              sessionGeneration: null,
+            );
+          }
+          return child;
+        },
         loadingBuilder: (context, child, loadingProgress) {
           if (loadingProgress == null) return child;
           return Container(
@@ -229,6 +360,19 @@ class _AppImageState extends State<AppImage> {
         width: widget.width,
         height: widget.height,
         fit: widget.fit,
+        imageBuilder: (context, imageProvider) {
+          _notifyRenderSuccess(
+            assetIdentity: resolvedUrl,
+            sha256Checksum: '',
+            sessionGeneration: null,
+          );
+          return Image(
+            image: imageProvider,
+            width: widget.width,
+            height: widget.height,
+            fit: widget.fit,
+          );
+        },
         placeholder: (context, url) => Container(
           width: widget.width,
           height: widget.height,
@@ -244,12 +388,50 @@ class _AppImageState extends State<AppImage> {
 
     final fallbackFile = File(resolvedUrl);
     if (!kIsWeb && fallbackFile.existsSync() && fallbackFile.lengthSync() > 0) {
-      return Image.file(
-        fallbackFile,
+      Uint8List? fileBytes;
+      String fileSha256 = '';
+      try {
+        fileBytes = fallbackFile.readAsBytesSync();
+        if (fileBytes.isNotEmpty) {
+          fileSha256 = sha256.convert(fileBytes).toString();
+        }
+      } catch (_) {
+        fileBytes = null;
+      }
+      if (fileBytes == null || fileBytes.isEmpty || fileSha256.isEmpty) {
+        _lastReportedAsset = null;
+        widget.onError?.call();
+        return fallback;
+      }
+      final decoded = img.decodeImage(fileBytes);
+      if (decoded == null) {
+        _lastReportedAsset = null;
+        widget.onError?.call();
+        return fallback;
+      }
+      _notifyRenderSuccess(
+        assetIdentity: resolvedUrl,
+        sha256Checksum: fileSha256,
+        sessionGeneration: null,
+      );
+      return Image.memory(
+        fileBytes,
+        key: ValueKey('${resolvedUrl}_$fileSha256'),
         width: widget.width,
         height: widget.height,
         fit: widget.fit,
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (frame != null || wasSynchronouslyLoaded) {
+            _notifyRenderSuccess(
+              assetIdentity: resolvedUrl,
+              sha256Checksum: fileSha256,
+              sessionGeneration: null,
+            );
+          }
+          return child;
+        },
         errorBuilder: (context, error, stackTrace) {
+          _lastReportedAsset = null;
           widget.onError?.call();
           return fallback;
         },

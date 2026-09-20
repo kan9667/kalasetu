@@ -151,6 +151,7 @@ class _MockReviewProductListNotifier
     int? revision,
     String? contentHash,
     String? idempotencyKey,
+    String? reviewedChecksum,
   }) async {
     approvedProductId = productId;
     approvedRevision = revision;

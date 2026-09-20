@@ -1,7 +1,10 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
+import 'package:crypto/crypto.dart';
+import 'package:synchronized/synchronized.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
@@ -246,6 +249,7 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
     int? revision,
     String? contentHash,
     String? idempotencyKey,
+    String? reviewedChecksum,
   }) async {
     final isOnline = _ref.read(connectivityProvider).value ?? true;
     final published = await _repository.approveAndPublishProduct(
@@ -254,6 +258,7 @@ class ProductListNotifier extends StateNotifier<AsyncValue<List<Product>>> {
       contentHash: contentHash,
       isOnline: isOnline,
       idempotencyKey: idempotencyKey,
+      reviewedChecksum: reviewedChecksum,
     );
     await loadProducts();
     return published;
@@ -355,6 +360,8 @@ class AddProductDraft {
   final String originalImagePath;
   final String enhancedImagePath;
   final bool isEnhanced;
+  final String immutablePhotoSnapshotPath;
+  final String? immutablePhotoSnapshotSha256;
   final String recordedAudioPath;
   final String voiceTranscript;
   final double transcriptionConfidence;
@@ -385,6 +392,7 @@ class AddProductDraft {
   final bool isRetakeFlow;
   final bool hasExistingDraft;
   final bool resumePromptHandled;
+  final bool hasCorruptedDraft;
   final String? imageQueueItemId;
   final String? voiceQueueItemId;
   final QueueStatus imageQueueStatus;
@@ -418,6 +426,8 @@ class AddProductDraft {
     this.originalImagePath = '',
     this.enhancedImagePath = '',
     this.isEnhanced = false,
+    this.immutablePhotoSnapshotPath = '',
+    this.immutablePhotoSnapshotSha256,
     this.recordedAudioPath = '',
     this.voiceTranscript = '',
     this.transcriptionConfidence = 1.0,
@@ -448,6 +458,7 @@ class AddProductDraft {
     this.isRetakeFlow = false,
     this.hasExistingDraft = false,
     this.resumePromptHandled = false,
+    this.hasCorruptedDraft = false,
     this.imageQueueItemId,
     this.voiceQueueItemId,
     this.imageQueueStatus = QueueStatus.completed,
@@ -482,6 +493,8 @@ class AddProductDraft {
     String? originalImagePath,
     String? enhancedImagePath,
     bool? isEnhanced,
+    String? immutablePhotoSnapshotPath,
+    Object? immutablePhotoSnapshotSha256 = _unset,
     String? recordedAudioPath,
     String? voiceTranscript,
     double? transcriptionConfidence,
@@ -512,6 +525,7 @@ class AddProductDraft {
     bool? isRetakeFlow,
     bool? hasExistingDraft,
     bool? resumePromptHandled,
+    bool? hasCorruptedDraft,
     Object? imageQueueItemId = _unset,
     Object? voiceQueueItemId = _unset,
     QueueStatus? imageQueueStatus,
@@ -545,6 +559,12 @@ class AddProductDraft {
       originalImagePath: originalImagePath ?? this.originalImagePath,
       enhancedImagePath: enhancedImagePath ?? this.enhancedImagePath,
       isEnhanced: isEnhanced ?? this.isEnhanced,
+      immutablePhotoSnapshotPath:
+          immutablePhotoSnapshotPath ?? this.immutablePhotoSnapshotPath,
+      immutablePhotoSnapshotSha256:
+          identical(immutablePhotoSnapshotSha256, _unset)
+              ? this.immutablePhotoSnapshotSha256
+              : immutablePhotoSnapshotSha256 as String?,
       recordedAudioPath: recordedAudioPath ?? this.recordedAudioPath,
       voiceTranscript: voiceTranscript ?? this.voiceTranscript,
       transcriptionConfidence:
@@ -576,6 +596,7 @@ class AddProductDraft {
       isRetakeFlow: isRetakeFlow ?? this.isRetakeFlow,
       hasExistingDraft: hasExistingDraft ?? this.hasExistingDraft,
       resumePromptHandled: resumePromptHandled ?? this.resumePromptHandled,
+      hasCorruptedDraft: hasCorruptedDraft ?? this.hasCorruptedDraft,
       imageQueueItemId: identical(imageQueueItemId, _unset)
           ? this.imageQueueItemId
           : imageQueueItemId as String?,
@@ -634,15 +655,178 @@ class AddProductDraft {
           : listingFingerprint as String?,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'draft_id': draftId,
+      'current_step': currentStep,
+      'original_image_path': originalImagePath,
+      'enhanced_image_path': enhancedImagePath,
+      'is_enhanced': isEnhanced,
+      'immutable_photo_snapshot_path': immutablePhotoSnapshotPath,
+      'immutable_photo_snapshot_sha256': immutablePhotoSnapshotSha256,
+      'recorded_audio_path': recordedAudioPath,
+      'voice_transcript': voiceTranscript,
+      'transcription_confidence': transcriptionConfidence,
+      'manual_description': manualDescription,
+      'title_en': titleEn,
+      'title_hi': titleHi,
+      'description_en': descriptionEn,
+      'description_hi': descriptionHi,
+      'category': category,
+      'tags': tags,
+      'raw_material_cost': rawMaterialCost,
+      'labor_hours': laborHours,
+      'hourly_rate': hourlyRate,
+      'floor_price': floorPrice,
+      'suggested_price': suggestedPrice,
+      'min_price': minPrice,
+      'max_price': maxPrice,
+      'final_price': finalPrice,
+      'pricing_reasoning': pricingReasoning,
+      'pricing_reasoning_hi': pricingReasoningHi,
+      'confidence_score': confidenceScore,
+      'market_position': marketPosition,
+      'comparable_products': comparableProducts.map((c) => c.toJson()).toList(),
+      'additional_image_paths': additionalImagePaths,
+      'image_queue_item_id': imageQueueItemId,
+      'voice_queue_item_id': voiceQueueItemId,
+      'image_queue_status': imageQueueStatus.name,
+      'voice_queue_status': voiceQueueStatus.name,
+      'media_id': mediaId,
+      'original_media_id': originalMediaId,
+      'sha256_checksum': sha256Checksum,
+      'is_degraded': isDegraded,
+      'degraded_reason': degradedReason,
+      'image_enhance_op_id': imageEnhanceOpId,
+      'voice_listing_op_id': voiceListingOpId,
+      'pricing_op_id': pricingOpId,
+      'is_voice_degraded': isVoiceDegraded,
+      'voice_degraded_reason': voiceDegradedReason,
+      'is_listing_degraded': isListingDegraded,
+      'listing_degraded_reason': listingDegradedReason,
+      'is_pricing_degraded': isPricingDegraded,
+      'pricing_degraded_reason': pricingDegradedReason,
+      'image_input_generation': imageInputGeneration,
+      'bound_media_generation': boundMediaGeneration,
+      'pricing_input_generation': pricingInputGeneration,
+      'pricing_fingerprint': pricingFingerprint,
+      'voice_input_generation': voiceInputGeneration,
+      'voice_fingerprint': voiceFingerprint,
+      'listing_input_generation': listingInputGeneration,
+      'listing_fingerprint': listingFingerprint,
+    };
+  }
+
+  factory AddProductDraft.fromJson(Map<String, dynamic> json) {
+    return AddProductDraft(
+      draftId: json['draft_id'] as String? ?? '',
+      currentStep: (json['current_step'] as num?)?.toInt() ?? 0,
+      originalImagePath: json['original_image_path'] as String? ?? '',
+      enhancedImagePath: json['enhanced_image_path'] as String? ?? '',
+      isEnhanced: json['is_enhanced'] as bool? ?? false,
+      immutablePhotoSnapshotPath: json['immutable_photo_snapshot_path'] as String? ?? '',
+      immutablePhotoSnapshotSha256: json['immutable_photo_snapshot_sha256'] as String?,
+      recordedAudioPath: json['recorded_audio_path'] as String? ?? '',
+      voiceTranscript: json['voice_transcript'] as String? ?? '',
+      transcriptionConfidence: (json['transcription_confidence'] as num?)?.toDouble() ?? 1.0,
+      manualDescription: json['manual_description'] as String? ?? '',
+      titleEn: json['title_en'] as String? ?? '',
+      titleHi: json['title_hi'] as String? ?? '',
+      descriptionEn: json['description_en'] as String? ?? '',
+      descriptionHi: json['description_hi'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      tags: json['tags'] != null ? List<String>.from(json['tags'] as List) : const [],
+      rawMaterialCost: (json['raw_material_cost'] as num?)?.toDouble() ?? 0.0,
+      laborHours: (json['labor_hours'] as num?)?.toDouble() ?? 0.0,
+      hourlyRate: (json['hourly_rate'] as num?)?.toDouble() ?? 0.0,
+      floorPrice: (json['floor_price'] as num?)?.toDouble() ?? 0.0,
+      suggestedPrice: (json['suggested_price'] as num?)?.toDouble() ?? 0.0,
+      minPrice: (json['min_price'] as num?)?.toDouble() ?? 0.0,
+      maxPrice: (json['max_price'] as num?)?.toDouble() ?? 0.0,
+      finalPrice: (json['final_price'] as num?)?.toDouble() ?? 0.0,
+      pricingReasoning: json['pricing_reasoning'] as String? ?? '',
+      pricingReasoningHi: json['pricing_reasoning_hi'] as String? ?? '',
+      confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.0,
+      marketPosition: json['market_position'] as String? ?? '',
+      comparableProducts: json['comparable_products'] != null
+          ? (json['comparable_products'] as List)
+              .whereType<Map>()
+              .map((c) => ComparableProduct.fromJson(Map<String, dynamic>.from(c)))
+              .toList()
+          : const [],
+      additionalImagePaths: json['additional_image_paths'] != null
+          ? List<String>.from(json['additional_image_paths'] as List)
+          : const [],
+      imageQueueItemId: json['image_queue_item_id'] as String?,
+      voiceQueueItemId: json['voice_queue_item_id'] as String?,
+      imageQueueStatus: QueueStatus.values.firstWhere(
+        (e) => e.name == json['image_queue_status'],
+        orElse: () => QueueStatus.completed,
+      ),
+      voiceQueueStatus: QueueStatus.values.firstWhere(
+        (e) => e.name == json['voice_queue_status'],
+        orElse: () => QueueStatus.completed,
+      ),
+      mediaId: json['media_id'] as String?,
+      originalMediaId: json['original_media_id'] as String?,
+      sha256Checksum: json['sha256_checksum'] as String?,
+      isDegraded: json['is_degraded'] as bool? ?? false,
+      degradedReason: json['degraded_reason'] as String?,
+      imageEnhanceOpId: json['image_enhance_op_id'] as String?,
+      voiceListingOpId: json['voice_listing_op_id'] as String?,
+      pricingOpId: json['pricing_op_id'] as String?,
+      isVoiceDegraded: json['is_voice_degraded'] as bool? ?? false,
+      voiceDegradedReason: json['voice_degraded_reason'] as String?,
+      isListingDegraded: json['is_listing_degraded'] as bool? ?? false,
+      listingDegradedReason: json['listing_degraded_reason'] as String?,
+      isPricingDegraded: json['is_pricing_degraded'] as bool? ?? false,
+      pricingDegradedReason: json['pricing_degraded_reason'] as String?,
+      imageInputGeneration: (json['image_input_generation'] as num?)?.toInt() ?? 0,
+      boundMediaGeneration: (json['bound_media_generation'] as num?)?.toInt(),
+      pricingInputGeneration: (json['pricing_input_generation'] as num?)?.toInt() ?? 0,
+      pricingFingerprint: json['pricing_fingerprint'] as String?,
+      voiceInputGeneration: (json['voice_input_generation'] as num?)?.toInt() ?? 0,
+      voiceFingerprint: json['voice_fingerprint'] as String?,
+      listingInputGeneration: (json['listing_input_generation'] as num?)?.toInt() ?? 0,
+      listingFingerprint: json['listing_fingerprint'] as String?,
+    );
+  }
+
+  static void validateSnapshotSchema(Map<String, dynamic> json) {
+    if (json['__version'] != 1) {
+      throw FormatException('Unsupported draft snapshot version: ${json['__version']}');
+    }
+    final draftId = json['draft_id'];
+    if (draftId is! String || draftId.trim().isEmpty) {
+      throw const FormatException('Missing or invalid draft_id in snapshot schema');
+    }
+    if (json['current_step'] != null && json['current_step'] is! int) {
+      throw const FormatException('Invalid current_step in snapshot schema');
+    }
+    if (json['tags'] != null && json['tags'] is! List) {
+      throw const FormatException('Invalid tags in snapshot schema');
+    }
+    if (json['additional_image_paths'] != null && json['additional_image_paths'] is! List) {
+      throw const FormatException('Invalid additional_image_paths in snapshot schema');
+    }
+  }
 }
 
 class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
+  static const String snapshotKey = 'active_draft_snapshot';
   final Ref _ref;
+  final Lock _draftLock = Lock();
+  int _draftSaveSeq = 0;
+  bool _isReconciling = false;
+  bool _isMigrating = false;
+  bool get isMigrating => _isMigrating;
   StreamSubscription<List<QueueItem>>? _imageQueueSubscription;
   StreamSubscription<List<QueueItem>>? _voiceQueueSubscription;
   bool _processingSubmissionInProgress = false;
   Completer<bool>? _imageEnhancingCompleter;
   Map<String, dynamic>? _pendingDraft;
+  Map<String, dynamic>? _pendingDraftSnapshot;
 
   // Tracks whether an image-enhancement request is actually in flight right
   // now. This is distinct from `state.isEnhanced`, which only tells us
@@ -701,6 +885,9 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   // already navigated away from it.
   int _aiProcessingGen = 0;
 
+  // Protect against duplicate or concurrent replays of the same in-flight operation.
+  final Set<String> _inFlightReplayOpIds = {};
+
   // Hard backstop: no matter what combination of timeouts/queue states is in
   // play, the AI-processing spinner is never allowed to stay on forever.
   Timer? _aiProcessingWatchdog;
@@ -746,23 +933,235 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   void _loadDraft() {
     if (Hive.isBoxOpen('draft_box')) {
       final box = Hive.box('draft_box');
-      final values = <String, dynamic>{
-        for (final key in box.keys) key.toString(): box.get(key),
-      };
-      if (values.isNotEmpty &&
-          (values['draft_id'] != null ||
-              values['draft_original_image'] != null ||
-              values['draft_image'] != null)) {
-        _pendingDraft = values;
+
+      // 1. Single source of truth: active_draft_snapshot
+      if (box.containsKey(snapshotKey)) {
+        final raw = box.get(snapshotKey);
+        if (raw != null) {
+          try {
+            final decoded = jsonDecode(raw.toString());
+            if (decoded is Map<String, dynamic>) {
+              AddProductDraft.validateSnapshotSchema(decoded);
+              _pendingDraftSnapshot = decoded;
+              state = state.copyWith(
+                hasExistingDraft: true,
+                resumePromptHandled: false,
+              );
+              return;
+            } else {
+              throw const FormatException('Snapshot payload is not a JSON object');
+            }
+          } catch (e) {
+            debugPrint('[AddProductFlow] Corrupt active draft snapshot detected: $e');
+            // INVARIANT: A corrupt new snapshot must trigger recovery, not silently fall back to older legacy values.
+            state = state.copyWith(
+              hasCorruptedDraft: true,
+              hasExistingDraft: true,
+              resumePromptHandled: false,
+            );
+            return;
+          }
+        }
+      }
+
+      // 2. Check for legacy multi-key writes for non-destructive migration
+      final legacyKeys = ['draft_id', 'draft_original_image', 'draft_image'];
+      final hasLegacy = legacyKeys.any((k) => box.containsKey(k));
+      if (hasLegacy) {
+        final values = <String, dynamic>{
+          for (final key in box.keys) key.toString(): box.get(key),
+        };
+        if (values.isNotEmpty &&
+            (values['draft_id'] != null ||
+                values['draft_original_image'] != null ||
+                values['draft_image'] != null)) {
+          unawaited(_migrateLegacyDraft(box, values));
+        }
+      }
+    }
+  }
+
+  Future<void> _migrateLegacyDraft(Box box, Map<String, dynamic> legacyValues) async {
+    _isMigrating = true;
+    try {
+      await _draftLock.synchronized(() async {
+        final draftId = legacyValues['draft_id'] as String? ??
+            'draft_${DateTime.now().microsecondsSinceEpoch}';
+        final legacyImage = legacyValues['draft_image'] as String? ?? '';
+        final origImage =
+            legacyValues['draft_original_image'] as String? ?? legacyImage;
+
+        final imageQueueItemId = legacyValues['draft_image_queue_id'] as String? ??
+            legacyValues['draft_image_queue_item_id'] as String?;
+        final voiceQueueItemId = legacyValues['draft_voice_queue_id'] as String? ??
+            legacyValues['draft_voice_queue_item_id'] as String?;
+        final imageQueueStatus = _queueStatus(legacyValues['draft_image_queue_status']) ??
+            QueueStatus.completed;
+        final voiceQueueStatus = _queueStatus(legacyValues['draft_voice_queue_status']) ??
+            QueueStatus.completed;
+        final additionalImages = _stringList(
+          legacyValues['draft_additional_images'] ?? legacyValues['draft_additional_image_paths'],
+        );
+        final immutableSnapshotPath =
+            legacyValues['draft_immutable_photo_snapshot_path'] as String? ?? '';
+        final immutableSnapshotSha256 =
+            legacyValues['draft_immutable_photo_snapshot_sha256'] as String?;
+
+        final migratedDraft = AddProductDraft(
+          draftId: draftId,
+          currentStep: (legacyValues['draft_step'] as num?)?.toInt() ?? 0,
+          originalImagePath: origImage,
+          enhancedImagePath: legacyValues['draft_enhanced_image'] as String? ?? '',
+          isEnhanced:
+              (legacyValues['draft_enhanced_image'] as String?)?.isNotEmpty == true &&
+                  legacyValues['draft_enhanced_image'] != origImage,
+          recordedAudioPath: legacyValues['draft_audio'] as String? ?? '',
+          voiceTranscript: legacyValues['draft_transcript'] as String? ?? '',
+          manualDescription:
+              legacyValues['draft_manual_description'] as String? ?? '',
+          titleEn: legacyValues['draft_title_en'] as String? ?? '',
+          titleHi: legacyValues['draft_title_hi'] as String? ?? '',
+          descriptionEn: legacyValues['draft_description_en'] as String? ?? '',
+          descriptionHi: legacyValues['draft_description_hi'] as String? ?? '',
+          category: legacyValues['draft_category'] as String? ?? '',
+          tags: _stringListOrNull(legacyValues['draft_tags']) ?? const [],
+          rawMaterialCost:
+              (legacyValues['draft_raw_material_cost'] as num?)?.toDouble() ?? 0.0,
+          laborHours:
+              (legacyValues['draft_labor_hours'] as num?)?.toDouble() ?? 0.0,
+          hourlyRate:
+              (legacyValues['draft_hourly_rate'] as num?)?.toDouble() ?? 0.0,
+          floorPrice:
+              (legacyValues['draft_floor_price'] as num?)?.toDouble() ?? 0.0,
+          suggestedPrice:
+              (legacyValues['draft_suggested_price'] as num?)?.toDouble() ?? 0.0,
+          minPrice: (legacyValues['draft_min_price'] as num?)?.toDouble() ?? 0.0,
+          maxPrice: (legacyValues['draft_max_price'] as num?)?.toDouble() ?? 0.0,
+          finalPrice:
+              (legacyValues['draft_final_price'] as num?)?.toDouble() ?? 0.0,
+          pricingReasoning:
+              legacyValues['draft_pricing_reasoning'] as String? ?? '',
+          pricingReasoningHi:
+              legacyValues['draft_pricing_reasoning_hi'] as String? ?? '',
+          confidenceScore:
+              (legacyValues['draft_confidence_score'] as num?)?.toDouble() ?? 0.0,
+          marketPosition:
+              legacyValues['draft_market_position'] as String? ?? '',
+          additionalImagePaths: additionalImages,
+          imageQueueItemId: imageQueueItemId,
+          voiceQueueItemId: voiceQueueItemId,
+          imageQueueStatus: imageQueueStatus,
+          voiceQueueStatus: voiceQueueStatus,
+          immutablePhotoSnapshotPath: immutableSnapshotPath,
+          immutablePhotoSnapshotSha256: immutableSnapshotSha256,
+          mediaId: legacyValues['draft_media_id'] as String?,
+          originalMediaId: legacyValues['draft_original_media_id'] as String?,
+          sha256Checksum: legacyValues['draft_sha256_checksum'] as String?,
+          isDegraded: legacyValues['draft_is_degraded'] as bool? ?? false,
+          degradedReason: legacyValues['draft_degraded_reason'] as String?,
+          imageEnhanceOpId: legacyValues['draft_image_enhance_op_id'] as String?,
+          voiceListingOpId: legacyValues['draft_voice_listing_op_id'] as String?,
+          pricingOpId: legacyValues['draft_pricing_op_id'] as String?,
+          isVoiceDegraded:
+              legacyValues['draft_is_voice_degraded'] as bool? ?? false,
+          voiceDegradedReason:
+              legacyValues['draft_voice_degraded_reason'] as String?,
+          isListingDegraded:
+              legacyValues['draft_is_listing_degraded'] as bool? ?? false,
+          listingDegradedReason:
+              legacyValues['draft_listing_degraded_reason'] as String?,
+          isPricingDegraded:
+              legacyValues['draft_is_pricing_degraded'] as bool? ?? false,
+          pricingDegradedReason:
+              legacyValues['draft_pricing_degraded_reason'] as String?,
+          imageInputGeneration:
+              (legacyValues['draft_image_input_generation'] as num?)?.toInt() ?? 0,
+          boundMediaGeneration:
+              (legacyValues['draft_bound_media_generation'] as num?)?.toInt(),
+          pricingInputGeneration:
+              (legacyValues['draft_pricing_input_generation'] as num?)?.toInt() ?? 0,
+          pricingFingerprint:
+              legacyValues['draft_pricing_fingerprint'] as String?,
+          voiceInputGeneration:
+              (legacyValues['draft_voice_input_generation'] as num?)?.toInt() ?? 0,
+          voiceFingerprint: legacyValues['draft_voice_fingerprint'] as String?,
+          listingInputGeneration:
+              (legacyValues['draft_listing_input_generation'] as num?)?.toInt() ?? 0,
+          listingFingerprint:
+              legacyValues['draft_listing_fingerprint'] as String?,
+        );
+
+        final snapshotData = migratedDraft.toJson();
+        snapshotData['__version'] = 1;
+        snapshotData['__save_seq'] = ++_draftSaveSeq;
+        final jsonStr = jsonEncode(snapshotData);
+
+        // Write snapshot and await durable persistence
+        await box.put(snapshotKey, jsonStr);
+        await box.flush();
+
+        // Complete semantic readback verification
+        final readBack = box.get(snapshotKey) as String?;
+        if (readBack == null) {
+          throw StateError(
+            'Readback verification failed: snapshotKey was null after put',
+          );
+        }
+        final decodedReadBack = jsonDecode(readBack) as Map<String, dynamic>;
+        AddProductDraft.validateSnapshotSchema(decodedReadBack);
+        if (decodedReadBack['draft_id'] != draftId) {
+          throw StateError('Readback verification failed: draft_id mismatch');
+        }
+        if (decodedReadBack['image_queue_item_id'] != imageQueueItemId) {
+          throw StateError('Readback verification failed: image_queue_item_id mismatch');
+        }
+        if (decodedReadBack['voice_queue_item_id'] != voiceQueueItemId) {
+          throw StateError('Readback verification failed: voice_queue_item_id mismatch');
+        }
+        if (decodedReadBack['image_queue_status'] != imageQueueStatus.name) {
+          throw StateError('Readback verification failed: image_queue_status mismatch');
+        }
+        if (decodedReadBack['voice_queue_status'] != voiceQueueStatus.name) {
+          throw StateError('Readback verification failed: voice_queue_status mismatch');
+        }
+        final readBackAdditional = _stringList(decodedReadBack['additional_image_paths']);
+        if (!listEquals(readBackAdditional, additionalImages)) {
+          throw StateError('Readback verification failed: additional_image_paths mismatch');
+        }
+
+        // Verified! Clean up legacy multi-keys
+        for (final k in legacyValues.keys) {
+          if (k != snapshotKey) {
+            await box.delete(k);
+          }
+        }
+        await box.flush();
+
+        _pendingDraftSnapshot = snapshotData;
+        if (mounted) {
+          state = state.copyWith(
+            hasExistingDraft: true,
+            resumePromptHandled: false,
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint(
+        '[AddProductFlow] Legacy draft migration failed; preserving legacy data: $e',
+      );
+      _pendingDraft = legacyValues;
+      if (mounted) {
         state = state.copyWith(
           hasExistingDraft: true,
           resumePromptHandled: false,
         );
       }
+    } finally {
+      _isMigrating = false;
     }
   }
 
-  void loadSavedDraftState({
+  Future<void> loadSavedDraftState({
     required String draftId,
     required String originalImagePath,
     required String enhancedImagePath,
@@ -817,7 +1216,9 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     String? voiceFingerprint,
     int? listingInputGeneration,
     String? listingFingerprint,
-  }) {
+    String? immutablePhotoSnapshotPath,
+    String? immutablePhotoSnapshotSha256,
+  }) async {
     final hasImage =
         (originalImagePath.isNotEmpty || enhancedImagePath.isNotEmpty);
     final hasCompletedListing =
@@ -851,6 +1252,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       isEnhanced:
           enhancedImagePath.isNotEmpty &&
           enhancedImagePath != originalImagePath,
+      immutablePhotoSnapshotPath: immutablePhotoSnapshotPath,
+      immutablePhotoSnapshotSha256: immutablePhotoSnapshotSha256,
       voiceTranscript: transcript,
       recordedAudioPath: recordedAudioPath ?? '',
       transcriptionConfidence: transcriptionConfidence ?? 1.0,
@@ -912,14 +1315,87 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     if (voiceQueueItemId != null && voiceQueueItemId.isNotEmpty) {
       _watchVoiceQueue(voiceQueueItemId);
     }
-    _persistDraft();
+    await _persistDraft();
   }
 
   void markResumePromptVisible() {
     state = state.copyWith(resumePromptHandled: true);
   }
 
-  void resumeExistingDraft() {
+  Future<void> resumeExistingDraft() async {
+    if (_pendingDraftSnapshot != null) {
+      final snapshot = _pendingDraftSnapshot!;
+      final restoredDraft = AddProductDraft.fromJson(snapshot);
+      await loadSavedDraftState(
+        draftId: restoredDraft.draftId,
+        originalImagePath: restoredDraft.originalImagePath,
+        enhancedImagePath: restoredDraft.enhancedImagePath,
+        transcript: restoredDraft.voiceTranscript,
+        recordedAudioPath: restoredDraft.recordedAudioPath,
+        manualDescription: restoredDraft.manualDescription,
+        titleEn: restoredDraft.titleEn,
+        titleHi: restoredDraft.titleHi,
+        descriptionEn: restoredDraft.descriptionEn,
+        descriptionHi: restoredDraft.descriptionHi,
+        additionalImagePaths: restoredDraft.additionalImagePaths,
+        savedStep: restoredDraft.currentStep,
+        category: restoredDraft.category,
+        tags: restoredDraft.tags,
+        rawMaterialCost: restoredDraft.rawMaterialCost,
+        laborHours: restoredDraft.laborHours,
+        hourlyRate: restoredDraft.hourlyRate,
+        floorPrice: restoredDraft.floorPrice,
+        suggestedPrice: restoredDraft.suggestedPrice,
+        minPrice: restoredDraft.minPrice,
+        maxPrice: restoredDraft.maxPrice,
+        finalPrice: restoredDraft.finalPrice,
+        pricingReasoning: restoredDraft.pricingReasoning,
+        pricingReasoningHi: restoredDraft.pricingReasoningHi,
+        confidenceScore: restoredDraft.confidenceScore,
+        marketPosition: restoredDraft.marketPosition,
+        imageQueueItemId: restoredDraft.imageQueueItemId,
+        voiceQueueItemId: restoredDraft.voiceQueueItemId,
+        imageQueueStatus: restoredDraft.imageQueueStatus,
+        voiceQueueStatus: restoredDraft.voiceQueueStatus,
+        mediaId: restoredDraft.mediaId,
+        originalMediaId: restoredDraft.originalMediaId,
+        sha256Checksum: restoredDraft.sha256Checksum,
+        isDegraded: restoredDraft.isDegraded,
+        degradedReason: restoredDraft.degradedReason,
+        imageEnhanceOpId: restoredDraft.imageEnhanceOpId,
+        voiceListingOpId: restoredDraft.voiceListingOpId,
+        pricingOpId: restoredDraft.pricingOpId,
+        isVoiceDegraded: restoredDraft.isVoiceDegraded,
+        voiceDegradedReason: restoredDraft.voiceDegradedReason,
+        isListingDegraded: restoredDraft.isListingDegraded,
+        listingDegradedReason: restoredDraft.listingDegradedReason,
+        isPricingDegraded: restoredDraft.isPricingDegraded,
+        pricingDegradedReason: restoredDraft.pricingDegradedReason,
+        imageInputGeneration: restoredDraft.imageInputGeneration,
+        boundMediaGeneration: restoredDraft.boundMediaGeneration,
+        pricingInputGeneration: restoredDraft.pricingInputGeneration,
+        pricingFingerprint: restoredDraft.pricingFingerprint,
+        voiceInputGeneration: restoredDraft.voiceInputGeneration,
+        voiceFingerprint: restoredDraft.voiceFingerprint,
+        listingInputGeneration: restoredDraft.listingInputGeneration,
+        listingFingerprint: restoredDraft.listingFingerprint,
+        immutablePhotoSnapshotPath: restoredDraft.immutablePhotoSnapshotPath,
+        immutablePhotoSnapshotSha256: restoredDraft.immutablePhotoSnapshotSha256,
+      );
+      _pendingDraftSnapshot = null;
+      _pendingDraft = null;
+      _hydrateQueueState();
+      unawaited(_reconcileDraftOperations());
+      if (mounted) {
+        state = state.copyWith(
+          hasExistingDraft: false,
+          resumePromptHandled: true,
+          isAiProcessing: false,
+        );
+      }
+      return;
+    }
+
     final pending = _pendingDraft;
     if (pending != null) {
       final legacyImage = pending['draft_image'] as String? ?? '';
@@ -954,6 +1430,9 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         pricingReasoningHi: pending['draft_pricing_reasoning_hi'] as String?,
         confidenceScore: (pending['draft_confidence_score'] as num?)?.toDouble(),
         marketPosition: pending['draft_market_position'] as String?,
+        comparableProducts: (pending['draft_comparable_products'] as List?)
+            ?.map((e) => ComparableProduct.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList(),
         imageQueueItemId: pending['draft_image_queue_id'] as String?,
         voiceQueueItemId: pending['draft_voice_queue_id'] as String?,
         imageQueueStatus: _queueStatus(pending['draft_image_queue_status']),
@@ -985,18 +1464,43 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       unawaited(_reconcileDraftOperations());
     }
     _pendingDraft = null;
-    state = state.copyWith(
-      hasExistingDraft: false,
-      resumePromptHandled: true,
-      isAiProcessing: false,
-    );
+    if (mounted) {
+      state = state.copyWith(
+        hasExistingDraft: false,
+        resumePromptHandled: true,
+        isAiProcessing: false,
+      );
+    }
   }
 
   Future<void> _reconcileDraftOperations() async {
+    if (!mounted) return;
     if (state.draftId.isEmpty) return;
+    if (_isReconciling) {
+      debugPrint('[AddProductFlow] Reconcile skipped: already in progress.');
+      return;
+    }
+    _isReconciling = true;
+
     try {
+      if (!mounted) return;
+      final currentOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+      final currentBackend = ApiConfig.baseUrl;
+
       final ops = await AiOperationStorage.getOperationsForDraft(state.draftId);
+      if (!mounted) return;
       for (final op in ops) {
+        if (!mounted) return;
+        // INVARIANT: Check owner and backend before applying or replaying
+        if (op.owner != currentOwner ||
+            op.backend != currentBackend ||
+            op.draftId != state.draftId) {
+          debugPrint(
+            '[AddProductFlow] Skipping op ${op.id}: owner/backend/draft mismatch.',
+          );
+          continue;
+        }
+
         if (op.status == AiOperationRecord.statusCompleted && op.resultData != null) {
           if (op.operationType == 'image_enhance' &&
               op.inputGeneration == state.imageInputGeneration &&
@@ -1007,26 +1511,38 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
             final checksum = res['sha256Checksum'] as String? ?? res['sha256_checksum'] as String?;
             final displayPath = res['displayPath'] as String? ?? res['enhanced_url'] as String?;
             if (mediaId != null && mediaId.isNotEmpty) {
+              if (!mounted) return;
               state = state.copyWith(
                 mediaId: mediaId,
                 originalMediaId: origId,
                 sha256Checksum: checksum,
-                enhancedImagePath: (displayPath != null && displayPath.isNotEmpty) ? displayPath : state.enhancedImagePath,
-                isEnhanced: displayPath != null && displayPath.isNotEmpty && displayPath != state.originalImagePath,
+                enhancedImagePath: (displayPath != null && displayPath.isNotEmpty)
+                    ? displayPath
+                    : state.enhancedImagePath,
+                isEnhanced: displayPath != null &&
+                    displayPath.isNotEmpty &&
+                    displayPath != state.originalImagePath,
                 boundMediaGeneration: op.inputGeneration,
               );
-              _persistDraft();
+              await _persistDraft();
             }
           } else if (op.operationType == 'pricing_suggest' &&
                      op.inputGeneration == state.pricingInputGeneration &&
                      state.suggestedPrice == 0) {
             final res = op.resultData!;
+            final rawFloor = (res['floor_price'] as num?)?.toDouble() ?? state.floorPrice;
+            final currentCostFloor = state.floorPrice > 0
+                ? state.floorPrice
+                : (state.rawMaterialCost + (state.laborHours * state.hourlyRate));
+            final effectiveFloor = rawFloor < currentCostFloor ? currentCostFloor : rawFloor;
+            final sugPrice = (res['suggested_price'] as num?)?.toDouble() ?? state.suggestedPrice;
+            if (!mounted) return;
             state = state.copyWith(
-              floorPrice: (res['floor_price'] as num?)?.toDouble() ?? state.floorPrice,
-              suggestedPrice: (res['suggested_price'] as num?)?.toDouble() ?? state.suggestedPrice,
+              floorPrice: effectiveFloor,
+              suggestedPrice: sugPrice < effectiveFloor ? effectiveFloor : sugPrice,
               minPrice: (res['min_price'] as num?)?.toDouble() ?? state.minPrice,
               maxPrice: (res['max_price'] as num?)?.toDouble() ?? state.maxPrice,
-              finalPrice: (res['suggested_price'] as num?)?.toDouble() ?? state.finalPrice,
+              finalPrice: sugPrice < effectiveFloor ? effectiveFloor : sugPrice,
               confidenceScore: (res['confidence_score'] as num?)?.toDouble() ?? state.confidenceScore,
               marketPosition: res['market_position'] as String? ?? state.marketPosition,
               comparableProducts: res['comparable_products'] != null
@@ -1040,32 +1556,412 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
               isPricingDegraded: res['is_degraded'] as bool? ?? state.isPricingDegraded,
               pricingDegradedReason: res['degraded_reason'] as String? ?? state.pricingDegradedReason,
             );
-            _persistDraft();
+            await _persistDraft();
           } else if (op.operationType == 'listing_generate' &&
                      op.inputGeneration == state.listingInputGeneration &&
                      state.titleEn.isEmpty) {
             final res = op.resultData!;
+            if (!mounted) return;
             state = state.copyWith(
               titleEn: res['title_en'] as String? ?? state.titleEn,
               titleHi: res['title_hi'] as String? ?? state.titleHi,
               descriptionEn: res['description_en'] as String? ?? state.descriptionEn,
               descriptionHi: res['description_hi'] as String? ?? state.descriptionHi,
-              category: (res['category'] as String?)?.isNotEmpty == true ? res['category'] as String : state.category,
+              category: (res['category'] as String?)?.isNotEmpty == true
+                  ? res['category'] as String
+                  : state.category,
               tags: res['tags'] != null ? List<String>.from(res['tags'] as List) : state.tags,
               isListingDegraded: res['is_degraded'] as bool? ?? state.isListingDegraded,
               listingDegradedReason: res['degraded_reason'] as String? ?? state.listingDegradedReason,
             );
-            _persistDraft();
+            await _persistDraft();
+          }
+        } else if (op.status == AiOperationRecord.statusInFlight ||
+                   op.status == AiOperationRecord.statusPending) {
+          // Replay pending/in-flight operations using original persisted request & idempotency key
+          if (op.operationType == 'pricing_suggest' &&
+              op.inputGeneration == state.pricingInputGeneration &&
+              (state.pricingOpId == null || state.pricingOpId == op.id)) {
+            if (state.pricingFingerprint == null || state.pricingFingerprint == op.inputFingerprint) {
+              if (!_inFlightReplayOpIds.contains(op.id)) {
+                _inFlightReplayOpIds.add(op.id);
+                debugPrint('[AddProductFlow] Replaying in-flight pricing operation: ${op.id}');
+                unawaited(_replayPricingOperation(op).whenComplete(() {
+                  _inFlightReplayOpIds.remove(op.id);
+                }));
+              }
+            }
+          } else if (op.operationType == 'listing_generate' &&
+                     op.inputGeneration == state.listingInputGeneration &&
+                     (state.voiceListingOpId == null || state.voiceListingOpId == op.id)) {
+            if (state.listingFingerprint == null || state.listingFingerprint == op.inputFingerprint) {
+              if (!_inFlightReplayOpIds.contains(op.id)) {
+                _inFlightReplayOpIds.add(op.id);
+                debugPrint('[AddProductFlow] Replaying in-flight listing operation: ${op.id}');
+                unawaited(_replayListingOperation(op).whenComplete(() {
+                  _inFlightReplayOpIds.remove(op.id);
+                }));
+              }
+            }
+          } else if (op.operationType == 'image_enhance' &&
+                     op.inputGeneration == state.imageInputGeneration &&
+                     (state.imageEnhanceOpId == null || state.imageEnhanceOpId == op.id)) {
+            if (!_inFlightReplayOpIds.contains(op.id)) {
+              _inFlightReplayOpIds.add(op.id);
+              debugPrint('[AddProductFlow] Replaying in-flight image enhancement operation: ${op.id}');
+              unawaited(_replayImageEnhanceOperation(op).whenComplete(() {
+                _inFlightReplayOpIds.remove(op.id);
+              }));
+            }
           }
         }
       }
+    } on CorruptAiOperationException catch (e) {
+      debugPrint('[AddProductFlow] Corrupt AI operation storage detected: $e');
+      if (mounted) {
+        state = state.copyWith(hasCorruptedDraft: true);
+      }
     } catch (e) {
       debugPrint('[AddProductFlow] Error reconciling draft operations: $e');
+    } finally {
+      _isReconciling = false;
+    }
+  }
+
+  Future<void> _replayImageEnhanceOperation(AiOperationRecord op) async {
+    final enhancerService = _ref.read(imageEnhancerServiceProvider);
+    final req = op.requestSnapshot;
+    final opId = op.id;
+    final opGeneration = op.inputGeneration;
+    final owner = op.owner;
+
+    // 1. Validate identity preconditions before dispatch
+    final preOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+    final preBackend = ApiConfig.baseUrl;
+    if (preOwner != owner ||
+        preBackend != op.backend ||
+        state.draftId != op.draftId ||
+        (state.imageEnhanceOpId != null && state.imageEnhanceOpId != op.id) ||
+        state.imageInputGeneration != opGeneration) {
+      debugPrint('[AddProductFlow] Replay precondition mismatch for op $opId (owner, backend, draft, opId, or gen). Aborting replay.');
+      return;
+    }
+
+    // 2. Validate immutable image input path (never silently substitute mutable draft image)
+    final imagePath = req['image_path'] as String? ?? req['originalImagePath'] as String?;
+    if (imagePath == null || imagePath.isEmpty) {
+      debugPrint('[AddProductFlow] Cannot replay image enhancement without immutable persisted image path.');
+      await AiOperationStorage.updateResult(
+        opId,
+        status: AiOperationRecord.statusFailed,
+        resultData: {'error': 'Missing persisted image path in request snapshot'},
+      );
+      if (mounted) {
+        state = state.copyWith(
+          isDegraded: true,
+          degradedReason: 'Persisted source image path is missing for enhancement replay',
+        );
+        await _persistDraft();
+      }
+      return;
+    }
+
+    // 3. Verify disk existence and exact input fingerprint
+    final file = File(imagePath);
+    if (!file.existsSync()) {
+      debugPrint('[AddProductFlow] Source image file missing on disk: $imagePath');
+      await AiOperationStorage.updateResult(
+        opId,
+        status: AiOperationRecord.statusFailed,
+        resultData: {'error': 'Source image file missing on disk: $imagePath'},
+      );
+      if (mounted) {
+        state = state.copyWith(
+          isDegraded: true,
+          degradedReason: 'Original image file is missing from disk for enhancement replay',
+        );
+        await _persistDraft();
+      }
+      return;
+    }
+
+    if (op.inputFingerprint.isNotEmpty) {
+      final currentFingerprint = await AiOperationRecord.computeFingerprint(
+        operationType: op.operationType,
+        owner: op.owner,
+        backend: op.backend,
+        inputs: {'draft_id': op.draftId, 'generation': op.inputGeneration},
+        files: [file],
+      );
+      if (currentFingerprint != op.inputFingerprint) {
+        debugPrint('[AddProductFlow] Source image fingerprint mismatch for op $opId. Expected ${op.inputFingerprint}, got $currentFingerprint');
+        await AiOperationStorage.updateResult(
+          opId,
+          status: AiOperationRecord.statusFailed,
+          resultData: {
+            'error': 'Source image bytes changed since operation was queued',
+            'expected_fingerprint': op.inputFingerprint,
+            'actual_fingerprint': currentFingerprint,
+          },
+        );
+        if (mounted) {
+          state = state.copyWith(
+            isDegraded: true,
+            degradedReason: 'Original image changed since enhancement was requested',
+          );
+          await _persistDraft();
+        }
+        return;
+      }
+    }
+
+    try {
+      final result = await enhancerService.enhanceImage(
+        imagePath,
+        draftId: op.draftId,
+        idempotencyKey: op.idempotencyKey,
+      );
+
+      await AiOperationStorage.updateResult(
+        opId,
+        status: result.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
+        resultData: {
+          'mediaId': result.mediaId,
+          'originalMediaId': result.originalMediaId,
+          'sha256Checksum': result.sha256Checksum,
+          'displayPath': result.displayPath,
+          'isDegraded': result.isDegraded,
+          'degradedReason': result.degradedReason,
+        },
+      );
+
+      // 4. Validate late result preconditions before mutating active draft
+      if (!mounted) return;
+      final lateOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+      final lateBackend = ApiConfig.baseUrl;
+      if (lateOwner != owner ||
+          lateBackend != op.backend ||
+          state.draftId != op.draftId ||
+          (state.imageEnhanceOpId != null && state.imageEnhanceOpId != op.id) ||
+          state.imageInputGeneration != opGeneration) {
+        debugPrint('[AddProductFlow] Discarding stale image enhance result for op $opId.');
+        return;
+      }
+
+      state = state.copyWith(
+        mediaId: result.mediaId,
+        originalMediaId: result.originalMediaId,
+        sha256Checksum: result.sha256Checksum,
+        enhancedImagePath: result.displayPath,
+        isEnhanced: result.displayPath.isNotEmpty && result.displayPath != state.originalImagePath,
+        isDegraded: result.isDegraded,
+        degradedReason: result.degradedReason,
+        boundMediaGeneration: opGeneration,
+      );
+      await _persistDraft();
+    } catch (e) {
+      debugPrint('[AddProductFlow] Error replaying image enhancement operation $opId: $e');
+    }
+  }
+
+  Future<void> _replayPricingOperation(AiOperationRecord op) async {
+    final pricingService = _ref.read(pricingServiceProvider);
+    final req = op.requestSnapshot;
+    final opId = op.id;
+    final opGeneration = op.inputGeneration;
+    final owner = op.owner;
+
+    // Validate preconditions before dispatch
+    final preOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+    final preBackend = ApiConfig.baseUrl;
+    if (preOwner != op.owner ||
+        preBackend != op.backend ||
+        state.draftId != op.draftId ||
+        (state.pricingOpId != null && state.pricingOpId != op.id) ||
+        state.pricingInputGeneration != opGeneration) {
+      debugPrint('[AddProductFlow] Pricing replay precondition mismatch for op $opId. Aborting replay.');
+      return;
+    }
+
+    try {
+      final suggestion = await pricingService.suggestPrice(
+        description: req['description'] as String?,
+        category: req['category'] as String? ?? 'Handicrafts',
+        tags: _stringList(req['tags']),
+        imageUrl: req['image_url'] as String? ?? req['imageUrl'] as String?,
+        rawMaterialCost: (req['materials_cost'] as num?)?.toDouble() ??
+            (req['raw_material_cost'] as num?)?.toDouble() ??
+            (req['base_cost'] as num?)?.toDouble(),
+        laborHours: (req['labor_hours'] as num?)?.toDouble(),
+        hourlyWage: (req['hourly_wage'] as num?)?.toDouble() ??
+            (req['hourly_rate'] as num?)?.toDouble(),
+        idempotencyKey: op.idempotencyKey,
+      );
+
+      await AiOperationStorage.updateResult(
+        opId,
+        status: suggestion.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
+        resultData: {
+          'floor_price': suggestion.floorPrice,
+          'suggested_price': suggestion.suggestedPrice,
+          'min_price': suggestion.minPrice,
+          'max_price': suggestion.maxPrice,
+          'confidence_score': suggestion.confidenceScore,
+          'market_position': suggestion.marketPosition,
+          'comparable_products': suggestion.comparableProducts.map((c) => c.toJson()).toList(),
+          'reasoning': suggestion.reasoning,
+          'reasoning_hi': suggestion.reasoningHi,
+          'is_degraded': suggestion.isDegraded,
+          'degraded_reason': suggestion.degradedReason,
+        },
+      );
+
+      if (!mounted) return;
+      final cur = state;
+      final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+      final curBackend = ApiConfig.baseUrl;
+      if (curOwner == owner &&
+          curBackend == op.backend &&
+          cur.draftId == op.draftId &&
+          cur.pricingInputGeneration == opGeneration &&
+          cur.pricingOpId == opId) {
+        final currentCostFloor = cur.rawMaterialCost + (cur.laborHours * cur.hourlyRate);
+        final effectiveFloor = max(suggestion.floorPrice, currentCostFloor);
+        final effectiveSuggested = max(suggestion.suggestedPrice, effectiveFloor);
+        final effectiveMin = max(suggestion.minPrice, effectiveFloor);
+        final effectiveMax = max(suggestion.maxPrice, effectiveFloor);
+
+        if (!mounted) return;
+        state = state.copyWith(
+          floorPrice: effectiveFloor,
+          suggestedPrice: effectiveSuggested,
+          minPrice: effectiveMin,
+          maxPrice: effectiveMax,
+          finalPrice: effectiveSuggested,
+          confidenceScore: suggestion.confidenceScore,
+          marketPosition: suggestion.marketPosition,
+          comparableProducts: suggestion.comparableProducts,
+          pricingReasoning: suggestion.reasoning,
+          pricingReasoningHi: suggestion.reasoningHi,
+          isPricingProcessing: false,
+          isPricingDegraded: suggestion.isDegraded,
+          pricingDegradedReason: suggestion.degradedReason,
+        );
+        await _persistDraft();
+      }
+    } catch (e) {
+      debugPrint('[AddProductFlow] Error during pricing replay: $e');
+      await AiOperationStorage.updateResult(
+        opId,
+        status: AiOperationRecord.statusFailed,
+        errorMessage: e.toString(),
+      );
+    }
+  }
+
+  Future<void> _replayListingOperation(AiOperationRecord op) async {
+    final speechService = _ref.read(speechServiceProvider);
+    final req = op.requestSnapshot;
+    final opId = op.id;
+    final opGeneration = op.inputGeneration;
+    final owner = op.owner;
+
+    // Validate preconditions before dispatch
+    final preOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+    final preBackend = ApiConfig.baseUrl;
+    if (preOwner != op.owner ||
+        preBackend != op.backend ||
+        state.draftId != op.draftId ||
+        (state.voiceListingOpId != null && state.voiceListingOpId != op.id) ||
+        state.listingInputGeneration != opGeneration) {
+      debugPrint('[AddProductFlow] Listing replay precondition mismatch for op $opId. Aborting replay.');
+      return;
+    }
+
+    try {
+      final suggestion = await speechService.generateListingFromTranscript(
+        transcript: req['transcript'] as String? ?? '',
+        languageCode: req['language_code'] as String? ?? 'auto',
+        categoryHint: req['category_hint'] as String?,
+        idempotencyKey: op.idempotencyKey,
+      );
+
+      await AiOperationStorage.updateResult(
+        opId,
+        status: suggestion.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
+        resultData: {
+          'title_en': suggestion.titleEn,
+          'title_hi': suggestion.titleHi,
+          'description_en': suggestion.descriptionEn,
+          'description_hi': suggestion.descriptionHi,
+          'category': suggestion.category,
+          'tags': suggestion.tags,
+          'raw_material_cost': suggestion.rawMaterialCost,
+          'labor_hours': suggestion.laborHours,
+          'hourly_rate': suggestion.hourlyRate,
+          'floor_price': suggestion.floorPrice,
+          'is_degraded': suggestion.isDegraded,
+          'degraded_reason': suggestion.degradedReason,
+        },
+      );
+
+      if (!mounted) return;
+      final cur = state;
+      final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+      final curBackend = ApiConfig.baseUrl;
+      if (curOwner == owner &&
+          curBackend == op.backend &&
+          cur.draftId == op.draftId &&
+          cur.listingInputGeneration == opGeneration &&
+          cur.voiceListingOpId == opId) {
+        final mat = (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0)
+            ? suggestion.rawMaterialCost!
+            : cur.rawMaterialCost;
+        final hours = (suggestion.laborHours != null && suggestion.laborHours! > 0)
+            ? suggestion.laborHours!
+            : cur.laborHours;
+        final rate = (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0)
+            ? suggestion.hourlyRate!
+            : cur.hourlyRate;
+        final calculatedFloor = mat + (hours * rate);
+        final rawFloor = (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
+            ? suggestion.floorPrice!
+            : cur.floorPrice;
+        final effectiveFloor = max(rawFloor, calculatedFloor);
+
+        if (!mounted) return;
+        state = state.copyWith(
+          titleEn: suggestion.titleEn,
+          titleHi: suggestion.titleHi,
+          descriptionEn: suggestion.descriptionEn,
+          descriptionHi: suggestion.descriptionHi,
+          category: suggestion.category.isNotEmpty ? suggestion.category : cur.category,
+          tags: suggestion.tags.isNotEmpty ? suggestion.tags : cur.tags,
+          rawMaterialCost: mat,
+          laborHours: hours,
+          hourlyRate: rate,
+          floorPrice: effectiveFloor,
+          minPrice: cur.minPrice < effectiveFloor ? effectiveFloor : cur.minPrice,
+          finalPrice: cur.finalPrice < effectiveFloor ? effectiveFloor : cur.finalPrice,
+          isListingDegraded: suggestion.isDegraded,
+          listingDegradedReason: suggestion.degradedReason,
+          isAiProcessing: false,
+        );
+        await _persistDraft();
+      }
+    } catch (e) {
+      debugPrint('[AddProductFlow] Error during listing replay: $e');
+      await AiOperationStorage.updateResult(
+        opId,
+        status: AiOperationRecord.statusFailed,
+        errorMessage: e.toString(),
+      );
     }
   }
 
   void discardPreviousDraft() {
     _pendingDraft = null;
+    _pendingDraftSnapshot = null;
     state = AddProductDraft(
       draftId: 'draft_${DateTime.now().microsecondsSinceEpoch}',
       hasExistingDraft: false,
@@ -1077,63 +1973,22 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     }
   }
 
-  void _persistDraft() {
-    if (Hive.isBoxOpen('draft_box')) {
-      final box = Hive.box('draft_box');
-      box.put('draft_id', state.draftId);
-      box.put('draft_step', state.currentStep);
-      box.put('draft_image', state.originalImagePath);
-      box.put('draft_original_image', state.originalImagePath);
-      box.put('draft_enhanced_image', state.enhancedImagePath);
-      box.put('draft_audio', state.recordedAudioPath);
-      box.put('draft_transcript', state.voiceTranscript);
-      box.put('draft_manual_description', state.manualDescription);
-      box.put('draft_title_en', state.titleEn);
-      box.put('draft_title_hi', state.titleHi);
-      box.put('draft_description_en', state.descriptionEn);
-      box.put('draft_description_hi', state.descriptionHi);
-      box.put('draft_category', state.category);
-      box.put('draft_tags', state.tags);
-      box.put('draft_raw_material_cost', state.rawMaterialCost);
-      box.put('draft_labor_hours', state.laborHours);
-      box.put('draft_hourly_rate', state.hourlyRate);
-      box.put('draft_floor_price', state.floorPrice);
-      box.put('draft_suggested_price', state.suggestedPrice);
-      box.put('draft_min_price', state.minPrice);
-      box.put('draft_max_price', state.maxPrice);
-      box.put('draft_final_price', state.finalPrice);
-      box.put('draft_pricing_reasoning', state.pricingReasoning);
-      box.put('draft_pricing_reasoning_hi', state.pricingReasoningHi);
-      box.put('draft_confidence_score', state.confidenceScore);
-      box.put('draft_market_position', state.marketPosition);
-      box.put('draft_additional_images', state.additionalImagePaths);
-      box.put('draft_image_queue_id', state.imageQueueItemId);
-      box.put('draft_voice_queue_id', state.voiceQueueItemId);
-      box.put('draft_image_queue_status', state.imageQueueStatus.index);
-      box.put('draft_voice_queue_status', state.voiceQueueStatus.index);
-      box.put('draft_media_id', state.mediaId);
-      box.put('draft_original_media_id', state.originalMediaId);
-      box.put('draft_sha256_checksum', state.sha256Checksum);
-      box.put('draft_is_degraded', state.isDegraded);
-      box.put('draft_degraded_reason', state.degradedReason);
-      box.put('draft_image_enhance_op_id', state.imageEnhanceOpId);
-      box.put('draft_voice_listing_op_id', state.voiceListingOpId);
-      box.put('draft_pricing_op_id', state.pricingOpId);
-      box.put('draft_is_voice_degraded', state.isVoiceDegraded);
-      box.put('draft_voice_degraded_reason', state.voiceDegradedReason);
-      box.put('draft_is_listing_degraded', state.isListingDegraded);
-      box.put('draft_listing_degraded_reason', state.listingDegradedReason);
-      box.put('draft_is_pricing_degraded', state.isPricingDegraded);
-      box.put('draft_pricing_degraded_reason', state.pricingDegradedReason);
-      box.put('draft_image_input_generation', state.imageInputGeneration);
-      box.put('draft_bound_media_generation', state.boundMediaGeneration);
-      box.put('draft_pricing_input_generation', state.pricingInputGeneration);
-      box.put('draft_pricing_fingerprint', state.pricingFingerprint);
-      box.put('draft_voice_input_generation', state.voiceInputGeneration);
-      box.put('draft_voice_fingerprint', state.voiceFingerprint);
-      box.put('draft_listing_input_generation', state.listingInputGeneration);
-      box.put('draft_listing_fingerprint', state.listingFingerprint);
+  Future<void> _persistDraft() async {
+    if (!Hive.isBoxOpen('draft_box')) {
+      throw StateError('draft_box is not open; cannot persist safety-critical draft');
     }
+    final curState = state;
+    final currentSeq = ++_draftSaveSeq;
+    await _draftLock.synchronized(() async {
+      if (currentSeq < _draftSaveSeq) return;
+      final box = Hive.box('draft_box');
+      final snapshotData = curState.toJson();
+      snapshotData['__version'] = 1;
+      snapshotData['__save_seq'] = currentSeq;
+      final jsonStr = jsonEncode(snapshotData);
+      await box.put(snapshotKey, jsonStr);
+      await box.flush();
+    });
   }
 
   /// Called from "Retake Photo" on the AI Listing Review step. Sends the
@@ -1147,44 +2002,62 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 
   /// Called when the user accepts a photo on Step 1. Normally advances to
   /// Step 2; if we're mid-retake, jumps straight back to Step 3 instead.
-  void confirmPhoto() {
+  Future<void> confirmPhoto() async {
     if (state.isRetakeFlow) {
       state = state.copyWith(currentStep: 2, isRetakeFlow: false);
+      await _persistDraft();
     } else {
-      nextStep();
+      await nextStep();
     }
   }
 
-  void setStep(int step) {
+  Future<void> setStep(int step) async {
     state = state.copyWith(currentStep: step);
-    _persistDraft();
+    await _persistDraft();
   }
 
-  void nextStep() {
+  Future<void> nextStep() async {
     if (state.currentStep < 4) {
       state = state.copyWith(currentStep: state.currentStep + 1);
-      _persistDraft();
+      await _persistDraft();
     }
   }
 
-  void previousStep() {
+  Future<void> previousStep() async {
     if (state.currentStep > 0) {
       state = state.copyWith(currentStep: state.currentStep - 1);
-      _persistDraft();
+      await _persistDraft();
     }
   }
 
   Future<void> setImage(String path) async {
     _processingSubmissionInProgress = false;
     final newGen = state.imageInputGeneration + 1;
+    final newPricingGen = state.pricingInputGeneration + 1;
     await AiOperationStorage.markSuperseded(
       state.draftId,
       'image_enhance',
       newGen,
     );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
+
+    String snapshotPath = path;
+    String? snapshotSha256;
+    if (path.isNotEmpty && File(path).existsSync()) {
+      snapshotPath = await _copyImageToDraftStorage(File(path));
+      final bytes = await File(snapshotPath).readAsBytes();
+      snapshotSha256 = sha256.convert(bytes).toString();
+    }
+
     state = state.copyWith(
       originalImagePath: path,
       enhancedImagePath: path,
+      immutablePhotoSnapshotPath: snapshotPath,
+      immutablePhotoSnapshotSha256: snapshotSha256,
       isEnhanced: false,
       isAiProcessing: false,
       imageQueueItemId: null,
@@ -1197,22 +2070,38 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       degradedReason: null,
       imageInputGeneration: newGen,
       boundMediaGeneration: null,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
     );
-    _persistDraft();
+    await _persistDraft();
   }
 
   Future<String> queueImage(File imageFile) async {
     _processingSubmissionInProgress = false;
     final durablePath = await _copyImageToDraftStorage(imageFile);
+    String? snapshotSha256;
+    if (File(durablePath).existsSync()) {
+      final bytes = await File(durablePath).readAsBytes();
+      snapshotSha256 = sha256.convert(bytes).toString();
+    }
     final newGen = state.imageInputGeneration + 1;
+    final newPricingGen = state.pricingInputGeneration + 1;
     await AiOperationStorage.markSuperseded(
       state.draftId,
       'image_enhance',
       newGen,
     );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
     state = state.copyWith(
       originalImagePath: durablePath,
       enhancedImagePath: durablePath,
+      immutablePhotoSnapshotPath: durablePath,
+      immutablePhotoSnapshotSha256: snapshotSha256,
       isEnhanced: false,
       isAiProcessing: false,
       imageQueueItemId: null,
@@ -1225,14 +2114,22 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       degradedReason: null,
       imageInputGeneration: newGen,
       boundMediaGeneration: null,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
     );
-    _persistDraft();
+    await _persistDraft();
     return '';
   }
 
   Future<String> _copyImageToDraftStorage(File imageFile) async {
     if (!imageFile.existsSync()) return imageFile.path;
-    final appDir = await getApplicationDocumentsDirectory();
+    Directory appDir;
+    try {
+      appDir = await getApplicationDocumentsDirectory();
+    } catch (_) {
+      appDir = Directory.systemTemp;
+    }
     final draftDir = Directory('${appDir.path}/draft_media');
     await draftDir.create(recursive: true);
     final extension = imageFile.path.contains('.')
@@ -1422,6 +2319,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     final owner = _ref.read(authStateProvider).userId ?? 'anonymous';
     final backend = ApiConfig.baseUrl;
     final int opGeneration = state.imageInputGeneration;
+    final targetDraftId = state.draftId;
 
     final fingerprint = await AiOperationRecord.computeFingerprint(
       operationType: 'image_enhance',
@@ -1430,6 +2328,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       inputs: {'draft_id': state.draftId, 'generation': opGeneration},
       files: [imageFile],
     );
+
+    if (!mounted) return;
 
     final String opId;
     final existingOp = state.imageEnhanceOpId != null
@@ -1460,7 +2360,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       );
       await AiOperationStorage.save(record);
       state = state.copyWith(imageEnhanceOpId: opId);
-      _persistDraft();
+      await _persistDraft();
     }
 
     final enhancer = _ref.read(imageEnhancerServiceProvider);
@@ -1482,7 +2382,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       final curBackend = ApiConfig.baseUrl;
       if (curOwner == owner &&
           curBackend == backend &&
-          cur.draftId == state.draftId &&
+          cur.draftId == targetDraftId &&
           cur.imageInputGeneration == opGeneration &&
           (cur.imageEnhanceOpId == null || cur.imageEnhanceOpId == opId)) {
         final hasNewPath = res.displayPath.isNotEmpty && res.displayPath != imageFile.path;
@@ -1498,7 +2398,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           boundMediaGeneration: opGeneration,
         );
         _recomputeAiProcessing();
-        _persistDraft();
+        await _persistDraft();
       }
     }).catchError((err) async {
       await AiOperationStorage.updateResult(
@@ -1537,7 +2437,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           boundMediaGeneration: opGeneration,
         );
         _recomputeAiProcessing();
-        _persistDraft();
+        await _persistDraft();
         return;
       }
 
@@ -1553,7 +2453,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         boundMediaGeneration: opGeneration,
       );
       _recomputeAiProcessing();
-      _persistDraft();
+      await _persistDraft();
     } catch (e, st) {
       debugPrint('[AddProductFlow] AI enhancement error: $e\n$st');
       _imageEnhancementInFlight = false;
@@ -1567,7 +2467,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       );
       if (gen != null && gen != _aiProcessingGen) return;
       _recomputeAiProcessing();
-      _persistDraft();
+      await _persistDraft();
     }
   }
 
@@ -1828,62 +2728,183 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     state = state.copyWith(
       additionalImagePaths: [...state.additionalImagePaths, path],
     );
-    _persistDraft();
+    await _persistDraft();
   }
 
-  void removeAdditionalImage(String path) {
+  Future<void> removeAdditionalImage(String path) async {
     state = state.copyWith(
       additionalImagePaths: state.additionalImagePaths
           .where((p) => p != path)
           .toList(),
     );
-    _persistDraft();
+    await _persistDraft();
   }
 
-  void addTag(String tag) {
+  Future<void> addTag(String tag) async {
     final trimmed = tag.trim();
     if (trimmed.isEmpty || state.tags.contains(trimmed)) return;
-    state = state.copyWith(tags: [...state.tags, trimmed]);
-    _persistDraft();
+    final newPricingGen = state.pricingInputGeneration + 1;
+    state = state.copyWith(
+      tags: [...state.tags, trimmed],
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
+    await _persistDraft();
   }
 
-  void removeTag(String tag) {
-    state = state.copyWith(tags: state.tags.where((t) => t != tag).toList());
-    _persistDraft();
+  Future<void> removeTag(String tag) async {
+    final newPricingGen = state.pricingInputGeneration + 1;
+    state = state.copyWith(
+      tags: state.tags.where((t) => t != tag).toList(),
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
+    await _persistDraft();
   }
 
-  void setManualDescription(String desc) {
-    state = state.copyWith(manualDescription: desc);
-    _persistDraft();
+  Future<void> setManualDescription(String desc) async {
+    final newListingGen = state.listingInputGeneration + 1;
+    final newPricingGen = state.pricingInputGeneration + 1;
+    state = state.copyWith(
+      manualDescription: desc,
+      listingInputGeneration: newListingGen,
+      voiceListingOpId: null,
+      listingFingerprint: null,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'listing_generate',
+      newListingGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
+    await _persistDraft();
   }
 
-  void retakeDescription() {
+  Future<void> retakeDescription() async {
+    final newVoiceGen = state.voiceInputGeneration + 1;
+    final newListingGen = state.listingInputGeneration + 1;
+    final newPricingGen = state.pricingInputGeneration + 1;
     state = state.copyWith(
       recordedAudioPath: '',
       voiceTranscript: '',
       manualDescription: '',
       voiceQueueItemId: null,
+      voiceInputGeneration: newVoiceGen,
+      voiceFingerprint: null,
+      listingInputGeneration: newListingGen,
+      voiceListingOpId: null,
+      listingFingerprint: null,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'voice_transcribe',
+      newVoiceGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'listing_generate',
+      newListingGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
     );
     setStep(1);
+    await _persistDraft();
   }
 
   Future<void> processVoiceRecording({
     required String audioPath,
     required String languageCode,
   }) async {
+    final newVoiceGen = state.voiceInputGeneration + 1;
+    final newListingGen = state.listingInputGeneration + 1;
+    final newPricingGen = state.pricingInputGeneration + 1;
     state = state.copyWith(
       recordedAudioPath: audioPath,
       voiceQueueItemId: null,
+      voiceInputGeneration: newVoiceGen,
+      voiceFingerprint: null,
+      listingInputGeneration: newListingGen,
+      voiceListingOpId: null,
+      listingFingerprint: null,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
     );
-    _persistDraft();
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'voice_transcribe',
+      newVoiceGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'listing_generate',
+      newListingGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
+    await _persistDraft();
   }
 
   Future<String> queueVoiceRecording(File audioFile) async {
+    final newVoiceGen = state.voiceInputGeneration + 1;
+    final newListingGen = state.listingInputGeneration + 1;
+    final newPricingGen = state.pricingInputGeneration + 1;
     state = state.copyWith(
       recordedAudioPath: audioFile.path,
       voiceQueueStatus: QueueStatus.pending,
+      voiceInputGeneration: newVoiceGen,
+      voiceFingerprint: null,
+      listingInputGeneration: newListingGen,
+      voiceListingOpId: null,
+      listingFingerprint: null,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
     );
-    _persistDraft();
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'voice_transcribe',
+      newVoiceGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'listing_generate',
+      newListingGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
+    await _persistDraft();
 
     if (kMockAiBackend) {
       // Skip the real offline-sync queue entirely — there's no backend to
@@ -1891,7 +2912,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       // leaving voiceQueueStatus stuck at "pending" (which would otherwise
       // keep the AI-processing loader open until the watchdog times out).
       state = state.copyWith(voiceQueueStatus: QueueStatus.completed);
-      _persistDraft();
+      await _persistDraft();
       return '';
     }
 
@@ -2055,14 +3076,44 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 
   Future<void> retakePhoto(File newPhoto) async {
     final durablePath = await _copyImageToDraftStorage(newPhoto);
+    String? snapshotSha256;
+    if (File(durablePath).existsSync()) {
+      final bytes = await File(durablePath).readAsBytes();
+      snapshotSha256 = sha256.convert(bytes).toString();
+    }
+    final newGen = state.imageInputGeneration + 1;
+    final newPricingGen = state.pricingInputGeneration + 1;
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'image_enhance',
+      newGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
     state = state.copyWith(
       originalImagePath: durablePath,
       enhancedImagePath: durablePath,
+      immutablePhotoSnapshotPath: durablePath,
+      immutablePhotoSnapshotSha256: snapshotSha256,
       isEnhanced: false,
       imageQueueItemId: null,
       imageQueueStatus: QueueStatus.pending,
+      mediaId: null,
+      originalMediaId: null,
+      sha256Checksum: null,
+      imageEnhanceOpId: null,
+      isDegraded: false,
+      degradedReason: null,
+      imageInputGeneration: newGen,
+      boundMediaGeneration: null,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
     );
-    _persistDraft();
+    await _persistDraft();
     final isOnline = _ref.read(connectivityProvider).value ?? true;
     if (isOnline) {
       unawaited(_enhanceProductImage(File(durablePath)));
@@ -2070,13 +3121,42 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   }
 
   Future<void> retakeVoice(File newAudio) async {
+    final newVoiceGen = state.voiceInputGeneration + 1;
+    final newListingGen = state.listingInputGeneration + 1;
+    final newPricingGen = state.pricingInputGeneration + 1;
+
     state = state.copyWith(
       recordedAudioPath: newAudio.path,
       voiceTranscript: '',
       voiceQueueItemId: null,
       voiceQueueStatus: QueueStatus.pending,
+      voiceInputGeneration: newVoiceGen,
+      voiceFingerprint: null,
+      listingInputGeneration: newListingGen,
+      voiceListingOpId: null,
+      listingFingerprint: null,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
     );
-    _persistDraft();
+
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'voice_transcribe',
+      newVoiceGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'listing_generate',
+      newListingGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
+
+    await _persistDraft();
     if (OfflineSyncService.instance.isInitialized) {
       try {
         final localId = await OfflineSyncService.instance.enqueueVoiceNote(
@@ -2092,14 +3172,43 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     }
   }
 
-  void clearVoiceRecording() {
+  Future<void> clearVoiceRecording() async {
+    final newVoiceGen = state.voiceInputGeneration + 1;
+    final newListingGen = state.listingInputGeneration + 1;
+    final newPricingGen = state.pricingInputGeneration + 1;
+
     state = state.copyWith(
       recordedAudioPath: '',
       voiceTranscript: '',
       voiceQueueItemId: null,
       voiceQueueStatus: QueueStatus.completed,
+      voiceInputGeneration: newVoiceGen,
+      voiceFingerprint: null,
+      listingInputGeneration: newListingGen,
+      voiceListingOpId: null,
+      listingFingerprint: null,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
     );
-    _persistDraft();
+
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'voice_transcribe',
+      newVoiceGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'listing_generate',
+      newListingGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
+
+    await _persistDraft();
   }
 
   Future<void> generateAiListing(String languageCode) async {
@@ -2158,6 +3267,9 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       final owner = _ref.read(authStateProvider).userId ?? 'anonymous';
       final backend = ApiConfig.baseUrl;
       final categoryHint = (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null;
+      final targetDraftId = state.draftId;
+      final targetOwner = owner;
+      final targetBackend = backend;
 
       final listingInputs = <String, dynamic>{
         'transcript': transcript,
@@ -2165,11 +3277,13 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         'category_hint': categoryHint,
       };
 
+      final frozenListingInputs = Map<String, dynamic>.from(listingInputs);
+
       final fingerprint = await AiOperationRecord.computeFingerprint(
         operationType: 'listing_generate',
         owner: owner,
         backend: backend,
-        inputs: listingInputs,
+        inputs: frozenListingInputs,
       );
 
       final String opId;
@@ -2189,7 +3303,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           draftId: state.draftId,
           inputGeneration: opGeneration,
           inputFingerprint: fingerprint,
-          requestSnapshot: listingInputs,
+          requestSnapshot: frozenListingInputs,
           status: AiOperationRecord.statusInFlight,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -2200,54 +3314,127 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           listingFingerprint: fingerprint,
           listingInputGeneration: opGeneration,
         );
-        _persistDraft();
+        await _persistDraft();
       }
 
-      // Cap listing generation at 25 s.
-      final suggestion = await speechService
-          .generateListingFromTranscript(
-            transcript: transcript,
-            languageCode: languageCode,
-            categoryHint: categoryHint,
-            idempotencyKey: opId,
-          )
-          .timeout(
-            const Duration(seconds: 25),
-            onTimeout: () {
-              debugPrint('[AddProductFlow] Listing generation timed out — using placeholder.');
-              return AiListingSuggestion(
-                titleEn: state.titleEn.isNotEmpty ? state.titleEn : transcript,
-                titleHi: state.titleHi,
-                descriptionEn: state.descriptionEn.isNotEmpty ? state.descriptionEn : transcript,
-                descriptionHi: state.descriptionHi,
-                category: state.category,
-                tags: state.tags,
-                isDegraded: true,
-                degradedReason: 'Listing generation timed out after 25 seconds.',
-              );
-            },
-          );
+      final networkFuture = speechService.generateListingFromTranscript(
+        transcript: transcript,
+        languageCode: languageCode,
+        categoryHint: categoryHint,
+        idempotencyKey: opId,
+      );
 
-      await AiOperationStorage.updateResult(
-        opId,
-        status: suggestion.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
-        resultData: {
-          'title_en': suggestion.titleEn,
-          'title_hi': suggestion.titleHi,
-          'description_en': suggestion.descriptionEn,
-          'description_hi': suggestion.descriptionHi,
-          'category': suggestion.category,
-          'tags': suggestion.tags,
-          'is_degraded': suggestion.isDegraded,
-          'degraded_reason': suggestion.degradedReason,
+      // Decouple background network future to persist late results
+      unawaited(networkFuture.then((res) async {
+        await AiOperationStorage.updateResult(
+          opId,
+          status: res.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
+          resultData: {
+            'title_en': res.titleEn,
+            'title_hi': res.titleHi,
+            'description_en': res.descriptionEn,
+            'description_hi': res.descriptionHi,
+            'category': res.category,
+            'tags': res.tags,
+            'raw_material_cost': res.rawMaterialCost,
+            'labor_hours': res.laborHours,
+            'hourly_rate': res.hourlyRate,
+            'floor_price': res.floorPrice,
+            'is_degraded': res.isDegraded,
+            'degraded_reason': res.degradedReason,
+          },
+        );
+        final cur = state;
+        final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+        final curBackend = ApiConfig.baseUrl;
+        if (curOwner == targetOwner &&
+            curBackend == targetBackend &&
+            cur.draftId == targetDraftId &&
+            cur.listingInputGeneration == opGeneration &&
+            cur.voiceListingOpId == opId) {
+          final mat = (res.rawMaterialCost != null && res.rawMaterialCost! > 0)
+              ? res.rawMaterialCost!
+              : cur.rawMaterialCost;
+          final hours = (res.laborHours != null && res.laborHours! > 0)
+              ? res.laborHours!
+              : cur.laborHours;
+          final rate = (res.hourlyRate != null && res.hourlyRate! > 0)
+              ? res.hourlyRate!
+              : cur.hourlyRate;
+          final calculatedFloor = mat + (hours * rate);
+          final rawFloor = (res.floorPrice != null && res.floorPrice! > 0)
+              ? res.floorPrice!
+              : cur.floorPrice;
+          final effectiveFloor = max(rawFloor, calculatedFloor);
+
+          state = state.copyWith(
+            titleEn: res.titleEn,
+            titleHi: res.titleHi,
+            descriptionEn: res.descriptionEn,
+            descriptionHi: res.descriptionHi,
+            category: res.category.isNotEmpty ? res.category : cur.category,
+            tags: res.tags.isNotEmpty ? res.tags : cur.tags,
+            rawMaterialCost: mat,
+            laborHours: hours,
+            hourlyRate: rate,
+            floorPrice: effectiveFloor,
+            minPrice: cur.minPrice < effectiveFloor ? effectiveFloor : cur.minPrice,
+            finalPrice: cur.finalPrice < effectiveFloor ? effectiveFloor : cur.finalPrice,
+            isListingDegraded: res.isDegraded,
+            listingDegradedReason: res.degradedReason,
+            isAiProcessing: false,
+          );
+          await _persistDraft();
+        }
+      }).catchError((err) async {
+        await AiOperationStorage.updateResult(
+          opId,
+          status: AiOperationRecord.statusFailed,
+          errorMessage: err.toString(),
+        );
+      }));
+
+      // Cap listing generation at 25 s for foreground UI responsiveness
+      final suggestion = await networkFuture.timeout(
+        const Duration(seconds: 25),
+        onTimeout: () {
+          debugPrint('[AddProductFlow] Listing generation timed out — using placeholder.');
+          return AiListingSuggestion(
+            titleEn: state.titleEn.isNotEmpty ? state.titleEn : transcript,
+            titleHi: state.titleHi,
+            descriptionEn: state.descriptionEn.isNotEmpty ? state.descriptionEn : transcript,
+            descriptionHi: state.descriptionHi,
+            category: state.category,
+            tags: state.tags,
+            isDegraded: true,
+            degradedReason: 'Listing generation timed out after 25 seconds.',
+          );
         },
       );
 
       final cur = state;
       final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
-      if (curOwner == owner &&
+      final curBackend = ApiConfig.baseUrl;
+      if (curOwner == targetOwner &&
+          curBackend == targetBackend &&
+          cur.draftId == targetDraftId &&
           cur.listingInputGeneration == opGeneration &&
           cur.voiceListingOpId == opId) {
+        final mat = (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0)
+            ? suggestion.rawMaterialCost!
+            : cur.rawMaterialCost;
+        final hours = (suggestion.laborHours != null && suggestion.laborHours! > 0)
+            ? suggestion.laborHours!
+            : cur.laborHours;
+        final rate = (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0)
+            ? suggestion.hourlyRate!
+            : cur.hourlyRate;
+        final calculatedFloor = mat + (hours * rate);
+        final rawFloor = (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
+            ? suggestion.floorPrice!
+            : cur.floorPrice;
+        final effectiveFloor = max(rawFloor, calculatedFloor);
+
         state = state.copyWith(
           titleEn: suggestion.titleEn,
           titleHi: suggestion.titleHi,
@@ -2255,23 +3442,17 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           descriptionHi: suggestion.descriptionHi,
           category: suggestion.category.isNotEmpty ? suggestion.category : state.category,
           tags: suggestion.tags.isNotEmpty ? suggestion.tags : state.tags,
-          rawMaterialCost: (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0)
-              ? suggestion.rawMaterialCost!
-              : state.rawMaterialCost,
-          laborHours: (suggestion.laborHours != null && suggestion.laborHours! > 0)
-              ? suggestion.laborHours!
-              : state.laborHours,
-          hourlyRate: (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0)
-              ? suggestion.hourlyRate!
-              : state.hourlyRate,
-          floorPrice: (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
-              ? suggestion.floorPrice!
-              : state.floorPrice,
+          rawMaterialCost: mat,
+          laborHours: hours,
+          hourlyRate: rate,
+          floorPrice: effectiveFloor,
+          minPrice: cur.minPrice < effectiveFloor ? effectiveFloor : cur.minPrice,
+          finalPrice: cur.finalPrice < effectiveFloor ? effectiveFloor : cur.finalPrice,
           isListingDegraded: suggestion.isDegraded,
           listingDegradedReason: suggestion.degradedReason,
           isAiProcessing: false,
         );
-        _persistDraft();
+        await _persistDraft();
       }
     } catch (e) {
       debugPrint('[AddProductFlow] Error in generateAiListing: $e');
@@ -2284,7 +3465,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         isListingDegraded: true,
         listingDegradedReason: 'Listing generation failed: $e',
       );
-      _persistDraft();
+      await _persistDraft();
     }
   }
 
@@ -2296,7 +3477,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       isRegenerating: true, // overlay card, not full-screen
       imageQueueStatus: QueueStatus.pending,
     );
-    _persistDraft();
+    await _persistDraft();
 
     final isOnline = _ref.read(connectivityProvider).value ?? true;
 
@@ -2319,7 +3500,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       debugPrint('[AddProductFlow] Error during regenerateAll: $e');
     } finally {
       state = state.copyWith(isAiProcessing: false, isRegenerating: false);
-      _persistDraft();
+      await _persistDraft();
     }
   }
 
@@ -2330,7 +3511,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   /// isAiProcessing left currentStep on Step 3, so "Go back" silently
   /// dropped the user onto the offline-waiting screen (or a half-populated
   /// Step 3) instead of returning them to where they tapped Next.
-  void cancelAiProcessing() {
+  Future<void> cancelAiProcessing() async {
     _aiProcessingWatchdog?.cancel();
     // Invalidate any in-flight enhancement/listing requests from this
     // submission so a late response can't flip isAiProcessing back on
@@ -2340,13 +3521,13 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     if (state.currentStep == 2) {
       state = state.copyWith(currentStep: 1);
     }
-    _persistDraft();
+    await _persistDraft();
   }
 
   /// Manual escape hatch for the full-screen pricing loader (Step 3 → 4).
-  void cancelPricingProcessing() {
+  Future<void> cancelPricingProcessing() async {
     state = state.copyWith(isPricingProcessing: false);
-    _persistDraft();
+    await _persistDraft();
   }
 
   Future<void> calculatePriceSuggestion() async {
@@ -2377,11 +3558,13 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       'hourly_rate': (state.laborHours > 0 && state.hourlyRate > 0) ? state.hourlyRate : null,
     };
 
+    final frozenPricingInputs = Map<String, dynamic>.from(pricingInputs);
+
     final fingerprint = await AiOperationRecord.computeFingerprint(
       operationType: 'pricing_suggest',
       owner: owner,
       backend: backend,
-      inputs: pricingInputs,
+      inputs: frozenPricingInputs,
     );
 
     final String opId;
@@ -2401,7 +3584,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         draftId: state.draftId,
         inputGeneration: opGeneration,
         inputFingerprint: fingerprint,
-        requestSnapshot: pricingInputs,
+        requestSnapshot: frozenPricingInputs,
         status: AiOperationRecord.statusInFlight,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
@@ -2412,52 +3595,138 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         pricingFingerprint: fingerprint,
         pricingInputGeneration: opGeneration,
       );
-      _persistDraft();
+      await _persistDraft();
     }
 
+    final targetDraftId = state.draftId;
+    final targetOwner = owner;
+    final targetBackend = backend;
+
+    final String reqDescription = (frozenPricingInputs['description'] as String?) ??
+        (desc.isNotEmpty ? desc : '${state.category} handcrafted product');
+    final String reqCategory = (frozenPricingInputs['category'] as String?) ?? state.category;
+    final List<String> reqTags = (frozenPricingInputs['tags'] is List)
+        ? (frozenPricingInputs['tags'] as List).map((e) => e.toString()).toList()
+        : state.tags;
+    final String? reqImageUrl = frozenPricingInputs['image_url'] as String?;
+    final double? reqRawMaterialCost = (frozenPricingInputs['raw_material_cost'] as num?)?.toDouble();
+    final double? reqLaborHours = (frozenPricingInputs['labor_hours'] as num?)?.toDouble();
+    final double? reqHourlyWage = (frozenPricingInputs['hourly_rate'] as num?)?.toDouble();
+
     try {
-      final suggestion = await pricingService.suggestPrice(
-        description: desc.isNotEmpty ? desc : '${state.category} handcrafted product',
-        category: state.category,
-        tags: state.tags,
-        imageUrl: imagePath,
-        rawMaterialCost: state.rawMaterialCost > 0 ? state.rawMaterialCost : null,
-        laborHours: state.laborHours > 0 ? state.laborHours : null,
-        hourlyWage: (state.laborHours > 0 && state.hourlyRate > 0) ? state.hourlyRate : null,
+      final networkFuture = pricingService.suggestPrice(
+        description: reqDescription,
+        category: reqCategory,
+        tags: reqTags,
+        imageUrl: reqImageUrl,
+        rawMaterialCost: reqRawMaterialCost,
+        laborHours: reqLaborHours,
+        hourlyWage: reqHourlyWage,
         idempotencyKey: opId,
       );
 
-      await AiOperationStorage.updateResult(
-        opId,
-        status: suggestion.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
-        resultData: {
-          'floor_price': suggestion.floorPrice,
-          'suggested_price': suggestion.suggestedPrice,
-          'min_price': suggestion.minPrice,
-          'max_price': suggestion.maxPrice,
-          'confidence_score': suggestion.confidenceScore,
-          'market_position': suggestion.marketPosition,
-          'comparable_products': suggestion.comparableProducts
-              .map((c) => c.toJson())
-              .toList(),
-          'reasoning': suggestion.reasoning,
-          'reasoning_hi': suggestion.reasoningHi,
-          'is_degraded': suggestion.isDegraded,
-          'degraded_reason': suggestion.degradedReason,
+      // Decouple background network future so late response is persisted to AiOperationStorage
+      // without reviving superseded operations or being lost on UI timeout
+      unawaited(networkFuture.then((suggestion) async {
+        await AiOperationStorage.updateResult(
+          opId,
+          status: suggestion.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
+          resultData: {
+            'floor_price': suggestion.floorPrice,
+            'suggested_price': suggestion.suggestedPrice,
+            'min_price': suggestion.minPrice,
+            'max_price': suggestion.maxPrice,
+            'confidence_score': suggestion.confidenceScore,
+            'market_position': suggestion.marketPosition,
+            'comparable_products': suggestion.comparableProducts
+                .map((c) => c.toJson())
+                .toList(),
+            'reasoning': suggestion.reasoning,
+            'reasoning_hi': suggestion.reasoningHi,
+            'is_degraded': suggestion.isDegraded,
+            'degraded_reason': suggestion.degradedReason,
+          },
+        );
+
+        final cur = state;
+        final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+        final curBackend = ApiConfig.baseUrl;
+        if (curOwner == targetOwner &&
+            curBackend == targetBackend &&
+            cur.draftId == targetDraftId &&
+            cur.pricingInputGeneration == opGeneration &&
+            cur.pricingOpId == opId) {
+          final currentCostFloor = cur.rawMaterialCost + (cur.laborHours * cur.hourlyRate);
+          final effectiveFloor = max(suggestion.floorPrice, currentCostFloor);
+          final effectiveSuggested = max(suggestion.suggestedPrice, effectiveFloor);
+          final effectiveMin = max(suggestion.minPrice, effectiveFloor);
+          final effectiveMax = max(suggestion.maxPrice, effectiveFloor);
+
+          state = state.copyWith(
+            floorPrice: effectiveFloor,
+            suggestedPrice: effectiveSuggested,
+            minPrice: effectiveMin,
+            maxPrice: effectiveMax,
+            finalPrice: effectiveSuggested,
+            confidenceScore: suggestion.confidenceScore,
+            marketPosition: suggestion.marketPosition,
+            comparableProducts: suggestion.comparableProducts,
+            pricingReasoning: suggestion.reasoning,
+            pricingReasoningHi: suggestion.reasoningHi,
+            isPricingDegraded: suggestion.isDegraded,
+            pricingDegradedReason: suggestion.degradedReason,
+          );
+          await _persistDraft();
+        }
+      }).catchError((e) async {
+        await AiOperationStorage.updateResult(
+          opId,
+          status: AiOperationRecord.statusFailed,
+          errorMessage: e.toString(),
+        );
+      }));
+
+      final suggestion = await networkFuture.timeout(
+        const Duration(seconds: 25),
+        onTimeout: () {
+          debugPrint('[AddProductFlow] Pricing calculation timed out — using cost floor.');
+          final curCostFloor = state.rawMaterialCost + (state.laborHours * state.hourlyRate);
+          return PriceSuggestion(
+            floorPrice: curCostFloor,
+            suggestedPrice: curCostFloor > 0 ? curCostFloor * 1.5 : 100.0,
+            minPrice: curCostFloor,
+            maxPrice: curCostFloor > 0 ? curCostFloor * 2.5 : 250.0,
+            confidenceScore: 0.0,
+            marketPosition: 'fair',
+            comparableProducts: const [],
+            reasoning: 'Pricing calculation timed out. Defaulted to calculated cost floor.',
+            reasoningHi: 'मूल्य गणना समय समाप्त हो गई। गणना किए गए लागत आधार पर निर्धारित।',
+            isDegraded: true,
+            degradedReason: 'Pricing calculation timed out after 25 seconds.',
+          );
         },
       );
 
       final cur = state;
       final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
-      if (curOwner == owner &&
+      final curBackend = ApiConfig.baseUrl;
+      if (curOwner == targetOwner &&
+          curBackend == targetBackend &&
+          cur.draftId == targetDraftId &&
           cur.pricingInputGeneration == opGeneration &&
           cur.pricingOpId == opId) {
+        final currentCostFloor = cur.rawMaterialCost + (cur.laborHours * cur.hourlyRate);
+        final effectiveFloor = max(suggestion.floorPrice, currentCostFloor);
+        final effectiveSuggested = max(suggestion.suggestedPrice, effectiveFloor);
+        final effectiveMin = max(suggestion.minPrice, effectiveFloor);
+        final effectiveMax = max(suggestion.maxPrice, effectiveFloor);
+
         state = state.copyWith(
-          floorPrice: suggestion.floorPrice,
-          suggestedPrice: suggestion.suggestedPrice,
-          minPrice: suggestion.minPrice,
-          maxPrice: suggestion.maxPrice,
-          finalPrice: suggestion.suggestedPrice,
+          floorPrice: effectiveFloor,
+          suggestedPrice: effectiveSuggested,
+          minPrice: effectiveMin,
+          maxPrice: effectiveMax,
+          finalPrice: effectiveSuggested,
           confidenceScore: suggestion.confidenceScore,
           marketPosition: suggestion.marketPosition,
           comparableProducts: suggestion.comparableProducts,
@@ -2466,14 +3735,9 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           isPricingDegraded: suggestion.isDegraded,
           pricingDegradedReason: suggestion.degradedReason,
         );
-        _persistDraft();
+        await _persistDraft();
       }
     } catch (e) {
-      await AiOperationStorage.updateResult(
-        opId,
-        status: AiOperationRecord.statusFailed,
-        errorMessage: e.toString(),
-      );
       final errStr = e.toString().toLowerCase();
       if (errStr.contains('401') || errStr.contains('403') || errStr.contains('unauthorized')) {
         _ref.read(authStateProvider.notifier).expireSession();
@@ -2484,7 +3748,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           isPricingDegraded: true,
           pricingDegradedReason: 'Pricing calculation failed: $e',
         );
-        _persistDraft();
+        await _persistDraft();
       }
       rethrow;
     }
@@ -2504,15 +3768,15 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         isPricingProcessing: false,
         currentStep: 3,
       );
-      _persistDraft();
+      await _persistDraft();
     }
   }
 
-  void updateCostParameters({
+  Future<void> updateCostParameters({
     double? materialCost,
     double? laborHours,
     double? hourlyRate,
-  }) {
+  }) async {
     final mat = materialCost ?? state.rawMaterialCost;
     final hours = laborHours ?? state.laborHours;
     final rate = hourlyRate ?? state.hourlyRate;
@@ -2520,6 +3784,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 
     final newMin = state.minPrice < floor ? floor : state.minPrice;
     final newPrice = state.finalPrice < floor ? floor : state.finalPrice;
+    final newPricingGen = state.pricingInputGeneration + 1;
 
     state = state.copyWith(
       rawMaterialCost: mat,
@@ -2528,21 +3793,35 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       floorPrice: floor,
       minPrice: newMin,
       finalPrice: newPrice,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
     );
+
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
+    await _persistDraft();
   }
 
-  void setFinalPrice(double price) {
+  Future<void> setFinalPrice(double price) async {
     state = state.copyWith(finalPrice: price);
+    await _persistDraft();
   }
 
-  void updateListingDetails({
+  Future<void> updateListingDetails({
     String? titleEn,
     String? titleHi,
     String? descriptionEn,
     String? descriptionHi,
     String? category,
     List<String>? tags,
-  }) {
+  }) async {
+    final newListingGen = state.listingInputGeneration + 1;
+    final newPricingGen = state.pricingInputGeneration + 1;
+
     state = state.copyWith(
       titleEn: titleEn ?? state.titleEn,
       titleHi: titleHi ?? state.titleHi,
@@ -2550,8 +3829,25 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       descriptionHi: descriptionHi ?? state.descriptionHi,
       category: category ?? state.category,
       tags: tags ?? state.tags,
+      listingInputGeneration: newListingGen,
+      voiceListingOpId: null,
+      listingFingerprint: null,
+      pricingInputGeneration: newPricingGen,
+      pricingOpId: null,
+      pricingFingerprint: null,
     );
-    _persistDraft();
+
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'listing_generate',
+      newListingGen,
+    );
+    await AiOperationStorage.markSuperseded(
+      state.draftId,
+      'pricing_suggest',
+      newPricingGen,
+    );
+    await _persistDraft();
   }
 
   void reset() {

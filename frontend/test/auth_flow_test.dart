@@ -7,6 +7,33 @@ import 'package:kalasetu/features/auth/screens/sign_in_screen.dart';
 import 'package:kalasetu/features/auth/screens/register_screen.dart';
 import 'package:kalasetu/features/auth/providers/auth_provider.dart';
 import 'package:kalasetu/data/models/user_profile.dart';
+import 'package:kalasetu/data/repositories/auth_repository.dart';
+
+class _FakeAuthRepository extends AuthRepository {
+  @override
+  Future<RequestOtpResult> requestOtp(String phone) async {
+    return const RequestOtpSuccess(message: 'OTP sent', expiresInSeconds: 300);
+  }
+
+  @override
+  Future<VerifyOtpResult> verifyOtpWithBackend(String phoneNumber, String otp) async {
+    final profile = UserProfile(
+      id: 'artisan_123',
+      name: 'Ravi Verma',
+      phone: phoneNumber,
+      craftType: 'Woodwork & Carving',
+      locationCluster: 'Saharanpur Woodcraft Hub',
+      state: 'Uttar Pradesh',
+    );
+    await saveAuthData('artisan_123', phoneNumber, token: 'fake_jwt_token');
+    return VerifyOtpSuccess(profile: profile, token: 'fake_jwt_token');
+  }
+
+  @override
+  Future<RegisterArtisanResult> registerArtisan(UserProfile profile) async {
+    return RegisterArtisanSuccess(profile.copyWith(id: 'artisan_123'));
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -83,7 +110,12 @@ void main() {
   });
 
   test('AuthNotifier saves registered profile on OTP verification', () async {
-    final container = ProviderContainer();
+    final fakeRepo = _FakeAuthRepository();
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(fakeRepo),
+      ],
+    );
     final authNotifier = container.read(authStateProvider.notifier);
 
     final newArtisan = UserProfile(

@@ -113,10 +113,14 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 60 * 24 * 30  # 30 days
 
     # SMS Provider Configuration
-    sms_provider: str = Field(default="console", description="SMS delivery provider: console, mock, http")
+    sms_provider: str = Field(default="console", description="SMS delivery provider: console, mock, http, 2factor")
     sms_api_url: Optional[str] = Field(default="", description="SMS gateway HTTP endpoint URL")
     sms_api_key: Optional[str] = Field(default="", description="SMS gateway API key")
     sms_sender_id: Optional[str] = Field(default="", description="SMS sender identifier")
+    sms_template_name: Optional[str] = Field(default="", description="Optional 2Factor SMS DLT template name")
+    enable_real_sms: bool = Field(default=False, description="Explicit authorization switch required to dispatch real HTTP SMS.")
+    daily_sms_cap: int = Field(default=20, description="Server-wide daily SMS dispatch limit over rolling 24-hour window.")
+    daily_phone_sms_cap: int = Field(default=3, description="Per-phone daily SMS dispatch limit over rolling 24-hour window.")
 
     @model_validator(mode="before")
     @classmethod
@@ -145,10 +149,17 @@ class Settings(BaseSettings):
         if is_prod:
             if self.allow_demo_otp:
                 raise ValueError("ALLOW_DEMO_OTP cannot be enabled in production.")
-            if (self.sms_provider or "").lower() in {"console", "mock"}:
-                raise ValueError("Production environment must configure a real external SMS provider (e.g. 'http').")
-            if not self.sms_api_url or not self.sms_api_key:
-                raise ValueError("SMS_API_URL and SMS_API_KEY must be configured in production.")
+            provider = (self.sms_provider or "").lower().strip()
+            if provider in {"console", "mock"}:
+                raise ValueError("Production environment must configure a real external SMS provider (e.g. 'http' or '2factor').")
+            if provider == "http":
+                if not self.sms_api_url or not self.sms_api_key:
+                    raise ValueError("SMS_API_URL and SMS_API_KEY must be configured for HTTP SMS provider in production.")
+            elif provider == "2factor":
+                if not self.sms_api_key:
+                    raise ValueError("SMS_API_KEY must be configured for 2Factor SMS provider in production.")
+            else:
+                raise ValueError(f"Unsupported SMS provider '{provider}' for production.")
             if self.cors_allow_credentials and ("*" in self.cors_origins or not self.cors_origins):
                 raise ValueError(
                     "Production environment cannot use wildcard CORS origins ('*') when credentials are enabled. "

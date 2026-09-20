@@ -1417,17 +1417,76 @@ Run `alembic upgrade head` before starting new backend instances.
 
 **Required work**: Analytics will become real automatically once §26.1 (Orders backend) is implemented — no separate analytics backend required.
 
-### 26.7 SMS OTP Gateway — Cryptographic Challenges with Rate Limiting (Phase 1 Complete)
+### 26.7 SMS OTP Gateway — Cryptographic Challenges, Durable Budget Ledger & Dedicated 2Factor Provider (Phase 1)
 
-**Current state**: `backend/routers/auth.py` implements a cryptographic challenge lifecycle (`OtpChallengeDB`, salted SHA-256 hashes, 5-minute expiry, max 3 attempts, per-phone and per-IP rate limiting, pluggable `SmsProvider`). Demo OTP (`123456`) is strictly restricted to non-production environments with `ALLOW_DEMO_OTP=true`.
+**Current state**: `backend/routers/auth.py` and `backend/services/otp_service.py` implement a cryptographic challenge lifecycle (`OtpChallengeDB`, salted SHA-256 hashes, 5-minute expiry, max 3 attempts, per-phone and per-IP rate limiting, pluggable `SmsProvider`). `OtpService` strictly validates SMS provider dispatch, raising HTTP 503 and burning the challenge if dispatch fails. Supported SMS providers (`http`, `2factor`, `mock`, `console`) are validated at initialization, with non-HTTP/non-2factor providers strictly forbidden when `ENVIRONMENT=production`. Demo OTP (`123456`) is restricted to non-production environments where `ALLOW_DEMO_OTP=true`.
 
-**Required work for Phase 2**: Configure production SMS gateway provider (e.g., MSG91, Twilio, Gupshup) in `.env` and set `ALLOW_DEMO_OTP=false`.
+A durable database budget ledger (`sms_dispatch_logs` table, Alembic migration `0004_sms_dispatch_logs`) enforces atomic budget reservations before external calls with rolling 24-hour global (`daily_sms_cap=20`) and per-phone (`daily_phone_sms_cap=3`) limits over statuses `['reserved', 'dispatched', 'ambiguous_timeout']`. External dispatch is gated by `ENABLE_REAL_SMS=false` by default. Ambiguous network timeouts are counted against the budget and never automatically resent. Dedicated `TwoFactorSmsProvider` (`SMS_PROVIDER=2factor`) supports custom OTP delivery via `https://2factor.in/API/V1/{api_key}/SMS/{phone}/{otp}/{template}` while keeping backend challenge verification authoritative. All credentials, recipient phones, OTPs, and URL queries are strictly redacted from logs. Transport logs are protected from credential leakage at the HTTP client level via `HttpxSensitiveUrlFilter` attached to `httpx` and `httpcore` loggers. Atomic quota admission is enforced in SQLite using monotonic insertion `rowid` ordering (`rowid <= my_rowid`) across concurrent sessions.
+
+#### Real SMS Activation & Safe Verification Instructions (For Future Delivery Tests)
+
+> [!CAUTION]
+> **Do not send real SMS or consume gateway credits without separate explicit user authorization.**
+> Real cellular SMS delivery requires `ENABLE_REAL_SMS=true` and consume credits from an external SMS balance. `ENABLE_REAL_SMS` must remain `false` by default in all test and developer environments.
+
+To configure and verify real SMS delivery when explicitly authorized:
+
+1. **Prerequisites & Environment Configuration**:
+   Update `.env` in the repository root with production-ready credentials:
+   ```env
+   ENABLE_REAL_SMS=true
+   SMS_PROVIDER=2factor
+   SMS_API_KEY=<authorized_2factor_api_key>
+   SMS_TEMPLATE_NAME=AUTHSMS  # Or the actual configured 2Factor DLT template name
+   ALLOW_DEMO_OTP=false        # Strictly disables demo OTP (123456) so only real SMS is verified
+   ```
+2. **Backend Server Restart Requirement**:
+   `backend/config.py` loads and caches configuration via `get_settings()` decorated with `@lru_cache()`. Modifying `.env` does not affect a running backend server. **The backend process must be restarted** whenever SMS or auth configuration is modified so that updated settings and singleton services are properly reloaded.
+3. **Actual Route Sequence & Schemas**:
+   - **New Artisan Registration & Auto-OTP Dispatch**:
+     - Client calls `POST /api/v1/auth/register` with `ArtisanRegisterRequest`:
+       ```json
+       {
+         "name": "Artisan Name",
+         "phone": "9876543210",
+         "craft_type": "Pottery",
+         "location_cluster": "Khurja",
+         "state": "Uttar Pradesh",
+         "experience_years": "5",
+         "pehchan_id": "UP-12345",
+         "preferred_language": "hi"
+       }
+       ```
+       Backend creates an unverified profile with HTTP 201.
+     - In the frontend registration flow, successful registration immediately initiates the OTP challenge by calling `POST /api/v1/auth/login` with `ArtisanLoginRequest`:
+       ```json
+       {
+         "phone": "9876543210"
+       }
+       ```
+       Backend validates the phone, reserves quota in `sms_dispatch_logs`, inserts a salted challenge in `otp_challenges`, and dispatches the 6-digit OTP to the carrier gateway via `TwoFactorSmsProvider`.
+   - **Returning Artisan Login**:
+     - Client calls `POST /api/v1/auth/login` with `ArtisanLoginRequest` `{"phone": "9876543210"}`.
+   - **OTP Verification & Bearer Token Issuance**:
+     - Artisan inputs the received 6-digit OTP.
+     - Client calls `POST /api/v1/auth/verify-otp` with `OtpVerifyRequest`:
+       ```json
+       {
+         "phone": "9876543210",
+         "otp": "<6-digit-otp>"
+       }
+       ```
+     - Backend verifies the challenge hash, deletes or consumes the challenge, and returns `{"status": "success", "access_token": "<jwt>", "token_type": "bearer", "artisan": {...}}`.
+4. **Authorized Recipient Requirement**:
+   Only use an explicitly authorized test phone number. Verify that the recipient number is a valid 10-digit Indian mobile number (or standard `+91` format).
+
+**Required work for Phase 2**: Carry out verified live production SMS gateway delivery over physical cellular carriers on real mobile devices once live production credentials, DLT-approved templates, and explicit user authorization are provided.
 
 ---
 
 ## 27. Phase 1 Trust & Invariant Protections (Defect Resolutions & Verification)
 
-During Phase 1 hardening and independent architectural review, 7 key defect areas were identified and systematically resolved:
+During Phase 1 hardening and independent architectural review, 12 key defect areas were identified and systematically resolved:
 
 ### 27.1 Private Media Security & Isolation
 - **Origin Validation**: `PrivateMediaCache.isConfiguredApiOrigin(uri)` validates scheme, host, and port against `ApiConfig.baseUrl`, preventing bearer credential leakage to third-party endpoints or CDNs.
@@ -1483,13 +1542,90 @@ During Phase 1 hardening and independent architectural review, 7 key defect area
 - **Lease Reclamation**: Expired in-flight approval leases are safely reclaimed across simulated app restarts without losing dependent unpublish operations.
 - **Drift Outbox Watcher**: Production wiring watches the Drift outbox stream via `watchPendingOperations()`, providing live badge count and queue state hydration without manual test injection.
 
-### 27.10 Test Coverage & Environment Demarcation
-- **Backend Test Suite**: 121 passing, 1 skipped across Python 3.14 (covering AI idempotency fingerprints, tenant isolation, approval workflow, SQLite foreign keys, media pipeline, auth security, streaming ingest, and migration upgrades).
-- **Frontend Test Suite**: 162 passing across Flutter 3.44.0 / Dart 3.12.0 (covering unpublish truthfulness, coalescing scenarios, upstream dependency resolution, hash validation, 409 conflict refresh, review screens, secure token fallback, private media cache bounded aborts, drift queue durability, offline media lineage, degradation banners, chatbot review navigation, exact-media review verification, repository initialization barrier, cache session binding, and live HTTP wire test).
-- **Static Analysis**: `flutter analyze` clean with 0 issues.
-- **Demarcation of Test Environment**: All automated test verification reported herein was conducted on local developer workstation harnesses (macOS 15.6 Darwin ARM64, local SQLite with foreign keys, Drift native SQLite, in-memory/mock HTTP adapters, and loopback FastAPI wire tests). Physical field testing on real Android/iOS mobile hardware remains part of Phase 2 validation.
+### 27.10 Single Source of Truth Draft Snapshot & Serialized Durability
+- **Single Versioned Snapshot**: Replaced multi-key Hive draft storage with `active_draft_snapshot` (`__version: 1`).
+- **Serialized Writes**: All draft persistence is serialized via `_draftLock.synchronized(...)` and monotonic `__save_seq` sequence tracking, preventing out-of-order asynchronous overwrites.
+- **Non-Destructive Migration**: Old draft data is migrated by writing the full snapshot, awaiting durable persistence, and verifying exact readback before purging legacy keys.
+- **Corrupt Snapshot Defense**: Corrupt JSON in `active_draft_snapshot` triggers an actionable recovery flow (`hasCorruptedDraft: true`) rather than silently falling back to stale legacy keys.
+
+### 27.11 Exact-Byte Approval & Offline Checksum Verification
+- **AppImage Render Callbacks**: `AppImage` provides `onRenderSuccess` reporting decoded asset identity, SHA-256 checksum, and session generation, deduplicated by asset identity to eliminate infinite rebuild loops.
+- **Step 5 Strict Rendering Binding**: `Step5ConfirmWidget` blocks publication until the exact selected publish asset (`_verifiedAsset`, `_verifiedChecksum`, `_verifiedSessionGen`, `_verifiedImageGen`, `_verifiedMediaId`) has been rendered and verified. The display image never falls back to raw photos when publishing an enhanced asset.
+- **Offline Outbox Checksum Enforcement**: Offline approvals embed `media_sha256` in the `actionMediaUpload` payload snapshot. During queue sync, `ProductRepository` verifies on-disk bytes against `media_sha256`; any file modification or missing file causes the operation to fail closed (`statusFailed`).
+
+### 27.12 Multi-Dimensional Input Invalidation & Client Floor Guarantee
+- **Comprehensive Dependency Invalidation**: Edits to cost parameters bump `pricingInputGeneration`, clear `pricingOpId`, and recalculate floor price (`materials + labor * rate`); edits to listing details (category, tags, title, description) bump both `listingInputGeneration` and `pricingInputGeneration` and clear stale op IDs; photo retakes invalidate enhancement, listing, and pricing operations; voice retakes invalidate voice, listing, and pricing operations.
+- **Pre-Dispatch Snapshot Freezing**: Request payloads are frozen from current state before dispatch to ensure exact parameter fidelity.
+- **Client Floor Protection**: `calculatePriceSuggestion` strictly clamps AI suggestions to `max(suggestion.floorPrice, calculatedCostFloor)` to guarantee client-side alignment with authoritative server enforcement.
+
+### 27.13 Authentication Flow & Session Integrity Hardening
+- **Typed Result Invariants**: `AuthRepository` returns typed `VerifyOtpSuccess`/`VerifyOtpFailure`, `RequestOtpSuccess`/`RequestOtpFailure`, and `RegisterArtisanSuccess`/`RegisterArtisanFailure`.
+- **Zero Fallback Profiles**: `AuthNotifier` eliminates synthetic fake profile generation on OTP verification failure; the user remains unauthenticated (`isAuthenticated: false`) and error details are truthfully preserved.
+- **Explicit OTP Verification**: The OTP input screen navigates to home only after server verification succeeds and session tokens are durably committed to `SecureTokenStorage`.
+- **Truthful SMS Propagation**: `OtpService` checks `sms_provider.send_otp()`, burning the challenge and raising HTTP 503 if SMS delivery fails.
+- **Provider Environment Validation**: `OtpService.__init__` rejects `console` and `mock` providers in `production`, enforcing `http` provider configuration.
+- **Token Verification Requirement**: Local authentication flags alone do not establish a session; `isAuthenticated()` strictly requires a non-empty bearer token in `SecureTokenStorage`.
+- **Draft Preservation on Expiry**: `expireSession()` and `signOut()` deactivate private media cache without deleting `draft_box` offline drafts.
+- **NGO Simulation Isolation**: NGO coordinator logins are explicitly tagged (`isNgoSimulation: true`) and separated from artisan bearer tokens.
+
+### 27.15 2Factor Transport Logging Leak Elimination & HTTPX Logger Protection
+- **Transport Filter**: `HttpxSensitiveUrlFilter(logging.Filter)` attached to `httpx` and `httpcore` loggers sanitizes URL queries and paths, preventing HTTP client request line logging (at `INFO` or higher) from leaking `api_key`, `phone`, or `otp`.
+- **Provider Redaction**: `TwoFactorSmsProvider` cleanses exception messages and error response bodies of API keys, OTPs, and phone numbers before propagating error messages.
+- **Verification**: Verified with real HTTPX logging enabled against `httpx.MockTransport` in `backend/tests/test_sms_review.py::test_real_httpx_logging_does_not_expose_fixture_credentials`.
+
+### 27.16 Atomic SMS Quota Admission & Typed Dispatch Outcomes
+- **Monotonic Rowid Ordering**: Enforced SQLite insertion `rowid` ordering (`SELECT count(*) FROM sms_dispatch_logs WHERE rowid <= my_rowid`) to guarantee total serialization of quota checks across concurrent worker sessions contending for remaining capacity.
+- **Pre-Dispatch Commitment**: Budget reservations commit to SQLite prior to initiating external HTTP calls, releasing database locks before the network dispatch.
+- **Ambiguous Timeout Retention**: Replaced mutable timeout flags with `SmsDispatchOutcome`, ensuring uncertain dispatches are committed as `ambiguous_timeout` and conservatively retained against budget without blind refunding.
+- **Verification**: Verified under concurrent multi-threaded execution with synchronization barriers in `backend/tests/test_sms_review.py::test_global_sms_cap_is_atomic_across_concurrent_sessions`.
+
+### 27.17 Authoritative Active Session Mode & Simulation Isolation
+- **Mode Authority**: `ActiveSessionManager` maintains authoritative session mode (`artisan`, `ngoSimulation`, `unauthenticated`) across Hive `auth_box`.
+- **Transport Token Isolation**: `AuthInterceptor` suppresses injecting retained artisan bearer tokens when `ActiveSessionManager.isNgoSimulation() == true`.
+- **Private Media & Outbox Guard**: Private media caching isolates simulated directories and omits bearer authentication; `ProductRepository.syncPendingQueue()` halts artisan outbox syncing while in NGO simulation mode.
+- **Verification**: Verified in `frontend/test/frontend_review_test.dart` (`simulation must not dispatch with retained artisan bearer token`).
+
+### 27.18 In-Flight Operation Restart Recovery
+- **Durable Operation Replay**: `AddProductFlowNotifier._reconcileDraftOperations()` inspects `ai_operations_box` on startup and reattaches or replays pending/in-flight image enhancement operations using their durable record and original request, even when absent from the Drift SQLite queue.
+- **Complete Pricing Snapshot**: Pricing replay reconstructs `image_url` along with all frozen cost parameters (`base_cost`, `materials`, `labor_hours`, `hourly_rate`).
+- **Generation & Account Scoping**: Reconciliations verify input generation monotonicity, draft ID, backend origin, and user ID, safely discarding superseded operations.
+- **Verification**: Verified in `frontend/test/frontend_review_test.dart` (`restart replays in-flight image enhancement from its durable record`).
+
+### 27.19 Reviewed-Media Staged Snapshot Upload & Server Checksum Enforcement
+- **Immutable Byte Snapshot**: `ProductRepository` writes reviewed local photo bytes to an isolated `.tmp` staging file before initiating media upload for both online publication and offline queue sync.
+- **Pre-Upload Verification**: Bytes in the staging file are hashed via SHA-256 and matched against `effectiveReviewedChecksum` before dispatch.
+- **Server Hash Parity**: Server-returned `sha256_checksum` must strictly match the reviewed checksum before attachment or approval. Mismatches fail closed and abort publication.
+
+### 27.20 Test Coverage & Operational Verification Boundaries
+
+- **Backend Test Suite**: 144 passing, 1 skipped under Python 3.14 (covering 2Factor transport logging redaction, atomic concurrent quota admission without challenge destruction, post-dispatch timeout/read-error uncertain delivery accounting, confirmed gateway rejection, restart persistence, SMS 503 propagation, cryptographic OTP challenge lifecycle, AI idempotency fingerprints, tenant isolation, approval workflow, SQLite foreign keys, media pipeline, streaming ingest, and bidirectional Alembic migrations). Skipped test: `test_stage1_standalone_image_pipeline` in `backend/tests/test_image_pipeline_integration.py` (opt-in via `RUN_REMBG_TESTS=1` to avoid heavy u2net ONNX model weight download during regular test runs).
+- **Frontend Test Suite**: 198 passing across Flutter 3.44.0 / Dart 3.12.0 (covering session-transition safety, simulation switch during token retrieval, account switch/logout isolation, exact-input image recovery, on-disk fingerprint verification, unchanged replay, missing file fail-closed, duplicate resume suppression, stale result discard, staged-upload server checksum mismatch fail-closed, response-lost retry, same-byte image decode verification via `img.decodeImage`, reviewed checksum outbox carriage, draft snapshot source of truth, non-destructive migration, corrupt snapshot recovery, input invalidations, exact render preview bindings, offline media SHA-256 outbox integrity, typed auth failures, unpublish truthfulness, coalescing scenarios, upstream dependency resolution, hash validation, 409 conflict refresh, review screens, secure token fallback, private media cache bounded aborts, drift queue durability, offline media lineage, degradation banners, chatbot review navigation, exact-media review verification, repository initialization barrier, cache session binding, and live HTTP wire test).
+- **Static Analysis**: `flutter analyze` clean with 0 issues; `git diff --check` clean with 0 issues.
+
+#### Operational Verification Boundaries
+To maintain strict architectural truthfulness, the repository enforces five distinct verification boundaries:
+1. **Implemented and automatically tested**:
+   - Automated CI/CD test suites passing on local developer workstation test harnesses: 144 backend tests and 198 Flutter tests with SQLite foreign keys, Alembic migrations 0001-0004, Drift SQLite disk queue, mock HTTP adapters, and loopback FastAPI wire tests.
+2. **Reproduced and resolved**:
+   - Independent adversarial review findings successfully reproduced and resolved: HTTPX URL logging credential leak, concurrent quota admission race condition, retained artisan token leakage during NGO simulation, restart recovery of in-flight enhancement without Drift queue, simulation entry during asynchronous token retrieval, contender challenge destruction during concurrent OTP creation, post-dispatch read error / timeout quota leakage, and mutable image path replay under stale idempotency keys.
+3. **Simulated demo behavior**:
+   - Demo OTP (`123456`) is strictly restricted to non-production environments with `ALLOW_DEMO_OTP=true` and `ENVIRONMENT != "production"`.
+   - NGO coordinator mode is simulation-only (`isNgoSimulation: true`), strictly isolated from artisan credentials.
+   - Voice transcription: Tested via OpenAI Whisper mock adapter / API contract; live Whisper speech recognition models are not loaded in automated test suites.
+   - Cellular carrier SMS delivery: Tested via mock HTTP transport and `MockSmsProvider`. Live carrier delivery and credit consumption are explicitly disabled (`ENABLE_REAL_SMS=false`).
+   - Image enhancement: Automated tests use synthetic craft images and deterministic mocks; live `rembg` ONNX model execution is opt-in via `RUN_REMBG_TESTS=1`.
+4. **Local integration verification (not physical-device or carrier verification)**:
+   - End-to-end HTTP wire communication verified over local developer workstation TCP loopback (`127.0.0.1`) between Flutter client test runner and live FastAPI server process (`real_http_outbox_integration_test.dart`). This validates network wire serialization, request/response headers, and API contracts, but does not substitute for physical cellular radio or intermittent field networking tests.
+   - Multi-threaded concurrent database contention verified in local Python test processes using `ThreadPoolExecutor` and synchronization `Barrier` (`test_followup.py` and `test_sms_review.py`). This validates SQLite transaction serialization and monotonic rowid ordering, but does not substitute for multi-instance distributed PostgreSQL database deployments.
+   - Logging redaction verified with real HTTPX transport logger at `INFO` level using loopback `MockTransport`.
+5. **Unresolved / Future Phase scope**:
+   - Live cellular SMS carrier delivery with actual DLT-approved template and real API credits (requires explicit user authorization).
+   - Physical Android/iOS mobile hardware testing (camera sensors, microphone, OS background execution via WorkManager).
+   - Production PostgreSQL/Supabase deployment with RLS (Phase 2).
+   - S3/GCS private object storage with presigned URLs (Phase 2).
+   - GeM and ONDC protocol adapters (Phase 3).
 
 ---
 
 *Document maintained at `docs/ARCHITECTURE.md` — the sole source of truth for KalaSetu system architecture.*
-*Last updated: 2026-09-17 — Phase 1 Invariant Hardening & Defect Correction Complete.*
+*Last updated: 2026-09-20 — Phase 1 Narrow Correction Pass Complete.*

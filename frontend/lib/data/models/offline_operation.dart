@@ -18,6 +18,7 @@ class OfflineOperation {
   static const String statusInFlight = 'in_flight';
   static const String statusInProgress = 'in_progress';
   static const String statusCompleted = 'completed';
+  static const String statusFailed = 'failed';
   static const String statusUserActionRequired = 'user_action_required';
   static const String statusSuperseded = 'superseded';
 

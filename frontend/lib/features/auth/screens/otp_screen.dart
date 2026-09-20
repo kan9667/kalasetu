@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -31,9 +33,18 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     (_) => TextEditingController(),
   );
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  int _resendCooldown = 0;
+  Timer? _cooldownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCooldown();
+  }
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
     for (var controller in _controllers) {
       controller.dispose();
     }
@@ -43,19 +54,77 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     super.dispose();
   }
 
-  void _handleOtpComplete() async {
-    var otp = _controllers.map((c) => c.text).join();
-    if (otp.isEmpty) {
-      otp = '123456';
-    }
+  void _startCooldown() {
+    if (!mounted) return;
+    setState(() => _resendCooldown = 30);
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendCooldown <= 1) {
+        timer.cancel();
+        setState(() => _resendCooldown = 0);
+      } else {
+        setState(() => _resendCooldown--);
+      }
+    });
+  }
+
+  void _handleResend() async {
+    if (_resendCooldown > 0) return;
     final notifier = ref.read(authStateProvider.notifier);
-    await notifier.verifyOtp(
-      widget.phoneNumber.isEmpty ? '9876543210' : widget.phoneNumber,
+    final result = await notifier.resendOtp(widget.phoneNumber);
+    if (!mounted) return;
+    if (result is RequestOtpSuccess) {
+      _startCooldown();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('OTP sent successfully. Valid for 5 minutes.')),
+      );
+    } else if (result is RequestOtpFailure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  void _handleOtpComplete() async {
+    final otp = _controllers.map((c) => c.text).join().trim();
+    if (otp.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter all 6 digits of your verification code.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final notifier = ref.read(authStateProvider.notifier);
+    final success = await notifier.verifyOtp(
+      widget.phoneNumber,
       otp,
     );
-    await ref.read(userProfileProvider.notifier).reloadProfile();
-    if (mounted) {
-      context.goNamed(AppRouteConstants.home);
+
+    if (!mounted) return;
+
+    if (success) {
+      await ref.read(userProfileProvider.notifier).reloadProfile();
+      if (mounted) {
+        context.goNamed(AppRouteConstants.home);
+      }
+    } else {
+      final error = ref.read(authStateProvider).authError ?? 'Verification failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -146,30 +215,32 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
             const SizedBox(height: AppSpacing.md),
 
             AppButton(
-              label: 'resend_otp'.tr(),
+              label: _resendCooldown > 0
+                  ? 'Resend OTP in ${_resendCooldown}s'
+                  : 'resend_otp'.tr(),
               type: AppButtonType.text,
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('otp_resent_mock'.tr())),
-                );
-              },
+              onPressed: _resendCooldown > 0 ? null : _handleResend,
             ),
 
             const SizedBox(height: AppSpacing.xxl),
 
-            // Debug hint
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(AppRadii.sm),
+            if (authState.demoOtp != null && authState.demoOtp!.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.statusPendingBg,
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                  border: Border.all(color: AppColors.goldLight),
+                ),
+                child: Text(
+                  'Demo Mode: Your verification code is ${authState.demoOtp}',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.goldDark,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
-              child: Text(
-                'debug_otp_hint'.tr(),
-                style: AppTextStyles.caption,
-                textAlign: TextAlign.center,
-              ),
-            ),
           ],
         ),
       ),

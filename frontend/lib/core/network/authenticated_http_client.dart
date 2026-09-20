@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../storage/secure_token_storage.dart';
+import 'active_session_manager.dart';
 import 'session_expired_exception.dart';
 
 /// Dio interceptor providing automatic Bearer authentication and request idempotency.
@@ -19,13 +20,69 @@ class AuthInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    // 1. Inject Bearer authentication token if available
+    options.headers['Accept'] = 'application/json';
+
+    // Invariant: Fail closed when session initialization is incomplete
+    if (!ActiveSessionManager.isSessionReady()) {
+      return handler.reject(
+        DioException(
+          requestOptions: options,
+          error: StateError('Session initialization is incomplete (auth_box not initialized).'),
+        ),
+      );
+    }
+
+    final modeBefore = ActiveSessionManager.getActiveSessionModeSync();
+    final userIdBefore = ActiveSessionManager.getCurrentUserIdSync();
+
+    if (modeBefore == ActiveSessionMode.ngoSimulation) {
+      options.headers.remove('Authorization');
+      return handler.next(options);
+    }
+
+    if (modeBefore == ActiveSessionMode.unauthenticated) {
+      options.headers.remove('Authorization');
+      return handler.next(options);
+    }
+
+    // modeBefore == ActiveSessionMode.artisan
     final token = await _tokenStorage.getToken();
+
+    // Invariant: Re-check session state AFTER the async boundary before attaching credentials
+    if (!ActiveSessionManager.isSessionReady()) {
+      options.headers.remove('Authorization');
+      return handler.reject(
+        DioException(
+          requestOptions: options,
+          error: StateError('Session storage invalidated during token retrieval.'),
+        ),
+      );
+    }
+
+    final modeAfter = ActiveSessionManager.getActiveSessionModeSync();
+    final userIdAfter = ActiveSessionManager.getCurrentUserIdSync();
+
+    if (modeAfter == ActiveSessionMode.ngoSimulation) {
+      // Switched into NGO simulation during token retrieval: MUST NOT attach artisan token!
+      options.headers.remove('Authorization');
+      return handler.next(options);
+    }
+
+    if (modeAfter != ActiveSessionMode.artisan || userIdAfter != userIdBefore) {
+      // Switched account or logged out during token retrieval: fail closed
+      options.headers.remove('Authorization');
+      return handler.reject(
+        DioException(
+          requestOptions: options,
+          error: SessionExpiredException('Session invalidated during token retrieval.', 401),
+        ),
+      );
+    }
+
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
     }
 
-    options.headers['Accept'] = 'application/json';
     return handler.next(options);
   }
 

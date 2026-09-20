@@ -14,6 +14,9 @@ void main() {
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('auth_http_test_');
     Hive.init(tempDir.path);
+    final authBox = await Hive.openBox('auth_box');
+    await authBox.put('is_authenticated', true);
+    await authBox.put('user_id', 'artisan_test');
     FlutterSecureStorage.setMockInitialValues({});
   });
 

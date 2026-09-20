@@ -17,6 +17,8 @@ import '../../social_media/providers/social_media_provider.dart';
 import '../../social_media/widgets/social_media_launchpad_sheet.dart';
 import '../../home/screens/home_shell.dart';
 
+import '../../../core/storage/private_media_cache.dart';
+
 class Step5ConfirmWidget extends ConsumerStatefulWidget {
   const Step5ConfirmWidget({super.key});
 
@@ -27,6 +29,12 @@ class Step5ConfirmWidget extends ConsumerStatefulWidget {
 class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
   bool _isPublishing = false;
   bool _previewFailed = false;
+  bool _isRenderVerified = false;
+  String? _verifiedAsset;
+  String? _verifiedChecksum;
+  int? _verifiedSessionGen;
+  int? _verifiedImageGen;
+  String? _verifiedMediaId;
   Product? _publishedProduct;
   final AppTtsService _tts = AppTtsService();
 
@@ -42,6 +50,119 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
   void dispose() {
     _tts.dispose();
     super.dispose();
+  }
+
+  void _handleRenderSuccess({
+    required String assetIdentity,
+    required String sha256Checksum,
+    int? sessionGeneration,
+  }) {
+    // Strictly reject missing checksums or empty asset identity
+    if (sha256Checksum.isEmpty || assetIdentity.isEmpty) {
+      debugPrint('[Step5Confirm] Render callback rejected: missing checksum or asset identity');
+      if (mounted && _isRenderVerified) {
+        setState(() {
+          _isRenderVerified = false;
+          _previewFailed = true;
+        });
+      }
+      return;
+    }
+
+    final draft = ref.read(addProductFlowProvider);
+    final activeSessionGen = PrivateMediaCache.instance.sessionGeneration;
+
+    // Reject callback if private media session does not match active session
+    if (sessionGeneration != null && sessionGeneration != activeSessionGen) {
+      debugPrint(
+        '[Step5Confirm] Render callback rejected: session mismatch ($sessionGeneration vs active $activeSessionGen)',
+      );
+      if (mounted && _isRenderVerified) {
+        setState(() {
+          _isRenderVerified = false;
+          _previewFailed = true;
+        });
+      }
+      return;
+    }
+
+    final bool isEnhancedPublish = draft.mediaId != null && draft.mediaId!.isNotEmpty;
+
+    if (isEnhancedPublish) {
+      final expectedMediaId = draft.mediaId!;
+      final matchesEnhanced = assetIdentity.contains(expectedMediaId) ||
+          (draft.enhancedImagePath.isNotEmpty && assetIdentity == draft.enhancedImagePath);
+      if (!matchesEnhanced) {
+        debugPrint(
+          '[Step5Confirm] Render callback rejected: asset "$assetIdentity" does not match publish mediaId "$expectedMediaId"',
+        );
+        if (mounted && _isRenderVerified) {
+          setState(() {
+            _isRenderVerified = false;
+            _previewFailed = true;
+          });
+        }
+        return;
+      }
+      if (draft.sha256Checksum != null &&
+          draft.sha256Checksum!.isNotEmpty &&
+          sha256Checksum.isNotEmpty &&
+          draft.sha256Checksum != sha256Checksum) {
+        debugPrint(
+          '[Step5Confirm] Render callback rejected: checksum mismatch ($sha256Checksum vs ${draft.sha256Checksum})',
+        );
+        if (mounted && _isRenderVerified) {
+          setState(() {
+            _isRenderVerified = false;
+            _previewFailed = true;
+          });
+        }
+        return;
+      }
+    } else {
+      final expectedPath = draft.immutablePhotoSnapshotPath.isNotEmpty
+          ? draft.immutablePhotoSnapshotPath
+          : draft.originalImagePath;
+      if (assetIdentity != expectedPath && !assetIdentity.endsWith(expectedPath)) {
+        debugPrint(
+          '[Step5Confirm] Render callback rejected: asset "$assetIdentity" does not match raw path "$expectedPath"',
+        );
+        if (mounted && _isRenderVerified) {
+          setState(() {
+            _isRenderVerified = false;
+            _previewFailed = true;
+          });
+        }
+        return;
+      }
+      if (draft.immutablePhotoSnapshotSha256 != null &&
+          draft.immutablePhotoSnapshotSha256!.isNotEmpty &&
+          sha256Checksum.isNotEmpty &&
+          draft.immutablePhotoSnapshotSha256 != sha256Checksum) {
+        debugPrint(
+          '[Step5Confirm] Render callback rejected: offline snapshot checksum mismatch ($sha256Checksum vs ${draft.immutablePhotoSnapshotSha256})',
+        );
+        if (mounted && _isRenderVerified) {
+          setState(() {
+            _isRenderVerified = false;
+            _previewFailed = true;
+          });
+        }
+        return;
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isRenderVerified = true;
+        _previewFailed = false;
+        _verifiedAsset = assetIdentity;
+        _verifiedChecksum = sha256Checksum;
+        _verifiedSessionGen = sessionGeneration;
+        _verifiedImageGen = draft.imageInputGeneration;
+        _verifiedMediaId = draft.mediaId;
+      });
+    }
   }
 
   // This is the last checkpoint before the listing goes live. Reading the
@@ -94,7 +215,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
   Future<void> _handleListProduct() async {
     final draft = ref.read(addProductFlowProvider);
 
-    // INVARIANT: Runtime check (never assert) enforcing exact media review.
+    // INVARIANT: Runtime check enforcing exact media review.
     if (draft.mediaId != null && draft.boundMediaGeneration != draft.imageInputGeneration) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -120,7 +241,36 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       return;
     }
 
-    if (_previewFailed) {
+    final activeSession = PrivateMediaCache.instance.sessionGeneration;
+    final bool isSessionValid = _verifiedSessionGen == null || _verifiedSessionGen == activeSession;
+    final bool isGenValid = _verifiedImageGen == draft.imageInputGeneration;
+    final bool isMediaValid = (draft.mediaId == null && _verifiedMediaId == null) ||
+        (draft.mediaId != null && _verifiedMediaId == draft.mediaId);
+
+    final expectedPublishPath = draft.immutablePhotoSnapshotPath.isNotEmpty
+        ? draft.immutablePhotoSnapshotPath
+        : draft.originalImagePath;
+    final bool isAssetValid = draft.mediaId != null
+        ? (_verifiedAsset?.contains(draft.mediaId!) == true ||
+            (draft.enhancedImagePath.isNotEmpty && _verifiedAsset == draft.enhancedImagePath))
+        : (_verifiedAsset == expectedPublishPath || _verifiedAsset?.endsWith(expectedPublishPath) == true);
+
+    final expectedChecksum = draft.mediaId != null
+        ? draft.sha256Checksum
+        : draft.immutablePhotoSnapshotSha256;
+    final bool isChecksumValid = _verifiedChecksum != null &&
+        _verifiedChecksum!.isNotEmpty &&
+        (expectedChecksum == null ||
+            expectedChecksum.isEmpty ||
+            _verifiedChecksum == expectedChecksum);
+
+    if (_previewFailed ||
+        !_isRenderVerified ||
+        !isSessionValid ||
+        !isGenValid ||
+        !isMediaValid ||
+        !isAssetValid ||
+        !isChecksumValid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Cannot publish: Image preview could not be verified.'),
@@ -149,7 +299,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       description: draft.descriptionEn.isNotEmpty ? draft.descriptionEn : draft.voiceTranscript,
       descriptionHi: draft.descriptionHi,
       price: draft.finalPrice,
-      photoPath: draft.originalImagePath,
+      photoPath: expectedPublishPath,
       aiEnhancedPhotoPath: draft.isEnhanced ? draft.enhancedImagePath : '',
       additionalPhotoPaths: draft.additionalImagePaths,
       category: effectiveCategory,
@@ -161,6 +311,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
       laborHours: draft.laborHours > 0 ? draft.laborHours : null,
       hourlyRate: draft.hourlyRate > 0 ? draft.hourlyRate : null,
       mediaId: draft.mediaId,
+      reviewedMediaChecksum: _verifiedChecksum,
     );
 
     Product createdProduct;
@@ -172,6 +323,7 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
         createdProduct.id,
         revision: createdProduct.revision,
         contentHash: createdProduct.contentHash,
+        reviewedChecksum: _verifiedChecksum,
       );
     } on StaleRevisionException catch (e) {
       if (mounted) {
@@ -454,13 +606,14 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
     final bool mediaGenerationMismatch = draft.mediaId != null &&
         draft.boundMediaGeneration != draft.imageInputGeneration;
 
-    final hasValidLocalPhoto = draft.originalImagePath.isNotEmpty &&
-        (draft.originalImagePath.startsWith('http') ||
-            (File(draft.originalImagePath).existsSync() &&
-                File(draft.originalImagePath).lengthSync() > 0));
+    // Reset render verification if draft photo generation or media identity has changed
+    if (_isRenderVerified &&
+        (_verifiedImageGen != draft.imageInputGeneration ||
+         _verifiedMediaId != draft.mediaId)) {
+      _isRenderVerified = false;
+    }
 
-    final bool missingPhoto = draft.mediaId == null && !hasValidLocalPhoto;
-    final bool isPublishBlocked = mediaGenerationMismatch || missingPhoto || _previewFailed;
+    final bool isEnhancedPublish = draft.mediaId != null && draft.mediaId!.isNotEmpty;
 
     final localEnhancedExists = draft.isEnhanced &&
         draft.enhancedImagePath.isNotEmpty &&
@@ -470,17 +623,29 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
         (draft.originalImagePath.startsWith('http') ||
             (File(draft.originalImagePath).existsSync() && File(draft.originalImagePath).lengthSync() > 0));
 
-    final displayImage = mediaGenerationMismatch
-        ? '' // Never render mismatched media asset
-        : (localEnhancedExists
-            ? draft.enhancedImagePath
-            : (localOriginalExists
-                ? draft.originalImagePath
-                : (draft.mediaId != null && draft.mediaId!.isNotEmpty
-                    ? draft.mediaId!
-                    : (draft.originalMediaId != null && draft.originalMediaId!.isNotEmpty
-                        ? draft.originalMediaId!
-                        : draft.originalImagePath))));
+    final String displayImage;
+    if (mediaGenerationMismatch) {
+      displayImage = ''; // Never render mismatched media asset
+    } else if (isEnhancedPublish) {
+      // INVARIANT: When publishing enhanced mediaId, NEVER display raw original!
+      if (localEnhancedExists) {
+        displayImage = draft.enhancedImagePath;
+      } else {
+        displayImage = draft.mediaId!;
+      }
+    } else {
+      // Raw/offline publish
+      if (draft.immutablePhotoSnapshotPath.isNotEmpty && File(draft.immutablePhotoSnapshotPath).existsSync()) {
+        displayImage = draft.immutablePhotoSnapshotPath;
+      } else if (localOriginalExists) {
+        displayImage = draft.originalImagePath;
+      } else {
+        displayImage = '';
+      }
+    }
+
+    final bool missingPhoto = displayImage.isEmpty;
+    final bool isPublishBlocked = mediaGenerationMismatch || missingPhoto || _previewFailed || !_isRenderVerified;
 
     final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
             EasyLocalization.of(context)?.locale.languageCode) ==
@@ -543,11 +708,25 @@ class _Step5ConfirmWidgetState extends ConsumerState<Step5ConfirmWidget> {
                     child: AppImage(
                       imageUrl: displayImage,
                       fit: BoxFit.cover,
+                      onRenderSuccess: ({
+                        required String assetIdentity,
+                        required String sha256Checksum,
+                        int? sessionGeneration,
+                      }) {
+                        _handleRenderSuccess(
+                          assetIdentity: assetIdentity,
+                          sha256Checksum: sha256Checksum,
+                          sessionGeneration: sessionGeneration,
+                        );
+                      },
                       onError: () {
-                        if (mounted && !_previewFailed) {
+                        if (mounted && (!_previewFailed || _isRenderVerified)) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted && !_previewFailed) {
-                              setState(() => _previewFailed = true);
+                            if (mounted) {
+                              setState(() {
+                                _previewFailed = true;
+                                _isRenderVerified = false;
+                              });
                             }
                           });
                         }

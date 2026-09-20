@@ -183,11 +183,14 @@ void main() {
 
       // 3. Verify durable persistence in Hive's draft_box
       final draftBox = Hive.box('draft_box');
-      expect(draftBox.get('draft_media_id'), 'media_asset_uuid_789');
-      expect(draftBox.get('draft_original_media_id'), 'media_asset_uuid_123');
-      expect(draftBox.get('draft_sha256_checksum'), 'a1b2c3d4e5f600112233445566778899aabbccddeeff00112233445566778899');
-      expect(draftBox.get('draft_is_degraded'), isTrue);
-      expect(draftBox.get('draft_degraded_reason'), contains('rembg optional dependency unavailable'));
+      final snapshotRaw = draftBox.get('active_draft_snapshot');
+      expect(snapshotRaw, isNotNull);
+      final snapshot = jsonDecode(snapshotRaw.toString()) as Map<String, dynamic>;
+      expect(snapshot['media_id'], 'media_asset_uuid_789');
+      expect(snapshot['original_media_id'], 'media_asset_uuid_123');
+      expect(snapshot['sha256_checksum'], 'a1b2c3d4e5f600112233445566778899aabbccddeeff00112233445566778899');
+      expect(snapshot['is_degraded'], isTrue);
+      expect(snapshot['degraded_reason'], contains('rembg optional dependency unavailable'));
 
       // 4. Simulate app restart / fresh ProviderContainer with automatic hydration
       final newContainer = ProviderContainer();
@@ -320,8 +323,11 @@ void main() {
       expect(draftState.isDegraded, isTrue);
 
       final draftBox = Hive.box('draft_box');
-      expect(draftBox.get('draft_media_id'), equals(expectedMediaId));
-      expect(draftBox.get('draft_sha256_checksum'), equals(expectedSha256));
+      final snapshotRaw = draftBox.get('active_draft_snapshot');
+      expect(snapshotRaw, isNotNull);
+      final snapshot = jsonDecode(snapshotRaw.toString()) as Map<String, dynamic>;
+      expect(snapshot['media_id'], equals(expectedMediaId));
+      expect(snapshot['sha256_checksum'], equals(expectedSha256));
 
       final step5Product = Product(
         id: 'prod_reconciled_777',

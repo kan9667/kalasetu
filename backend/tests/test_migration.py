@@ -166,20 +166,30 @@ def test_fresh_db_alembic_upgrade_head():
 
             # Verify schema version
             version = conn.execute(text("SELECT version_num FROM alembic_version;")).scalar()
-            assert version == "0003_media_asset_lineage_and_degradation"
+            assert version == "0004_sms_dispatch_logs"
 
             # Verify media_assets has lineage columns
             media_cols = [c[1] for c in conn.execute(text("PRAGMA table_info(media_assets);")).fetchall()]
             assert "source_media_id" in media_cols
             assert "is_degraded" in media_cols
             assert "degraded_reason" in media_cols
+
+            # Verify sms_dispatch_logs table and columns
+            assert "sms_dispatch_logs" in tables
+            sms_cols = [c[1] for c in conn.execute(text("PRAGMA table_info(sms_dispatch_logs);")).fetchall()]
+            assert "id" in sms_cols
+            assert "phone_hash" in sms_cols
+            assert "status" in sms_cols
+            assert "provider" in sms_cols
+            assert "created_at" in sms_cols
+            assert "error_detail" in sms_cols
     finally:
         if os.path.exists(db_path):
             os.remove(db_path)
 
 
-def test_already_stamped_0001_db_upgrades_to_0003(isolated_legacy_db):
-    """Tests upgrading a database that was already stamped at 0001 to 0003 (head)."""
+def test_already_stamped_0001_db_upgrades_to_0004_and_downgrades(isolated_legacy_db):
+    """Tests upgrading a database that was already stamped at 0001 to 0004 (head), and testing downgrade/re-upgrade."""
     db_path, db_url = isolated_legacy_db
 
     alembic_cfg = _get_alembic_config(db_url)
@@ -192,18 +202,35 @@ def test_already_stamped_0001_db_upgrades_to_0003(isolated_legacy_db):
         version = conn.execute(text("SELECT version_num FROM alembic_version;")).scalar()
         assert version == "0001_artisan_approval_and_media"
 
-    # 2. Upgrade from 0001 to 0003 (head)
+    # 2. Upgrade from 0001 to head (0004)
     command.upgrade(alembic_cfg, "head")
 
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version;")).scalar()
-        assert version == "0003_media_asset_lineage_and_degradation"
+        assert version == "0004_sms_dispatch_logs"
 
         tables = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table';")).scalars().all()
         assert "product_revisions" in tables
         assert "idempotency_records" in tables
+        assert "sms_dispatch_logs" in tables
         media_cols = [c[1] for c in conn.execute(text("PRAGMA table_info(media_assets);")).fetchall()]
         assert "source_media_id" in media_cols
         assert "is_degraded" in media_cols
         assert "degraded_reason" in media_cols
+
+    # 3. Test downgrade to 0003
+    command.downgrade(alembic_cfg, "0003_media_asset_lineage_and_degradation")
+    with engine.connect() as conn:
+        version = conn.execute(text("SELECT version_num FROM alembic_version;")).scalar()
+        assert version == "0003_media_asset_lineage_and_degradation"
+        tables = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table';")).scalars().all()
+        assert "sms_dispatch_logs" not in tables
+
+    # 4. Re-upgrade back to head
+    command.upgrade(alembic_cfg, "head")
+    with engine.connect() as conn:
+        version = conn.execute(text("SELECT version_num FROM alembic_version;")).scalar()
+        assert version == "0004_sms_dispatch_logs"
+        tables = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table';")).scalars().all()
+        assert "sms_dispatch_logs" in tables
 

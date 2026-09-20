@@ -35,7 +35,9 @@ class RouterNotifier extends ChangeNotifier {
     _ref.listen<AuthState>(
       authStateProvider,
       (previous, next) {
-        final justLoggedIn = previous?.isAuthenticated != true && next.isAuthenticated;
+        final prevAccess = previous?.isAuthenticated == true || previous?.isNgoSimulation == true;
+        final nextAccess = next.isAuthenticated || next.isNgoSimulation;
+        final justLoggedIn = !prevAccess && nextAccess;
         if (justLoggedIn) {
           _ref.read(homeTabIndexProvider.notifier).state = 1;
         }
@@ -61,7 +63,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: notifier,
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
-      final isAuthenticated = authState.isAuthenticated;
+      final isAccessAllowed = authState.isAuthenticated || authState.isNgoSimulation;
       final hasLanguage = ref.read(hasSelectedLanguageProvider);
 
       final isOnSplash = state.matchedLocation == '/splash';
@@ -84,15 +86,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // Step 2: language is selected — don't let the user linger on the
       // language screen.
       if (isOnLanguage) {
-        return isAuthenticated ? '/home' : '/sign-in';
+        return isAccessAllowed ? '/home' : '/sign-in';
       }
 
-      // Step 3: must be authenticated for everything except the auth screens.
-      if (!isAuthenticated) {
+      // Step 3: must be authenticated (or in NGO simulation) for everything except auth screens.
+      if (!isAccessAllowed) {
         return isOnAuth ? null : '/sign-in';
       }
 
-      // Step 4: authenticated users shouldn't sit on auth screens.
+      // Step 4: authenticated/simulation users shouldn't sit on auth screens.
       if (isOnAuth) {
         return '/home';
       }
