@@ -29,20 +29,29 @@ void main() {
     if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(ProductStatusAdapter());
     if (!Hive.isAdapterRegistered(0)) Hive.registerAdapter(ProductAdapter());
     if (!Hive.isAdapterRegistered(2)) Hive.registerAdapter(UserProfileAdapter());
+    final authBox = await Hive.openBox('auth_box');
+    await authBox.put('user_id', 'artisan_probe');
+    await authBox.put('phone_number', '+919876543210');
+    await authBox.put('is_authenticated', true);
     await Hive.openBox('draft_box');
+    await Hive.openBox<String>('ai_operations_box');
     await Hive.openBox<UserProfile>('user_profile_box');
     pricing = PricingProbe();
     container = ProviderContainer(overrides: [pricingServiceProvider.overrideWithValue(pricing)]);
   });
   tearDown(() async {
+    final flow = container.read(addProductFlowProvider.notifier);
+    await flow.awaitActiveBackgroundFutures();
     container.dispose();
     await Hive.close();
-    await dir.delete(recursive: true);
+    if (await dir.exists()) {
+      await dir.delete(recursive: true);
+    }
   });
 
   test('retaking a photo invalidates old approved-media candidate', () async {
     final flow = container.read(addProductFlowProvider.notifier);
-    flow.loadSavedDraftState(draftId: 'draft_probe', originalImagePath: '/old.jpg', enhancedImagePath: '/old_enhanced.jpg', transcript: 'pot', mediaId: 'med_old', originalMediaId: 'med_raw_old', sha256Checksum: 'a' * 64, imageEnhanceOpId: 'op_old');
+    await flow.loadSavedDraftState(draftId: 'draft_probe', originalImagePath: '/old.jpg', enhancedImagePath: '/old_enhanced.jpg', transcript: 'pot', mediaId: 'med_old', originalMediaId: 'med_raw_old', sha256Checksum: 'a' * 64, imageEnhanceOpId: 'op_old');
     await flow.setImage('/new.jpg');
     final draft = container.read(addProductFlowProvider);
     expect(draft.mediaId, isNull, reason: 'New photo must never publish the old media asset');
@@ -51,7 +60,7 @@ void main() {
 
   test('changed pricing inputs receive a new operation key', () async {
     final flow = container.read(addProductFlowProvider.notifier);
-    flow.loadSavedDraftState(draftId: 'draft_probe', originalImagePath: '', enhancedImagePath: '', transcript: 'pot', descriptionEn: 'Terracotta pot', category: 'Pottery', rawMaterialCost: 100);
+    await flow.loadSavedDraftState(draftId: 'draft_probe', originalImagePath: '', enhancedImagePath: '', transcript: 'pot', descriptionEn: 'Terracotta pot', category: 'Pottery', rawMaterialCost: 100);
     await flow.calculatePriceSuggestion();
     flow.updateCostParameters(materialCost: 200);
     await flow.calculatePriceSuggestion();

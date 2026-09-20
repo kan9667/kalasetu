@@ -55,7 +55,9 @@ void main() {
     if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(ProductStatusAdapter());
     if (!Hive.isAdapterRegistered(2)) Hive.registerAdapter(UserProfileAdapter());
     await Hive.openBox('draft_box');
-    await Hive.openBox('auth_box');
+    final authBox = await Hive.openBox('auth_box');
+    await authBox.put('is_authenticated', true);
+    await authBox.put('user_id', 'artisan_review');
     await Hive.openBox<UserProfile>('user_profile_box');
     await Hive.openBox<String>(AiOperationStorage.boxName);
     await Hive.openBox<Product>('products_box');

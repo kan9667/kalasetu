@@ -265,6 +265,7 @@ class PrivateMediaCache {
     validateMediaId(mediaId);
 
     final startSessionGen = _sessionGeneration;
+    final startGlobalSessionGen = ActiveSessionManager.sessionGeneration;
     final startAccountId = _activeAccountId;
     final startBackendOrigin = _getBackendScope();
 
@@ -293,6 +294,7 @@ class PrivateMediaCache {
       }
 
       if (_sessionGeneration != startSessionGen ||
+          ActiveSessionManager.sessionGeneration != startGlobalSessionGen ||
           _activeAccountId != startAccountId ||
           _getBackendScope() != startBackendOrigin) {
         throw SessionChangedException(
@@ -308,6 +310,7 @@ class PrivateMediaCache {
         accountScope: accountScope,
         inFlightKey: inFlightKey,
         startSessionGen: startSessionGen,
+        startGlobalSessionGen: startGlobalSessionGen,
         startAccountId: startAccountId,
         startBackendOrigin: startBackendOrigin,
       );
@@ -331,6 +334,7 @@ class PrivateMediaCache {
     required String accountScope,
     required String inFlightKey,
     required int startSessionGen,
+    required int startGlobalSessionGen,
     required String? startAccountId,
     required String startBackendOrigin,
   }) async {
@@ -342,6 +346,22 @@ class PrivateMediaCache {
         '${staging.path}/staging_${mediaId}_${DateTime.now().microsecondsSinceEpoch}.tmp';
     final stagedFile = File(stagedPath);
     final finalFile = File('${scopedDir.path}/media_$mediaId.cached');
+
+    bool isSessionStillValid() {
+      if (_sessionGeneration != startSessionGen) return false;
+      if (ActiveSessionManager.sessionGeneration != startGlobalSessionGen) return false;
+      if (_activeAccountId != startAccountId) return false;
+      if (_getBackendScope() != startBackendOrigin) return false;
+      return true;
+    }
+
+    // Verify session identity after token retrieval
+    if (!isSessionStillValid()) {
+      if (await stagedFile.exists()) {
+        try { await stagedFile.delete(); } catch (_) {}
+      }
+      throw SessionChangedException('Session changed after token retrieval for media $mediaId');
+    }
 
     final targetUrl = downloadUrl ?? '${ApiConfig.baseUrl}/api/v1/media/$mediaId';
     final targetUri = Uri.parse(targetUrl);
@@ -358,6 +378,14 @@ class PrivateMediaCache {
           token.isNotEmpty)
         'Authorization': 'Bearer $token',
     };
+
+    // Verify session identity before dispatch
+    if (!isSessionStillValid()) {
+      if (await stagedFile.exists()) {
+        try { await stagedFile.delete(); } catch (_) {}
+      }
+      throw SessionChangedException('Session changed before dispatch for media $mediaId');
+    }
 
     final cancelToken = CancelToken();
     _inFlightDownloads[inFlightKey] = cancelToken;
@@ -414,6 +442,17 @@ class PrivateMediaCache {
 
       final activeSink = sink;
       await for (final chunk in stream) {
+        if (!isSessionStillValid()) {
+          debugPrint('[PrivateMediaCache] Session changed during streaming for media $mediaId; aborting.');
+          await activeSink.flush();
+          await activeSink.close();
+          sink = null;
+          if (await stagedFile.exists()) {
+            try { await stagedFile.delete(); } catch (_) {}
+          }
+          throw SessionChangedException('Session changed during streaming for media $mediaId');
+        }
+
         totalBytesRead += chunk.length;
         if (totalBytesRead > maxBytes) {
           debugPrint('[PrivateMediaCache] Media $mediaId exceeded max byte limit ($totalBytesRead > $maxBytes). Aborting.');
@@ -439,9 +478,7 @@ class PrivateMediaCache {
       }
 
       // Recheck session identity before promoting the download
-      if (_sessionGeneration != startSessionGen ||
-          _activeAccountId != startAccountId ||
-          _getBackendScope() != startBackendOrigin) {
+      if (!isSessionStillValid()) {
         if (await stagedFile.exists()) {
           await stagedFile.delete();
         }

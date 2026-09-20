@@ -111,7 +111,7 @@ async def enhance_image(
             source_media_id=None,
             is_degraded=False,
         )
-        if existing_raw:
+        if existing_raw and Path(existing_raw.file_path).exists():
             raw_asset = existing_raw
             raw_dest = Path(existing_raw.file_path)
             staged_raw.cleanup()
@@ -163,10 +163,10 @@ async def enhance_image(
                 status_str="ready",
             )
         else:
-            with open(result_path, "rb") as ef:
-                enhanced_bytes = ef.read()
+            # Enhanced image generated
+            enhanced_size = result_path.stat().st_size
+            enhanced_bytes = result_path.read_bytes()
             enhanced_checksum = hashlib.sha256(enhanced_bytes).hexdigest()
-            enhanced_size = len(enhanced_bytes)
             provenance = "ai_enhanced_image" if not is_degraded else "degraded_enhanced_image"
 
             # Check lineage-aware derived asset deduplication
@@ -178,7 +178,7 @@ async def enhance_image(
                 source_media_id=raw_asset.id,
                 is_degraded=is_degraded,
             )
-            if existing_derived:
+            if existing_derived and Path(existing_derived.file_path).exists():
                 if result_path.exists() and result_path != raw_dest:
                     result_path.unlink(missing_ok=True)
                 enhanced_asset = existing_derived

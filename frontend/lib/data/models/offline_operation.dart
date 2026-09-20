@@ -40,6 +40,8 @@ class OfflineOperation {
   final int retryCount;
   final DateTime createdAt;
   final DateTime? leaseExpiresAt;
+  final String? owner;
+  final String? backend;
 
   OfflineOperation({
     String? id,
@@ -60,6 +62,8 @@ class OfflineOperation {
     this.retryCount = 0,
     DateTime? createdAt,
     this.leaseExpiresAt,
+    this.owner,
+    this.backend,
   })  : id = id ?? 'op_${action.toLowerCase()}_${productId}_${DateTime.now().microsecondsSinceEpoch}',
         createdAt = createdAt ?? DateTime.now();
 
@@ -90,6 +94,8 @@ class OfflineOperation {
     DateTime? createdAt,
     DateTime? leaseExpiresAt,
     bool clearLeaseExpiresAt = false,
+    String? owner,
+    String? backend,
   }) {
     return OfflineOperation(
       id: id ?? this.id,
@@ -110,6 +116,8 @@ class OfflineOperation {
       retryCount: retryCount ?? this.retryCount,
       createdAt: createdAt ?? this.createdAt,
       leaseExpiresAt: clearLeaseExpiresAt ? null : (leaseExpiresAt ?? this.leaseExpiresAt),
+      owner: owner ?? this.owner,
+      backend: backend ?? this.backend,
     );
   }
 
@@ -133,6 +141,8 @@ class OfflineOperation {
       'retry_count': retryCount,
       'created_at': createdAt.toIso8601String(),
       'lease_expires_at': leaseExpiresAt?.toIso8601String(),
+      'owner': owner,
+      'backend': backend,
     };
   }
 
@@ -158,6 +168,8 @@ class OfflineOperation {
           ? Map<String, dynamic>.from(json['result_data'] as Map)
           : null,
       result: json['result'] as String?,
+      owner: json['owner'] as String?,
+      backend: json['backend'] as String?,
       errorMessage: json['error_message'] as String? ?? json['errorMessage'] as String?,
       retryCount: (json['retry_count'] as num?)?.toInt() ?? 0,
       createdAt: json['created_at'] != null

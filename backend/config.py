@@ -7,7 +7,7 @@ centralized application settings.
 
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic_settings import BaseSettings
 from pydantic import Field, model_validator
 
@@ -95,10 +95,10 @@ class Settings(BaseSettings):
     static_url_prefix: str = "/uploads"
 
     # CORS
-    cors_origins: List[str] = ["*"]
+    cors_origins: Union[List[str], str] = ["*"]
     cors_allow_credentials: bool = True
-    cors_allow_methods: List[str] = ["*"]
-    cors_allow_headers: List[str] = ["*"]
+    cors_allow_methods: Union[List[str], str] = ["*"]
+    cors_allow_headers: Union[List[str], str] = ["*"]
 
     # Environment & Auth
     environment: str = Field(default="development", description="Runtime environment: development, test, production")

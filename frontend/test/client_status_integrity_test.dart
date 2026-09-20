@@ -49,6 +49,10 @@ void main() {
     if (!Hive.isAdapterRegistered(0)) {
       Hive.registerAdapter(ProductAdapter());
     }
+
+    final authBox = await Hive.openBox('auth_box');
+    await authBox.put('is_authenticated', true);
+    await authBox.put('user_id', 'artisan_client_status');
   });
 
   tearDownAll(() async {

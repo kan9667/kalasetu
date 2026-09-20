@@ -560,6 +560,8 @@ persists immutable snapshot in ProductRevisionDB, status -> published"]
 - Media Upload Atomicity: Uploads write to `uploads/staging/`, validate magic bytes and compute SHA-256, atomically move into `uploads/private/`, and commit both the `MediaAssetDB` and `IdempotencyRecordDB` in a single database transaction with disk cleanup on error.
 - Batch Sync Optimistic Locking: `ProductSyncBatch` accepts `ProductSyncItem` with an optional `expected_revision`. Stale revisions trigger HTTP 409 conflict and cause an atomic transaction rollback.
 - Conflict & Crash Resilience: On HTTP 409 (`StaleRevisionException`) or network interruption, drafts and outbox entries are preserved intact. Offline data is never deleted as generic error recovery.
+- Session-Bound Queue Drain: Each drain of `pending_sync_box` is strictly bound to its initiating artisan user ID, backend origin, and monotonic session generation. Requires an initialized, authenticated artisan session (`ActiveSessionMode.artisan`), not merely "not simulation". Identity is revalidated before claiming each operation, after asynchronous staging/preparation, and before applying server responses or mutating local `productsBox` or `pendingBox`. If the session transitions (logout, switch to simulation, or switch to another artisan), drain execution halts safely, reverts in-flight leases to `statusPending`, and preserves recoverable operations without executing artisan A's queued work using artisan B's token.
+- Session-Bound Private Media Streaming & Isolated Cleanup: `PrivateMediaCache` validates session identity and generation after token retrieval, before dispatch, inside the streaming chunk loop, and before atomic promotion of downloaded bytes. Interrupted transfers clean up only the specific `.tmp` staging file owned by that request; existing valid cached media, drafts, and user state are strictly preserved.
 
 **Dynamic Network Discovery (`ApiConfig`)**:
 Probes `[LAN_IP:8000, 10.0.2.2:8000, 127.0.0.1:8000, localhost:8000]` against `/api/v1/health`. Binds to first responsive host. Prevents hardcoded IP failures across emulator/physical device/desktop.
@@ -1275,11 +1277,21 @@ sequenceDiagram
 | Tutorial Carousel | `frontend/test/tutorial_carousel_test.dart` | Onboarding navigation, TTS narration |
 | Cycling Guidance Cue | `frontend/test/cycling_guidance_cue_test.dart` | Rotating spoken guidance chips in Step 2 |
 | Offline Sync | `frontend/test/offline_sync_placeholder_test.dart` | Drift queue initialization, WorkManager registration |
+| Session Boundary Regressions | `frontend/test/session_boundary_adversarial_test.dart` | Session isolation, uninitialized session guard, race conditions |
+| Replay Identity Regressions | `frontend/test/replay_identity_test.dart` | Simulation token leakage guard, exact-input image/pricing replay |
+| Coalescing & Unpublish | `frontend/test/coalescing_and_unpublish_adversarial_test.dart` | Approval/unpublish coalescing, revision and hash conflict handling |
+| Offline Outbox Durability | `frontend/test/offline_outbox_durability_test.dart` | Append-only outbox, restart persistence, idempotency preservation |
+| Real HTTP Outbox Integration | `frontend/test/real_http_outbox_integration_test.dart` | Loopback HTTP wire test against live FastAPI daemon |
 
-### 23.3 Physical Device Validation
+### 23.3 Local Integration Verification vs Physical Device Scope
 
-Tested on multiple android devices. 
-Confirmed working: `<queries>` package visibility for WhatsApp/Instagram/Facebook, hardware camera + microphone, USB debug deployment via `flutter run`, on-device TTS in Hindi and English.
+- **Local Integration Verification (Prototype Automated Tests)**:
+  - Wire interoperability is verified over local TCP loopback (`127.0.0.1`) between the Flutter client and a live FastAPI server (`real_http_outbox_integration_test.dart`). This validates network serialization, HTTP status codes, headers, and media streaming over the socket, but does not simulate cellular radio latencies, network packet loss, or hardware transitions.
+  - Concurrency safety and database serialization are verified with multi-threaded Python test runners and thread barriers (`test_followup.py` and `test_sms_review.py`). This validates SQLite transaction integrity on local disk, but does not represent multi-node cloud databases.
+- **Physical Device Validation (Android Hardware)**:
+  - Tested on multiple Android devices.
+  - Confirmed working: `<queries>` package visibility for WhatsApp/Instagram/Facebook, hardware camera + microphone, USB debug deployment via `flutter run`, on-device TTS in Hindi and English.
+  - Production carrier SMS delivery, cellular handoff, and background OS lifecycle scheduling (WorkManager on raw devices) remain reserved for Phase 2/3.
 
 ---
 
@@ -1480,7 +1492,7 @@ To configure and verify real SMS delivery when explicitly authorized:
 4. **Authorized Recipient Requirement**:
    Only use an explicitly authorized test phone number. Verify that the recipient number is a valid 10-digit Indian mobile number (or standard `+91` format).
 
-**Required work for Phase 2**: Carry out verified live production SMS gateway delivery over physical cellular carriers on real mobile devices once live production credentials, DLT-approved templates, and explicit user authorization are provided.
+**Controlled-Pilot Plan (Separately Authorized Verification)**: Carry out verified live production SMS gateway delivery over physical cellular carriers on real mobile devices once live production credentials, DLT-approved templates, and explicit user authorization are provided. This verification is retained in the controlled-pilot plan with real gateway credentials and is not moved to Phase 3 merely to declare completion.
 
 ---
 
@@ -1595,19 +1607,35 @@ During Phase 1 hardening and independent architectural review, 12 key defect are
 - **Immutable Byte Snapshot**: `ProductRepository` writes reviewed local photo bytes to an isolated `.tmp` staging file before initiating media upload for both online publication and offline queue sync.
 - **Pre-Upload Verification**: Bytes in the staging file are hashed via SHA-256 and matched against `effectiveReviewedChecksum` before dispatch.
 - **Server Hash Parity**: Server-returned `sha256_checksum` must strictly match the reviewed checksum before attachment or approval. Mismatches fail closed and abort publication.
+### 27.20 Session-Bound Actual Product HTTP Client Consolidation
+- **Interceptor Consolidation**: Replaced the naive interceptor in `HttpApiService` (`frontend/lib/data/services/api_service.dart`) with `AuthInterceptor(tokenStorage: tokenStorage)`.
+- **Fail-Closed Protected Operations**: All protected product, media, catalog, voice, pricing, and chat requests fail closed (HTTP 401 `SessionExpiredException`) during simulation, after logout, upon account transition, or before repository initialization.
+- **Unauthenticated Flow Preservation**: Public authentication endpoints (`/api/v1/auth/*`) and explicitly public requests (`options.extra['is_public'] == true`) bypass artisan session guards, allowing registration and OTP login flows to proceed normally without credentials.
+- **Ambient Zone Propagation**: Passed initiating operation identity (`expectedUserId`, `expectedSessionGen`, `expectedBackend`) via `Zone.current` and captured it into request `options.extra` without breaking public API contracts across test doubles.
 
-### 27.20 Test Coverage & Operational Verification Boundaries
+### 27.21 Pre-Dispatch Operation Identity Binding Across Online Mutations & Recovery
+- **Initiating Identity Capture**: Captured initiating artisan user ID, backend origin, and session generation before asynchronous initialization/preparation across create, update, delete, unpublish, and multi-stage `upload -> attach -> publish`.
+- **Pre-Dispatch Revalidation**: Validated initialized artisan mode and matching identity after preparation and immediately prior to each network dispatch stage.
+- **Fail-Safe Invalidation Recovery**: If an account switch or logout occurs during preparation or token retrieval, network dispatch is stopped immediately; recoverable operations and original idempotency keys are durably preserved in offline storage under their initiating identity without silent reassignment or authorization under the replacement account.
+- **Multi-Stage Workflow Safeguard**: Session changes between media upload, attachment, and publication halt subsequent stages and retain the upstream completed records with local offline outbox items for safe replay under the original account.
+
+### 27.22 Test Repeatability & Media Deduplication Isolation
+- **On-Disk File Verification**: Hardened raw and derived media deduplication in `backend/routers/catalog.py` and `backend/routers/media.py` by requiring `Path(asset.file_path).exists()`. Stale database records referencing deleted temporary files from previous test runs are ignored, preventing HTTP 404 lookup failures.
+- **Pydantic Settings Parsing Resilience**: Updated CORS configuration parsing in `backend/config.py` to `Union[List[str], str] = ["*"]`, preventing premature JSON decode exceptions on comma-delimited environment variable strings.
+- **Fixture Isolation**: Isolated `test_full_media_pipeline_lifecycle` in `backend/tests/test_media_pipeline_http_e2e.py` with unique test payload bytes and isolated mock output paths.
+
+### 27.23 Test Coverage & Operational Verification Boundaries
 
 - **Backend Test Suite**: 144 passing, 1 skipped under Python 3.14 (covering 2Factor transport logging redaction, atomic concurrent quota admission without challenge destruction, post-dispatch timeout/read-error uncertain delivery accounting, confirmed gateway rejection, restart persistence, SMS 503 propagation, cryptographic OTP challenge lifecycle, AI idempotency fingerprints, tenant isolation, approval workflow, SQLite foreign keys, media pipeline, streaming ingest, and bidirectional Alembic migrations). Skipped test: `test_stage1_standalone_image_pipeline` in `backend/tests/test_image_pipeline_integration.py` (opt-in via `RUN_REMBG_TESTS=1` to avoid heavy u2net ONNX model weight download during regular test runs).
-- **Frontend Test Suite**: 198 passing across Flutter 3.44.0 / Dart 3.12.0 (covering session-transition safety, simulation switch during token retrieval, account switch/logout isolation, exact-input image recovery, on-disk fingerprint verification, unchanged replay, missing file fail-closed, duplicate resume suppression, stale result discard, staged-upload server checksum mismatch fail-closed, response-lost retry, same-byte image decode verification via `img.decodeImage`, reviewed checksum outbox carriage, draft snapshot source of truth, non-destructive migration, corrupt snapshot recovery, input invalidations, exact render preview bindings, offline media SHA-256 outbox integrity, typed auth failures, unpublish truthfulness, coalescing scenarios, upstream dependency resolution, hash validation, 409 conflict refresh, review screens, secure token fallback, private media cache bounded aborts, drift queue durability, offline media lineage, degradation banners, chatbot review navigation, exact-media review verification, repository initialization barrier, cache session binding, and live HTTP wire test).
+- **Frontend Test Suite**: 216 passing across Flutter 3.44.0 / Dart 3.12.0 (covering actual product HTTP client consolidation behind session-aware interceptor, pre-dispatch identity binding across create/update/delete/unpublish/publish, simulation token suppression, account/backend switch during token retrieval, session transition between upload/attach/publish stages, safe recovery under original identity, durable operation identity across online failure and offline fallback, non-destructive provenance recovery for legacy outbox records, backend origin scoping and replay affinity, simulation switch during token retrieval, account switch/logout isolation, exact-input image recovery, on-disk fingerprint verification, unchanged replay, missing file fail-closed, duplicate resume suppression, stale result discard, staged-upload server checksum mismatch fail-closed, response-lost retry, same-byte image decode verification via `img.decodeImage`, reviewed checksum outbox carriage, draft snapshot source of truth, non-destructive migration, corrupt snapshot recovery, input invalidations, exact render preview bindings, offline media SHA-256 outbox integrity, typed auth failures, unpublish truthfulness, coalescing scenarios, upstream dependency resolution, hash validation, 409 conflict refresh, review screens, secure token fallback, private media cache bounded aborts, drift queue durability, offline media lineage, degradation banners, chatbot review navigation, exact-media review verification, repository initialization barrier, cache session binding, and live HTTP wire test).
 - **Static Analysis**: `flutter analyze` clean with 0 issues; `git diff --check` clean with 0 issues.
 
 #### Operational Verification Boundaries
 To maintain strict architectural truthfulness, the repository enforces five distinct verification boundaries:
 1. **Implemented and automatically tested**:
-   - Automated CI/CD test suites passing on local developer workstation test harnesses: 144 backend tests and 198 Flutter tests with SQLite foreign keys, Alembic migrations 0001-0004, Drift SQLite disk queue, mock HTTP adapters, and loopback FastAPI wire tests.
+   - Automated CI/CD test suites passing on local developer workstation test harnesses: 144 backend tests and 216 Flutter tests with SQLite foreign keys, Alembic migrations 0001-0004, Drift SQLite disk queue, mock HTTP adapters, and loopback FastAPI wire tests.
 2. **Reproduced and resolved**:
-   - Independent adversarial review findings successfully reproduced and resolved: HTTPX URL logging credential leak, concurrent quota admission race condition, retained artisan token leakage during NGO simulation, restart recovery of in-flight enhancement without Drift queue, simulation entry during asynchronous token retrieval, contender challenge destruction during concurrent OTP creation, post-dispatch read error / timeout quota leakage, and mutable image path replay under stale idempotency keys.
+   - Independent adversarial review findings successfully reproduced and resolved: HTTPX URL logging credential leak, concurrent quota admission race condition, retained artisan token leakage during NGO simulation, restart recovery of in-flight enhancement without Drift queue, simulation entry during asynchronous token retrieval, contender challenge destruction during concurrent OTP creation, post-dispatch read error / timeout quota leakage, mutable image path replay under stale idempotency keys, cross-account cache contamination on in-flight switch, legacy ownerless operation drain vulnerability, backend origin affinity migration bypass, product HTTP client session bypass in `HttpApiService`, and pre-dispatch session binding across online mutations.
 3. **Simulated demo behavior**:
    - Demo OTP (`123456`) is strictly restricted to non-production environments with `ALLOW_DEMO_OTP=true` and `ENVIRONMENT != "production"`.
    - NGO coordinator mode is simulation-only (`isNgoSimulation: true`), strictly isolated from artisan credentials.
@@ -1618,8 +1646,8 @@ To maintain strict architectural truthfulness, the repository enforces five dist
    - End-to-end HTTP wire communication verified over local developer workstation TCP loopback (`127.0.0.1`) between Flutter client test runner and live FastAPI server process (`real_http_outbox_integration_test.dart`). This validates network wire serialization, request/response headers, and API contracts, but does not substitute for physical cellular radio or intermittent field networking tests.
    - Multi-threaded concurrent database contention verified in local Python test processes using `ThreadPoolExecutor` and synchronization `Barrier` (`test_followup.py` and `test_sms_review.py`). This validates SQLite transaction serialization and monotonic rowid ordering, but does not substitute for multi-instance distributed PostgreSQL database deployments.
    - Logging redaction verified with real HTTPX transport logger at `INFO` level using loopback `MockTransport`.
-5. **Unresolved / Future Phase scope**:
-   - Live cellular SMS carrier delivery with actual DLT-approved template and real API credits (requires explicit user authorization).
+5. **Separately authorized carrier verification & Future Phase scope**:
+   - Live cellular SMS carrier delivery with actual DLT-approved template and real API credits is retained in the controlled-pilot plan (requires separate explicit user authorization; not moved to Phase 3 merely to declare completion).
    - Physical Android/iOS mobile hardware testing (camera sensors, microphone, OS background execution via WorkManager).
    - Production PostgreSQL/Supabase deployment with RLS (Phase 2).
    - S3/GCS private object storage with presigned URLs (Phase 2).
@@ -1628,4 +1656,4 @@ To maintain strict architectural truthfulness, the repository enforces five dist
 ---
 
 *Document maintained at `docs/ARCHITECTURE.md` — the sole source of truth for KalaSetu system architecture.*
-*Last updated: 2026-09-20 — Phase 1 Narrow Correction Pass Complete.*
+*Last updated: 2026-09-20 — Phase 1 Request-Path & Identity Hardening Complete.*

@@ -90,7 +90,7 @@ async def upload_media(
             sha256_checksum=staged.sha256_checksum,
             processing_provenance="artisan_direct_upload",
         )
-        if existing_asset:
+        if existing_asset and Path(existing_asset.file_path).exists():
             staged.cleanup()
             asset = existing_asset
         else:

@@ -317,21 +317,55 @@ Status of review findings after Phase 1 Trust & Data Integrity implementation:
   idempotency keys. Preconditions (`owner`, `backend`, `draftId`, `operationId`, `generation`) are validated both before dispatch
   and before applying late results.
 - [RESOLVED] Staged Snapshot Upload & Server Checksum Enforcement: `ProductRepository.approveAndPublishProduct` and outbox
-  `MEDIA_UPLOAD` stage local files to immutable `.tmp` files, verify SHA-256 before upload, and verify server-returned
-  `sha256_checksum` against reviewed checksum. Mismatches throw `StateError`, which fails closed without falling back to offline
-  queueing. Response-lost upload retries succeed and publish once matching checksum is confirmed.
+- [RESOLVED] Session-Bound Offline Queue Drain: `ProductRepository.syncPendingQueue()` binds drain execution
+  to initiating artisan ID, backend origin, and monotonic session generation. Requires an initialized, authenticated
+  artisan session (`ActiveSessionMode.artisan`), not merely "not simulation". Revalidates session before claiming each
+  operation, after asynchronous preparation, and before applying responses or mutating local `productsBox` or `pendingBox`.
+  If session transitions (logout, switch to simulation, or switch to another artisan), drain halts safely, reverts
+  in-flight leases to `statusPending`, and preserves recoverable operations without executing artisan A's work using artisan B's token.
+- [RESOLVED] Session-Bound Private Media Streaming & Isolated Staging Cleanup: `PrivateMediaCache` validates session
+  identity and monotonic session generation after token retrieval, before dispatch, inside the streaming chunk loop,
+  and before atomic promotion of downloaded bytes. Interrupted transfers clean up only the specific `.tmp` staging file
+  owned by that request; existing valid cached media, drafts, and user state are strictly preserved.
+- [RESOLVED] Clean Storage Setup, Teardown & Background Tracking in Tests: `draft_identity_test.dart` opens all required
+  storage boxes before starting providers and awaits `AddProductFlowNotifier.awaitActiveBackgroundFutures()` before disposal
+  and box closure, eliminating arbitrary sleeps and suppressing no errors. `session_boundary_adversarial_test.dart` adds 6
+  deterministic regressions covering uninitialized session dispatch, simulation during token retrieval, artisan identity
+  transitions during drain, response application races, streaming interruptions, and restart/retry idempotency key preservation.
+- [RESOLVED] Durable Operation Identity, Provenance Recovery & Backend Scoping:
+  Initiating artisan identity, backend URL, and session generation are captured synchronously at entry of all repository
+  mutation boundaries (`addProduct`, `updateProduct`, `approveAndPublishProduct`, `deleteProduct`, `unpublishProduct`).
+  Session validity check (`isSessionValid`) ensures local cache mutations are suppressed if the session transitions while a
+  request is in-flight or falling back offline, eliminating cross-account cache contamination. Offline fallback operations
+  are durably bound to the initiating artisan and backend. Queue drain enforces "missing owner is not authorization":
+  `syncPendingQueue` rejects null/empty owners and performs non-destructive provenance recovery from `payloadSnapshot`
+  (`artisan_id`, `artisanId`, `approved_by_artisan_id`) and dependency chains; unrecoverable operations transition to
+  `statusUserActionRequired` with an informative error message and are never deleted. `OfflineOperation.backend` is
+  persisted at enqueue time and verified via `PrivateMediaCache.normalizeBackendOrigin` prior to replay; operations from
+  backend A never execute against backend B, safely resuming when reconnecting to backend A. Regressions verified in
+  `ownership_lifecycle_test.dart`.
+- [RESOLVED] Consolidated Product HTTP Client & Session-Aware Networking:
+  `HttpApiService` in `frontend/lib/data/services/api_service.dart` consolidated behind session-aware `AuthInterceptor` with session guards. Eliminated naive unconditional token attachment. Protected operations fail closed with HTTP 401 `SessionExpiredException` on uninitialized session, simulation mode, account switches, or logout, while preserving unauthenticated registration and login flows (`/api/v1/auth/*` and `is_public: true`). Tested on `HttpApiService` itself with mocked transport and fixture credentials.
+- [RESOLVED] Online Dispatch Bound to Initiating Operation Identity:
+  `ProductRepository` mutations (`addProduct`, `updateProduct`, `deleteProduct`, `unpublishProduct`, `approveAndPublishProduct`) capture initiating owner, backend, and session generation before asynchronous initialization/preparation. Validates initialized artisan mode, originating owner, backend origin, and session generation after preparation and before each network stage (including multi-stage `upload -> attach -> publish`). Carries expected operation identity across async boundaries into request options via `Zone.current` and options extra, preventing late authorization under replacement accounts during token retrieval. On session invalidation, stops dispatch and safely preserves recoverable work under its original identity and idempotency key without exposing or executing it under replacement accounts.
+- [RESOLVED] Test Repeatability & Media Deduplication Isolation:
+  Investigated transient failure in `test_full_media_pipeline_lifecycle` in `backend/tests/test_media_pipeline_http_e2e.py`. Discovered that database records pointing to ephemeral temporary files from prior test runs (e.g. `tmp_path`) could cause deduplication to reuse non-existent files on disk, returning downstream 404s. Hardened `backend/routers/catalog.py` and `backend/routers/media.py` to check `Path.exists()` before reusing existing raw and derived media records, and isolated test runs with unique image payload bytes.
 - [RESOLVED] Test Coverage & Verification: 144 backend tests passing under Python 3.14 (1 skipped:
   `test_stage1_standalone_image_pipeline` in `backend/tests/test_image_pipeline_integration.py`, opt-in via
   `RUN_REMBG_TESTS=1` to isolate heavy rembg u2net ONNX model weight downloads); 3 migration tests passing
-  (fresh DB upgrade, upgrade from 0001, and downgrade/re-upgrade of 0004); 198 Flutter tests passing
-  (including `session_race_test.dart`, `replay_identity_test.dart`, `review_regression_test.dart`, and live FastAPI wire test
-  `real_http_outbox_integration_test.dart`) with 0 `flutter analyze` issues and clean `git diff --check`.
+  (fresh DB upgrade, upgrade from 0001, and downgrade/re-upgrade of 0004); 216 Flutter tests passing
+  (including all 6 in `actual_dispatch_test.dart`, all 6 in `ownership_lifecycle_test.dart`, all 6 in
+  `session_boundary_adversarial_test.dart`, all 6 in `replay_identity_test.dart`, all 4 in `session_race_test.dart`,
+  all 13 in `coalescing_and_unpublish_adversarial_test.dart`, all 6 in `offline_outbox_durability_test.dart`, and live
+  FastAPI wire test `real_http_outbox_integration_test.dart`) with 0 `flutter analyze` issues and clean
+  `git diff --check`. Earlier counts (138 backend / 186 Flutter, 144 backend / 198 Flutter, 144 backend / 204 Flutter,
+  and 144 backend / 210 Flutter) represent previous baseline checkpoints.
 
 ### Verification Status & Operational Boundaries
 
 To maintain strict truthfulness, the repository distinguishes five operational boundaries:
 1. **Implemented and automatically tested**: Full end-to-end integration and unit tests passing in automated CI/CD
-   and local developer test harnesses (144 backend tests and 198 Flutter tests with SQLite foreign keys, Alembic migrations,
+   and local developer test harnesses (144 backend tests and 216 Flutter tests with SQLite foreign keys, Alembic migrations,
    Drift SQLite disk queue, mocked HTTP adapters, and live FastAPI wire test on loopback).
 2. **Reproduced and resolved**: Independent review findings reproduced and resolved with regression tests:
    HTTPX URL logging credential leak (`test_real_httpx_logging_does_not_expose_fixture_credentials`), concurrent quota
@@ -339,8 +373,10 @@ To maintain strict truthfulness, the repository distinguishes five operational b
    (`simulation must not dispatch with retained artisan bearer token`), in-flight enhancement restart recovery
    (`restart replays in-flight image enhancement from its durable record`), contender OTP destruction
    (`test_rejected_concurrent_request_preserves_delivered_otp`), post-dispatch read error / timeout quota retention
-   (`test_post_dispatch_read_error_keeps_budget_reserved`), and changed image replay failure
-   (`changed image bytes must not replay under the old identity`).
+   (`test_post_dispatch_read_error_keeps_budget_reserved`), changed image replay failure
+   (`changed image bytes must not replay under the old identity`), actual HTTP client simulation token attachment
+   (`test real product API client cannot use retained artisan token in simulation`), and account switch during repository
+   initialization (`test account switch during repository initialization blocks online create dispatch`).
 3. **Simulated demo behavior**: Demo OTP (`123456`) is explicitly restricted to non-production environments where
    `ALLOW_DEMO_OTP=true` and `ENVIRONMENT != "production"`. NGO/coordinator logins are explicitly tagged as simulated
    (`isNgoSimulation: true`) and isolated from artisan bearer token authorization. Speech-to-text is tested via mock
@@ -350,9 +386,10 @@ To maintain strict truthfulness, the repository distinguishes five operational b
    - End-to-end wire communication verified over local TCP loopback (`127.0.0.1`) between Flutter client and live FastAPI process (`real_http_outbox_integration_test.dart`). This validates network wire encoding and HTTP client/server contract interoperability, but does not substitute for testing over cellular data radios or physical mobile hardware.
    - Concurrency contention and database lock release verified with multi-threaded Python threads and barriers (`test_followup.py` and `test_sms_review.py`). This validates SQLite transaction serialization and monotonic rowid ordering on local filesystems, but does not substitute for testing multi-instance distributed databases.
    - Logging redaction verified with real HTTPX transport logger at `INFO` level (`test_sms_review.py`).
-   - Mobile hardware sensors (camera, microphone, WorkManager OS scheduling) and cellular SMS carrier networks remain unverified on physical hardware and are reserved for Phase 2/3.
-5. **Unresolved / Future Phase scope**:
-   - Live cellular SMS carrier delivery with actual DLT-approved template and real API credits (requires explicit user authorization).
+   - Mobile hardware sensors (camera, microphone, WorkManager OS scheduling) remain unverified on physical hardware.
+   - Separately authorized live carrier verification is retained in the controlled-pilot plan (see activation guide below); it is not executed in automated test suites to prevent credit consumption.
+5. **Controlled Pilot & Future Phase scope**:
+   - Controlled pilot verification: Live cellular SMS carrier delivery with actual DLT-approved template and real API credits (retained in the controlled-pilot plan, requires separate explicit user authorization).
    - Physical Android/iOS mobile hardware testing (camera hardware sensors, microphone background interruptions, platform secure keystore biometric prompts).
    - Production PostgreSQL/Supabase deployment with RLS (Phase 2).
    - Private S3/GCS object storage with signed URLs (Phase 2).

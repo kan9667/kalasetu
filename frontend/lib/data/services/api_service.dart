@@ -3,8 +3,9 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/config/api_config.dart';
+import '../../core/network/authenticated_http_client.dart';
+import '../../core/storage/secure_token_storage.dart';
 import '../models/product.dart';
-import '../repositories/auth_repository.dart';
 
 /// Exception thrown when publishing a draft fails due to an outdated revision or content mismatch.
 class StaleRevisionException implements Exception {
@@ -43,35 +44,18 @@ class HttpApiService implements ApiService {
   final Dio _dio;
   final String? _explicitBaseUrl;
 
-  HttpApiService({String? baseUrl, Dio? dio})
+  HttpApiService({String? baseUrl, Dio? dio, SecureTokenStorage? tokenStorage})
       : _explicitBaseUrl = baseUrl,
         _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: baseUrl ?? ApiConfig.baseUrl,
-                connectTimeout: const Duration(seconds: 8),
-                receiveTimeout: const Duration(seconds: 15),
-                sendTimeout: const Duration(seconds: 15),
-                headers: {
-                  'Accept': 'application/json',
-                  'Content-Type': 'application/json',
-                },
-              ),
+            AuthenticatedHttpClient.create(
+              baseUrl: baseUrl ?? ApiConfig.baseUrl,
+              tokenStorage: tokenStorage,
             ) {
-    _dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          try {
-            final authRepo = AuthRepository();
-            final token = await authRepo.getAccessToken();
-            if (token != null && token.isNotEmpty) {
-              options.headers['Authorization'] = 'Bearer $token';
-            }
-          } catch (_) {}
-          return handler.next(options);
-        },
-      ),
-    );
+    if (!_dio.interceptors.any((i) => i is AuthInterceptor)) {
+      _dio.interceptors.add(
+        AuthInterceptor(tokenStorage: tokenStorage),
+      );
+    }
   }
 
   void _syncBaseUrl() {
@@ -128,6 +112,17 @@ class HttpApiService implements ApiService {
     }
   }
 
+  Map<String, dynamic> _sessionExtra() {
+    final extra = <String, dynamic>{};
+    final expectedUserId = Zone.current[#kalasetuExpectedUserId] as String?;
+    final expectedSessionGen = Zone.current[#kalasetuExpectedSessionGen] as int?;
+    final expectedBackendOrigin = Zone.current[#kalasetuExpectedBackend] as String?;
+    if (expectedUserId != null) extra['expected_user_id'] = expectedUserId;
+    if (expectedSessionGen != null) extra['expected_session_gen'] = expectedSessionGen;
+    if (expectedBackendOrigin != null) extra['expected_backend_origin'] = expectedBackendOrigin;
+    return extra;
+  }
+
   @override
   Future<Product> createProduct(Product product, {String? artisanId, String? idempotencyKey}) async {
     _syncBaseUrl();
@@ -139,6 +134,7 @@ class HttpApiService implements ApiService {
         headers: {
           'Idempotency-Key': effectiveKey,
         },
+        extra: _sessionExtra(),
       );
       debugPrint('[HttpApiService] POST ${_dio.options.baseUrl}/api/v1/products: ${product.title}');
       final response = await _dio.post('/api/v1/products', data: payload, options: options);
@@ -168,6 +164,7 @@ class HttpApiService implements ApiService {
         headers: {
           'Idempotency-Key': effectiveKey,
         },
+        extra: _sessionExtra(),
       );
       debugPrint('[HttpApiService] PUT ${_dio.options.baseUrl}/api/v1/products/${product.id}');
       final response = await _dio.put('/api/v1/products/${product.id}', data: payload, options: options);
@@ -204,6 +201,7 @@ class HttpApiService implements ApiService {
         headers: {
           'Idempotency-Key': effectiveKey,
         },
+        extra: _sessionExtra(),
       );
       debugPrint('[HttpApiService] DELETE ${_dio.options.baseUrl}/api/v1/products/$id');
       final response = await _dio.delete('/api/v1/products/$id', options: options);
@@ -233,6 +231,7 @@ class HttpApiService implements ApiService {
         headers: {
           'Idempotency-Key': effectiveKey,
         },
+        extra: _sessionExtra(),
       );
       debugPrint('[HttpApiService] POST ${_dio.options.baseUrl}/api/v1/products/$productId/approve-and-publish');
       final response = await _dio.post(
@@ -281,6 +280,7 @@ class HttpApiService implements ApiService {
         headers: {
           'Idempotency-Key': effectiveKey,
         },
+        extra: _sessionExtra(),
       );
       debugPrint('[HttpApiService] POST ${_dio.options.baseUrl}/api/v1/media/upload');
       final response = await _dio.post('/api/v1/media/upload', data: formData, options: options);
@@ -313,6 +313,7 @@ class HttpApiService implements ApiService {
         headers: {
           'Idempotency-Key': effectiveKey,
         },
+        extra: _sessionExtra(),
       );
       debugPrint('[HttpApiService] POST ${_dio.options.baseUrl}/api/v1/products/$productId/unpublish');
       final response = await _dio.post(
@@ -365,6 +366,7 @@ class MockApiService implements ApiService {
     return List.from(_remoteProducts);
   }
 
+  @override
   @override
   Future<Product> createProduct(Product product, {String? artisanId, String? idempotencyKey}) async {
     await Future.delayed(const Duration(milliseconds: 900));

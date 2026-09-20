@@ -85,10 +85,11 @@ async def test_full_media_pipeline_lifecycle(setup_media_tenants, tmp_path):
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Step 1: Upload raw image
+        raw_test_bytes = VALID_PNG_BYTES + f"e2e_{uuid.uuid4().hex}".encode()
         upload_key = f"idem_upload_{uuid.uuid4().hex[:8]}"
         res_upload = await client.post(
             "/api/v1/media/upload",
-            files={"file": ("raw.png", io.BytesIO(VALID_PNG_BYTES), "image/png")},
+            files={"file": ("raw.png", io.BytesIO(raw_test_bytes), "image/png")},
             headers={**headers_a, "Idempotency-Key": upload_key},
         )
         assert res_upload.status_code == 201
@@ -99,8 +100,9 @@ async def test_full_media_pipeline_lifecycle(setup_media_tenants, tmp_path):
 
         # Step 2: Enhance image
         # Create a mock enhanced image on disk
-        enhanced_file = tmp_path / "mock_enhanced.png"
+        enhanced_file = tmp_path / f"mock_enhanced_{uuid.uuid4().hex}.png"
         img = Image.new("RGBA", (200, 200), (255, 255, 255, 255))
+        img.putpixel((0, 0), (uuid.uuid4().int % 256, 0, 0, 255))
         img.save(str(enhanced_file), "PNG")
 
         enhance_key = f"idem_enhance_{uuid.uuid4().hex[:8]}"
@@ -110,7 +112,7 @@ async def test_full_media_pipeline_lifecycle(setup_media_tenants, tmp_path):
         ):
             res_enhance = await client.post(
                 "/api/v1/catalog/enhance-image",
-                files={"image": ("raw.png", io.BytesIO(VALID_PNG_BYTES), "image/png")},
+                files={"image": ("raw.png", io.BytesIO(raw_test_bytes), "image/png")},
                 data={"return_format": "PNG"},
                 headers={**headers_a, "Idempotency-Key": enhance_key},
             )

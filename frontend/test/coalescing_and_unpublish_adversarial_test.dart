@@ -7,6 +7,7 @@ import 'package:kalasetu/data/models/product.dart';
 import 'package:kalasetu/data/models/offline_operation.dart';
 import 'package:kalasetu/data/services/api_service.dart';
 import 'package:kalasetu/data/repositories/product_repository.dart';
+import 'package:kalasetu/core/config/api_config.dart';
 import 'package:kalasetu/core/providers/app_providers.dart';
 import 'package:kalasetu/core/widgets/app_button.dart';
 import 'package:kalasetu/features/catalogue/screens/review_existing_product_screen.dart';
@@ -189,6 +190,20 @@ void main() {
     if (!Hive.isAdapterRegistered(0)) {
       Hive.registerAdapter(ProductAdapter());
     }
+
+    if (!Hive.isBoxOpen('auth_box')) {
+      final authBox = await Hive.openBox('auth_box');
+      await authBox.put('is_authenticated', true);
+      await authBox.put('user_id', 'artisan_coalesce');
+    }
+  });
+
+  setUp(() async {
+    if (!Hive.isBoxOpen('auth_box')) {
+      final authBox = await Hive.openBox('auth_box');
+      await authBox.put('is_authenticated', true);
+      await authBox.put('user_id', 'artisan_coalesce');
+    }
   });
 
   tearDownAll(() async {
@@ -233,6 +248,8 @@ void main() {
         retryCount: 0,
         leaseExpiresAt: null,
         resultData: null,
+        owner: 'artisan_coalesce',
+        backend: ApiConfig.baseUrl,
       );
       await pendingBox.put(approveOp.id, approveOp.toPendingString());
 
@@ -284,6 +301,8 @@ void main() {
         idempotencyKey: 'idem_inflight_key',
         status: OfflineOperation.statusInFlight,
         leaseExpiresAt: DateTime.now().add(const Duration(minutes: 5)),
+        owner: 'artisan_coalesce',
+        backend: ApiConfig.baseUrl,
       );
       await pendingBox.put(inflightApprove.id, inflightApprove.toPendingString());
 
@@ -334,6 +353,8 @@ void main() {
         idempotencyKey: 'idem_lost_response_123',
         status: OfflineOperation.statusPending,
         retryCount: 1,
+        owner: 'artisan_coalesce',
+        backend: ApiConfig.baseUrl,
       );
       await pendingBox.put(responseLostApprove.id, responseLostApprove.toPendingString());
 
@@ -379,6 +400,8 @@ void main() {
           'revision': 2,
           'content_hash': authoritativePublishedHash,
         },
+        owner: 'artisan_coalesce',
+        backend: ApiConfig.baseUrl,
       );
       await pendingBox.put(completedApprove.id, completedApprove.toPendingString());
 
@@ -441,6 +464,8 @@ void main() {
           'revision': 5,
           'content_hash': updatedHash,
         },
+        owner: 'artisan_coalesce',
+        backend: ApiConfig.baseUrl,
       );
       await pendingBox.put(attachOp.id, attachOp.toPendingString());
 
@@ -465,6 +490,8 @@ void main() {
         contentHash: initialHash,
         idempotencyKey: 'idem_unpub_dep_key',
         dependsOnOpId: attachOp.id,
+        owner: 'artisan_coalesce',
+        backend: ApiConfig.baseUrl,
       );
       await pendingBox.put(unpubOp.id, unpubOp.toPendingString());
 
@@ -496,6 +523,8 @@ void main() {
         revision: 2,
         contentHash: 'not_a_valid_64_char_hex_hash',
         idempotencyKey: 'idem_bad_hash',
+        owner: 'artisan_coalesce',
+        backend: ApiConfig.baseUrl,
       );
       await pendingBox.put(unpubOp.id, unpubOp.toPendingString());
 
@@ -538,6 +567,8 @@ void main() {
         revision: 2,
         contentHash: sampleHash,
         idempotencyKey: 'idem_conflict_key',
+        owner: 'artisan_coalesce',
+        backend: ApiConfig.baseUrl,
       );
       await pendingBox.put(unpubOp.id, unpubOp.toPendingString());
 
@@ -585,6 +616,8 @@ void main() {
         idempotencyKey: 'idem_restart_key_1',
         status: OfflineOperation.statusInFlight,
         leaseExpiresAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        owner: 'artisan_coalesce',
+        backend: ApiConfig.baseUrl,
       );
       await pendingBox.put(expiredOp.id, expiredOp.toPendingString());
 
@@ -643,6 +676,8 @@ void main() {
         revision: 2,
         contentHash: sampleHash,
         idempotencyKey: 'idem_unpub_conflict_fail',
+        owner: 'artisan_coalesce',
+        backend: ApiConfig.baseUrl,
       );
       await pendingBox.put(unpubOp.id, unpubOp.toPendingString());
 

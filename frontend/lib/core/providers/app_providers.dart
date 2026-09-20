@@ -913,6 +913,27 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     });
   }
 
+  bool _isDisposed = false;
+  bool get isDisposed => _isDisposed;
+
+  final List<Future<void>> _activeBackgroundFutures = [];
+
+  void _trackBackgroundFuture(Future<void> future) {
+    _activeBackgroundFutures.add(future);
+    future.whenComplete(() {
+      _activeBackgroundFutures.remove(future);
+    }).ignore();
+  }
+
+  /// Awaits all currently active background futures.
+  /// Useful for deterministic teardown in tests or clean shutdowns.
+  Future<void> awaitActiveBackgroundFutures() async {
+    while (_activeBackgroundFutures.isNotEmpty) {
+      final futures = List<Future<void>>.from(_activeBackgroundFutures);
+      await Future.wait(futures).catchError((_) => <void>[]);
+    }
+  }
+
   AddProductFlowNotifier(this._ref)
     : super(
         AddProductDraft(
@@ -924,6 +945,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _imageQueueSubscription?.cancel();
     _voiceQueueSubscription?.cancel();
     _aiProcessingWatchdog?.cancel();
@@ -1385,7 +1407,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       _pendingDraftSnapshot = null;
       _pendingDraft = null;
       _hydrateQueueState();
-      unawaited(_reconcileDraftOperations());
+      _trackBackgroundFuture(_reconcileDraftOperations());
       if (mounted) {
         state = state.copyWith(
           hasExistingDraft: false,
@@ -1461,7 +1483,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         listingFingerprint: pending['draft_listing_fingerprint'] as String?,
       );
       _hydrateQueueState();
-      unawaited(_reconcileDraftOperations());
+      _trackBackgroundFuture(_reconcileDraftOperations());
     }
     _pendingDraft = null;
     if (mounted) {
@@ -1586,9 +1608,10 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
               if (!_inFlightReplayOpIds.contains(op.id)) {
                 _inFlightReplayOpIds.add(op.id);
                 debugPrint('[AddProductFlow] Replaying in-flight pricing operation: ${op.id}');
-                unawaited(_replayPricingOperation(op).whenComplete(() {
+                final fut = _replayPricingOperation(op).whenComplete(() {
                   _inFlightReplayOpIds.remove(op.id);
-                }));
+                });
+                _trackBackgroundFuture(fut);
               }
             }
           } else if (op.operationType == 'listing_generate' &&
@@ -1598,9 +1621,10 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
               if (!_inFlightReplayOpIds.contains(op.id)) {
                 _inFlightReplayOpIds.add(op.id);
                 debugPrint('[AddProductFlow] Replaying in-flight listing operation: ${op.id}');
-                unawaited(_replayListingOperation(op).whenComplete(() {
+                final fut = _replayListingOperation(op).whenComplete(() {
                   _inFlightReplayOpIds.remove(op.id);
-                }));
+                });
+                _trackBackgroundFuture(fut);
               }
             }
           } else if (op.operationType == 'image_enhance' &&
@@ -1609,9 +1633,10 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
             if (!_inFlightReplayOpIds.contains(op.id)) {
               _inFlightReplayOpIds.add(op.id);
               debugPrint('[AddProductFlow] Replaying in-flight image enhancement operation: ${op.id}');
-              unawaited(_replayImageEnhanceOperation(op).whenComplete(() {
+              final fut = _replayImageEnhanceOperation(op).whenComplete(() {
                 _inFlightReplayOpIds.remove(op.id);
-              }));
+              });
+              _trackBackgroundFuture(fut);
             }
           }
         }
@@ -1974,6 +1999,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   }
 
   Future<void> _persistDraft() async {
+    if (_isDisposed) return;
     if (!Hive.isBoxOpen('draft_box')) {
       throw StateError('draft_box is not open; cannot persist safety-critical draft');
     }
@@ -2243,7 +2269,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
             _imageEnhancingCompleter == null) {
           final imageFile = File(state.originalImagePath);
           if (imageFile.existsSync()) {
-            unawaited(_enhanceProductImage(imageFile, gen: gen));
+            _trackBackgroundFuture(_enhanceProductImage(imageFile, gen: gen));
           }
         }
 
@@ -2255,7 +2281,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         if (state.titleEn.isEmpty &&
             state.manualDescription.isNotEmpty &&
             state.recordedAudioPath.isEmpty) {
-          unawaited(_generateListingFromManualDescription(languageCode, gen: gen));
+          _trackBackgroundFuture(_generateListingFromManualDescription(languageCode, gen: gen));
         }
       } else {
         // Offline: keep items saved in draft and queue, wait for connectivity
@@ -2371,12 +2397,13 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     );
 
     // Decouple background network future to persist late results
-    unawaited(networkFuture.then((res) async {
+    final bgFuture = networkFuture.then((res) async {
       await AiOperationStorage.updateResult(
         opId,
         status: res.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
         resultData: res.toJson(),
       );
+      if (_isDisposed) return;
       final cur = state;
       final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
       final curBackend = ApiConfig.baseUrl;
@@ -2406,7 +2433,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         status: AiOperationRecord.statusFailed,
         errorMessage: err.toString(),
       );
-    }));
+    });
+    _trackBackgroundFuture(bgFuture);
 
     try {
       final result = await networkFuture.timeout(
@@ -3116,7 +3144,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     await _persistDraft();
     final isOnline = _ref.read(connectivityProvider).value ?? true;
     if (isOnline) {
-      unawaited(_enhanceProductImage(File(durablePath)));
+      _trackBackgroundFuture(_enhanceProductImage(File(durablePath)));
     }
   }
 
@@ -3325,7 +3353,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       );
 
       // Decouple background network future to persist late results
-      unawaited(networkFuture.then((res) async {
+      final bgFuture = networkFuture.then((res) async {
         await AiOperationStorage.updateResult(
           opId,
           status: res.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
@@ -3344,6 +3372,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
             'degraded_reason': res.degradedReason,
           },
         );
+        if (_isDisposed) return;
         final cur = state;
         final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
         final curBackend = ApiConfig.baseUrl;
@@ -3392,7 +3421,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           status: AiOperationRecord.statusFailed,
           errorMessage: err.toString(),
         );
-      }));
+      });
+      _trackBackgroundFuture(bgFuture);
 
       // Cap listing generation at 25 s for foreground UI responsiveness
       final suggestion = await networkFuture.timeout(
@@ -3627,7 +3657,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
 
       // Decouple background network future so late response is persisted to AiOperationStorage
       // without reviving superseded operations or being lost on UI timeout
-      unawaited(networkFuture.then((suggestion) async {
+      final bgFuture = networkFuture.then((suggestion) async {
         await AiOperationStorage.updateResult(
           opId,
           status: suggestion.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
@@ -3648,6 +3678,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           },
         );
 
+        if (_isDisposed) return;
         final cur = state;
         final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
         final curBackend = ApiConfig.baseUrl;
@@ -3684,7 +3715,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           status: AiOperationRecord.statusFailed,
           errorMessage: e.toString(),
         );
-      }));
+      });
+      _trackBackgroundFuture(bgFuture);
 
       final suggestion = await networkFuture.timeout(
         const Duration(seconds: 25),

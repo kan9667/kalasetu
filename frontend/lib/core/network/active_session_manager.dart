@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import '../config/api_config.dart';
 
 /// Enum representing the authoritative active session mode.
 enum ActiveSessionMode {
@@ -15,6 +16,16 @@ class ActiveSessionManager {
   static const String keyIsAuthenticated = 'is_authenticated';
   static const String keyUserId = 'user_id';
   static const String keyNgoUserId = 'ngo_user_id';
+
+  static int _sessionGeneration = 0;
+
+  /// Monotonically increasing session generation counter.
+  static int get sessionGeneration => _sessionGeneration;
+
+  /// Explicitly bumps session generation upon login, logout, account switch, or simulation change.
+  static void bumpSessionGeneration() {
+    _sessionGeneration++;
+  }
 
   /// Synchronously checks if NGO simulation is active according to Hive auth_box.
   static bool isNgoSimulation() {
@@ -69,5 +80,23 @@ class ActiveSessionManager {
       return ActiveSessionMode.artisan;
     }
     return ActiveSessionMode.unauthenticated;
+  }
+
+  /// Validates if an initialized, authenticated artisan session is currently active
+  /// and strictly matches the expected initiating credentials and session generation.
+  static bool validateArtisanSession({
+    required String? expectedUserId,
+    required int expectedGeneration,
+    required String expectedBackendOrigin,
+  }) {
+    if (!isSessionReady()) return false;
+    if (getActiveSessionModeSync() != ActiveSessionMode.artisan) return false;
+    final currentUserId = getCurrentUserIdSync();
+    if (currentUserId == null || currentUserId.isEmpty || currentUserId != expectedUserId) {
+      return false;
+    }
+    if (_sessionGeneration != expectedGeneration) return false;
+    if (ApiConfig.baseUrl != expectedBackendOrigin) return false;
+    return true;
   }
 }

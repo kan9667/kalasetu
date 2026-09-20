@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
+import '../storage/private_media_cache.dart';
 import '../storage/secure_token_storage.dart';
 import 'active_session_manager.dart';
 import 'session_expired_exception.dart';
@@ -22,8 +23,17 @@ class AuthInterceptor extends Interceptor {
   ) async {
     options.headers['Accept'] = 'application/json';
 
+    // Allow unauthenticated registration/login public flows without requiring initialized session
+    final bool isPublicEndpoint = options.extra['is_public'] == true ||
+        options.path.contains('/api/v1/auth/');
+    if (isPublicEndpoint) {
+      options.headers.remove('Authorization');
+      return handler.next(options);
+    }
+
     // Invariant: Fail closed when session initialization is incomplete
     if (!ActiveSessionManager.isSessionReady()) {
+      options.headers.remove('Authorization');
       return handler.reject(
         DioException(
           requestOptions: options,
@@ -34,6 +44,68 @@ class AuthInterceptor extends Interceptor {
 
     final modeBefore = ActiveSessionManager.getActiveSessionModeSync();
     final userIdBefore = ActiveSessionManager.getCurrentUserIdSync();
+    final genBefore = ActiveSessionManager.sessionGeneration;
+
+    // Operation identity carried into request boundary
+    final expectedUserId = options.extra['expected_user_id'] as String?;
+    final expectedSessionGen = options.extra['expected_session_gen'] as int?;
+    final expectedBackend = options.extra['expected_backend_origin'] as String?;
+
+    if (expectedUserId != null && expectedUserId.isNotEmpty) {
+      // Bound operation must run strictly under initialized artisan session matching initiating identity
+      if (modeBefore != ActiveSessionMode.artisan) {
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            error: SessionExpiredException(
+              'Protected operation requires active artisan session, but current mode is $modeBefore.',
+              401,
+            ),
+          ),
+        );
+      }
+      if (userIdBefore != expectedUserId) {
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            error: SessionExpiredException(
+              'Operation owner mismatch before dispatch (expected $expectedUserId, active is $userIdBefore).',
+              401,
+            ),
+          ),
+        );
+      }
+      if (expectedSessionGen != null && genBefore != expectedSessionGen) {
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            error: SessionExpiredException(
+              'Session generation mismatch before dispatch (expected $expectedSessionGen, active is $genBefore).',
+              401,
+            ),
+          ),
+        );
+      }
+      if (expectedBackend != null && expectedBackend.isNotEmpty) {
+        final activeBackend = ApiConfig.baseUrl;
+        if (PrivateMediaCache.normalizeBackendOrigin(activeBackend) !=
+            PrivateMediaCache.normalizeBackendOrigin(expectedBackend)) {
+          options.headers.remove('Authorization');
+          return handler.reject(
+            DioException(
+              requestOptions: options,
+              error: SessionExpiredException(
+                'Backend origin mismatch before dispatch (expected $expectedBackend, active is $activeBackend).',
+                401,
+              ),
+            ),
+          );
+        }
+      }
+    }
 
     if (modeBefore == ActiveSessionMode.ngoSimulation) {
       options.headers.remove('Authorization');
@@ -61,6 +133,7 @@ class AuthInterceptor extends Interceptor {
 
     final modeAfter = ActiveSessionManager.getActiveSessionModeSync();
     final userIdAfter = ActiveSessionManager.getCurrentUserIdSync();
+    final genAfter = ActiveSessionManager.sessionGeneration;
 
     if (modeAfter == ActiveSessionMode.ngoSimulation) {
       // Switched into NGO simulation during token retrieval: MUST NOT attach artisan token!
@@ -68,15 +141,69 @@ class AuthInterceptor extends Interceptor {
       return handler.next(options);
     }
 
-    if (modeAfter != ActiveSessionMode.artisan || userIdAfter != userIdBefore) {
-      // Switched account or logged out during token retrieval: fail closed
-      options.headers.remove('Authorization');
-      return handler.reject(
-        DioException(
-          requestOptions: options,
-          error: SessionExpiredException('Session invalidated during token retrieval.', 401),
-        ),
-      );
+    if (expectedUserId != null && expectedUserId.isNotEmpty) {
+      if (modeAfter != ActiveSessionMode.artisan ||
+          userIdAfter != expectedUserId ||
+          userIdAfter != userIdBefore) {
+        // Switched account or logged out during token retrieval: fail closed
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
+            error: SessionExpiredException(
+              'Session invalidated or account changed during token retrieval (expected $expectedUserId, active is $userIdAfter).',
+              401,
+            ),
+          ),
+        );
+      }
+      if (expectedSessionGen != null && genAfter != expectedSessionGen) {
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
+            error: SessionExpiredException(
+              'Session generation bumped during token retrieval (expected $expectedSessionGen, active is $genAfter).',
+              401,
+            ),
+          ),
+        );
+      }
+      if (expectedBackend != null && expectedBackend.isNotEmpty) {
+        final activeBackend = ApiConfig.baseUrl;
+        if (PrivateMediaCache.normalizeBackendOrigin(activeBackend) !=
+            PrivateMediaCache.normalizeBackendOrigin(expectedBackend)) {
+          options.headers.remove('Authorization');
+          return handler.reject(
+            DioException(
+              requestOptions: options,
+              response: Response(requestOptions: options, statusCode: 401),
+              type: DioExceptionType.badResponse,
+              error: SessionExpiredException(
+                'Backend origin changed during token retrieval.',
+                401,
+              ),
+            ),
+          );
+        }
+      }
+    } else {
+      if (modeAfter != ActiveSessionMode.artisan || userIdAfter != userIdBefore) {
+        // Switched account or logged out during token retrieval: fail closed
+        options.headers.remove('Authorization');
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            response: Response(requestOptions: options, statusCode: 401),
+            type: DioExceptionType.badResponse,
+            error: SessionExpiredException('Session invalidated during token retrieval.', 401),
+          ),
+        );
+      }
     }
 
     if (token != null && token.isNotEmpty) {

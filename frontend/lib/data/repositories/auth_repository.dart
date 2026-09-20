@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../../core/config/api_config.dart';
+import '../../core/network/active_session_manager.dart';
 import '../../core/storage/secure_token_storage.dart';
 import '../models/user_profile.dart';
 
@@ -29,6 +30,7 @@ class AuthRepository {
                 connectTimeout: const Duration(seconds: 8),
                 receiveTimeout: const Duration(seconds: 15),
                 sendTimeout: const Duration(seconds: 15),
+                validateStatus: (status) => status != null && status < 500,
                 headers: {
                   'Accept': 'application/json',
                   'Content-Type': 'application/json',
@@ -61,12 +63,14 @@ class AuthRepository {
     final box = await _getBox();
     await box.put(_keyIsNgoSimulation, true);
     await box.put(_keyNgoUserId, userId);
+    ActiveSessionManager.bumpSessionGeneration();
   }
 
   Future<void> clearNgoSimulationData() async {
     final box = await _getBox();
     await box.delete(_keyIsNgoSimulation);
     await box.delete(_keyNgoUserId);
+    ActiveSessionManager.bumpSessionGeneration();
   }
 
   Future<bool> isAuthenticated() async {
@@ -114,6 +118,7 @@ class AuthRepository {
       await _tokenStorage.saveToken(token);
       await box.delete(_keyAccessToken);
     }
+    ActiveSessionManager.bumpSessionGeneration();
   }
 
   Future<void> clearAuthData() async {
@@ -125,6 +130,7 @@ class AuthRepository {
     await box.put(_keyIsAuthenticated, false);
     await box.delete(_keyIsNgoSimulation);
     await box.delete(_keyNgoUserId);
+    ActiveSessionManager.bumpSessionGeneration();
   }
 
   /// Registers artisan with backend `/api/v1/auth/register`

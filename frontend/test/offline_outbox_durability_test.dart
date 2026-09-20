@@ -127,12 +127,25 @@ void main() {
     if (!Hive.isBoxOpen('pending_sync_box')) {
       await Hive.openBox<String>('pending_sync_box');
     }
+    if (!Hive.isBoxOpen('auth_box')) {
+      final authBox = await Hive.openBox('auth_box');
+      await authBox.put('is_authenticated', true);
+      await authBox.put('user_id', 'artisan_outbox');
+    }
   });
 
   tearDownAll(() async {
     await Hive.close();
     if (tempDir.existsSync()) {
       tempDir.deleteSync(recursive: true);
+    }
+  });
+
+  setUp(() async {
+    if (!Hive.isBoxOpen('auth_box')) {
+      final authBox = await Hive.openBox('auth_box');
+      await authBox.put('is_authenticated', true);
+      await authBox.put('user_id', 'artisan_outbox');
     }
   });
 
@@ -235,6 +248,9 @@ void main() {
       // Re-open Hive
       await Hive.openBox<Product>('products_box');
       await Hive.openBox<String>('pending_sync_box');
+      final authBox = await Hive.openBox('auth_box');
+      await authBox.put('is_authenticated', true);
+      await authBox.put('user_id', 'artisan_outbox');
       repo = ProductRepository(apiService: mockApi);
 
       // Operations survive restart

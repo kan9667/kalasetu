@@ -261,6 +261,8 @@ void main() {
       productId: draft.id,
       idempotencyKey: createOp.idempotencyKey,
       payloadSnapshot: createOp.payloadSnapshot,
+      owner: createOp.owner,
+      backend: createOp.backend,
     );
     final pendingBox = Hive.box<String>('pending_sync_box');
     await pendingBox.put(replayOp.id, replayOp.toPendingString());
