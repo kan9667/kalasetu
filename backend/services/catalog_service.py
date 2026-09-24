@@ -11,6 +11,7 @@ Integrates:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import json
@@ -52,7 +53,43 @@ from ..models.schemas import (
     VoiceGlossaryResponse,
 )
 
+class VoiceServiceUnavailableException(Exception):
+    """Raised when voice transcription service encounters a transient upstream failure or timeout."""
+    pass
+
+
+class InvalidAudioException(Exception):
+    """Raised when uploaded audio is corrupt, missing, or in an unsupported format."""
+    pass
+
+
 logger = logging.getLogger(__name__)
+
+
+INSUFFICIENT_INFO_GREETINGS = {
+    "hello", "hi", "hey", "namaste", "namaskar", "pranam", "test", "testing",
+    "mic", "check", "audio", "one", "two", "three", "1", "2", "3", "bhaiya",
+    "bhai", "haan", "theek", "bolo", "sun", "sunai", "de", "raha", "rahi", "hai",
+    "aa", "aawaz", "kya", "ok", "okay", "yes", "no", "sir", "madam", "hallo",
+    "हेलो", "नमस्ते", "नमस्कार", "प्रणाम", "माइक", "टेस्टिंग", "चेक", "हाँ",
+    "ठीक", "बोलो", "सुनो", "सुनाई", "दे", "रहा", "आवाज़", "आ", "रही", "क्या",
+    "एक", "दो", "तीन", "भैया", "भाई"
+}
+
+
+def is_insufficient_product_info(transcript: str) -> bool:
+    if not transcript:
+        return True
+    cleaned = re.sub(r"[^\w\s]", " ", transcript.lower())
+    words = [w for w in cleaned.split() if w]
+    if not words:
+        return True
+    noise_count = sum(1 for w in words if w in INSUFFICIENT_INFO_GREETINGS)
+    if len(words) <= 5 and noise_count >= len(words) - 1:
+        return True
+    if len(words) > 5 and (noise_count / len(words)) >= 0.85:
+        return True
+    return False
 
 
 class CatalogService:
@@ -183,13 +220,22 @@ class CatalogService:
         """
         path = Path(audio_file_path)
         if not path.exists():
-            raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
+            raise InvalidAudioException(f"Audio file not found: {audio_file_path}")
 
         # Check for silent audio before running heavy Whisper processing (non-blocking threadpool)
         is_silent = await run_in_threadpool(self._is_audio_silent, path)
         if is_silent:
-            logger.warning("Audio file %s is silent (volume < -40dB). Aborting transcription.", path.name)
-            raise ValueError("No audible speech detected. Please speak closer to the microphone.")
+            logger.warning("Audio file %s is silent (volume < -40dB).", path.name)
+            return AudioTranscribeResponse(
+                transcript="",
+                language_code=language_code or "hi",
+                detected_language=language_code or "hi",
+                duration_seconds=0.0,
+                provider="whisper",
+                is_fallback=True,
+                status="no_speech",
+                fallback_reason="no_speech",
+            )
 
         result = await run_in_threadpool(
             self.voice_processor.process_voice_note,
@@ -200,14 +246,38 @@ class CatalogService:
         )
 
         if result.status == JobStatus.FAILED or not result.transcript or not result.transcript.is_usable():
-            error_msg = result.error or "Voice transcription failed or returned empty transcript."
-            logger.error("Voice pipeline transcription failure: %s", error_msg)
-            raise ValueError(error_msg)
+            fallback_reason = (result.transcript.fallback_reason if result.transcript else "") or result.error or ""
+            if "No audible speech detected" in fallback_reason or fallback_reason == "no_speech":
+                return AudioTranscribeResponse(
+                    transcript="",
+                    language_code=language_code or "hi",
+                    detected_language=language_code or "hi",
+                    duration_seconds=0.0,
+                    provider="whisper",
+                    is_fallback=True,
+                    status="no_speech",
+                    fallback_reason="no_speech",
+                )
+            if "invalid_audio_format" in fallback_reason or "ValueError" in fallback_reason or "Audio file" in fallback_reason:
+                logger.warning("Voice pipeline invalid audio failure: %s", fallback_reason)
+                raise InvalidAudioException(f"Invalid audio format or content: {fallback_reason}")
+
+            logger.error("Voice pipeline transcription failure: %s", fallback_reason)
+            raise VoiceServiceUnavailableException("Voice transcription service temporarily unavailable.")
 
         transcript_text = result.transcript.text.strip()
         if self._is_silence_hallucination(transcript_text):
-            logger.warning("Whisper silence hallucination detected: '%s'. Aborting transcription.", transcript_text)
-            raise ValueError("No audible speech detected. Please speak closer to the microphone.")
+            logger.warning("Whisper silence hallucination detected (%d chars). Marking as no_speech.", len(transcript_text))
+            return AudioTranscribeResponse(
+                transcript="",
+                language_code=result.transcript.language_code,
+                detected_language=result.transcript.language_code,
+                duration_seconds=result.transcript.duration_seconds,
+                provider=result.transcript.provider.value if hasattr(result.transcript.provider, "value") else str(result.transcript.provider),
+                is_fallback=True,
+                status="no_speech",
+                fallback_reason="no_speech",
+            )
 
         return AudioTranscribeResponse(
             transcript=transcript_text,
@@ -217,6 +287,7 @@ class CatalogService:
             provider=result.transcript.provider.value if hasattr(result.transcript.provider, "value") else str(result.transcript.provider),
             is_fallback=result.transcript.is_fallback,
             status=result.status.value,
+            fallback_reason=result.transcript.fallback_reason if result.transcript else None,
         )
 
     # ── Bilingual Listing Sanitizers & Rules ────────────────────────────────
@@ -285,6 +356,89 @@ class CatalogService:
             clean_tags.append(t)
         return clean_tags or ["handcrafted", "artisan", "traditional", "indian-handicrafts"]
 
+    async def _generate_listing_text(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        category_hint: Optional[str],
+        effective_category: Optional[str],
+    ) -> Optional[tuple[str, str, str, str, str, List[str]]]:
+        # 1. Try Groq Cloud if configured
+        if self.groq_client.is_available() and self.settings.llm_provider == "groq":
+            try:
+                groq_messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            system_prompt
+                            + "\n\nCRITICAL: Respond ONLY with a valid JSON object matching the keys: "
+                            "title_en, title_hi, description_en, description_hi, category, tags. "
+                            "No markdown fences, no extra text."
+                        ),
+                    },
+                    {"role": "user", "content": user_prompt},
+                ]
+                data = await self.groq_client.chat_json(groq_messages)
+                return (
+                    self._sanitize_customer_facing_text(data.get("title_en", "Handcrafted Artisan Product")),
+                    self._sanitize_customer_facing_text(data.get("title_hi", "हस्तनिर्मित उत्पाद")),
+                    self._sanitize_customer_facing_text(data.get("description_en", "")),
+                    self._sanitize_customer_facing_text(data.get("description_hi", "")),
+                    data.get("category", category_hint or effective_category or "General"),
+                    self._sanitize_tags(data.get("tags", ["handmade", "handicraft", "artisan"])),
+                )
+            except Exception as e:
+                logger.warning("[CatalogService] Groq listing generation failed: %s", e)
+
+        # 2. Try Google Gemini if available
+        if self.client:
+            try:
+                response = await run_in_threadpool(
+                    self.client.models.generate_content,
+                    model=self.settings.llm_model,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=0.2,
+                        response_mime_type="application/json",
+                        response_schema={
+                            "type": "object",
+                            "properties": {
+                                "title_en": {"type": "string"},
+                                "title_hi": {"type": "string"},
+                                "description_en": {"type": "string"},
+                                "description_hi": {"type": "string"},
+                                "category": {"type": "string"},
+                                "tags": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
+                            "required": [
+                                "title_en",
+                                "title_hi",
+                                "description_en",
+                                "description_hi",
+                                "category",
+                                "tags",
+                            ],
+                        },
+                    ),
+                )
+                data = json.loads(response.text)
+                return (
+                    self._sanitize_customer_facing_text(data.get("title_en", "Handcrafted Artisan Product")),
+                    self._sanitize_customer_facing_text(data.get("title_hi", "हस्तनिर्मित उत्पाद")),
+                    self._sanitize_customer_facing_text(data.get("description_en", "")),
+                    self._sanitize_customer_facing_text(data.get("description_hi", "")),
+                    data.get("category", category_hint or effective_category or "General"),
+                    self._sanitize_tags(data.get("tags", ["handmade", "handicraft", "artisan"])),
+                )
+            except Exception as e:
+                logger.error("[CatalogService] Gemini listing generation failed: %s", e)
+
+        return None
+
     async def generate_listing(
         self,
         request: ListingGenerateRequest,
@@ -295,6 +449,28 @@ class CatalogService:
         Enriches the prompt with domain craft glossary terms and enforces strict
         privacy quarantine on internal production costs.
         """
+        # Check insufficient input before expensive calls
+        if is_insufficient_product_info(request.transcript):
+            logger.info("[CatalogService] Transcript lacks product details; returning needs_clarification response.")
+            return ListingGenerateResponse(
+                title_en="Product Details Needed",
+                title_hi="उत्पाद विवरण की आवश्यकता है",
+                description_en="Please provide details about your handcrafted product (such as craft type, materials, size, or making process) to generate a listing.",
+                description_hi="कृपया अपने हस्तशिल्प उत्पाद के बारे में विवरण प्रदान करें (जैसे शिल्प का प्रकार, प्रयुक्त सामग्री, आकार आदि) ताकि पूरी सूची बनाई जा सके।",
+                category=request.category_hint or "General",
+                tags=[],
+                cost_inputs=CostInputsSchema(
+                    materials=0.0,
+                    labor_hours=0.0,
+                    hourly_rate=DEFAULT_HOURLY_RATE,
+                    transport=0.0,
+                    overhead=0.0,
+                ),
+                status="needs_clarification",
+                is_degraded=True,
+                degraded_reason="Insufficient product details in transcript. Please describe the item, materials, or craft.",
+            )
+
         # Detect category dynamically from transcript to prevent false terracotta biasing
         lower_transcript = request.transcript.lower()
         effective_category = request.category_hint
@@ -395,87 +571,48 @@ Category Hint (if provided): {effective_category or 'Auto-detect from transcript
 
 Please generate the structured bilingual catalog listing, strictly observing the cost confidentiality and quality rules."""
 
-        # Extract cost cues in parallel / baseline
-        extracted_costs = await self.extract_cost_cues(request.transcript)
+        # Concurrently extract cost cues and generate listing content
+        cost_future = self.extract_cost_cues(request.transcript)
+        listing_future = self._generate_listing_text(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            category_hint=request.category_hint,
+            effective_category=effective_category,
+        )
 
-        # ── 1. Try Groq Cloud if configured (primary or fallback) ──────────
-        if self.groq_client.is_available() and self.settings.llm_provider == "groq":
-            try:
-                groq_messages = [
-                    {
-                        "role": "system",
-                        "content": (
-                            system_prompt
-                            + "\n\nCRITICAL: Respond ONLY with a valid JSON object matching the keys: "
-                            "title_en, title_hi, description_en, description_hi, category, tags. "
-                            "No markdown fences, no extra text."
-                        ),
-                    },
-                    {"role": "user", "content": user_prompt},
-                ]
-                data = await self.groq_client.chat_json(groq_messages)
-                return ListingGenerateResponse(
-                    title_en=self._sanitize_customer_facing_text(data.get("title_en", "Handcrafted Artisan Product")),
-                    title_hi=self._sanitize_customer_facing_text(data.get("title_hi", "हस्तनिर्मित उत्पाद")),
-                    description_en=self._sanitize_customer_facing_text(data.get("description_en", "")),
-                    description_hi=self._sanitize_customer_facing_text(data.get("description_hi", "")),
-                    category=data.get("category", request.category_hint or "General"),
-                    tags=self._sanitize_tags(data.get("tags", ["handmade", "handicraft", "artisan"])),
-                    cost_inputs=extracted_costs,
-                )
-            except Exception as e:
-                logger.warning("[CatalogService] Groq listing generation failed, trying fallback: %s", e)
+        cost_res, listing_res = await asyncio.gather(cost_future, listing_future, return_exceptions=True)
 
-        # ── 2. Try Google Gemini if available ───────────────────────────────
-        if self.client:
-            try:
-                response = await run_in_threadpool(
-                    self.client.models.generate_content,
-                    model=self.settings.llm_model,
-                    contents=user_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        temperature=0.2,
-                        response_mime_type="application/json",
-                        response_schema={
-                            "type": "object",
-                            "properties": {
-                                "title_en": {"type": "string"},
-                                "title_hi": {"type": "string"},
-                                "description_en": {"type": "string"},
-                                "description_hi": {"type": "string"},
-                                "category": {"type": "string"},
-                                "tags": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                },
-                            },
-                            "required": [
-                                "title_en",
-                                "title_hi",
-                                "description_en",
-                                "description_hi",
-                                "category",
-                                "tags",
-                            ],
-                        },
-                    ),
-                )
+        # Handle cost cues failure independently: fallback to regex without discarding listing
+        if isinstance(cost_res, Exception) or not isinstance(cost_res, CostInputsSchema):
+            logger.warning("[CatalogService] Cost cue extraction failed: %s; using deterministic regex fallback", cost_res)
+            regex_cues = regex_extract_cost_cues(request.transcript)
+            extracted_costs = CostInputsSchema(
+                materials=regex_cues["materials"],
+                labor_hours=regex_cues["labor_hours"],
+                hourly_rate=regex_cues["hourly_rate"],
+                transport=regex_cues["transport"],
+                overhead=regex_cues["overhead"],
+            )
+        else:
+            extracted_costs = cost_res
 
-                data = json.loads(response.text)
-                return ListingGenerateResponse(
-                    title_en=self._sanitize_customer_facing_text(data.get("title_en", "Handcrafted Artisan Product")),
-                    title_hi=self._sanitize_customer_facing_text(data.get("title_hi", "हस्तनिर्मित उत्पाद")),
-                    description_en=self._sanitize_customer_facing_text(data.get("description_en", "")),
-                    description_hi=self._sanitize_customer_facing_text(data.get("description_hi", "")),
-                    category=data.get("category", request.category_hint or "General"),
-                    tags=self._sanitize_tags(data.get("tags", ["handmade", "handicraft", "artisan"])),
-                    cost_inputs=extracted_costs,
-                )
-            except Exception as e:
-                logger.error("[CatalogService] Gemini listing generation failed: %s", e)
+        if isinstance(listing_res, tuple) and listing_res[0] is not None:
+            # LLM succeeded!
+            title_en, title_hi, desc_en, desc_hi, cat, tags = listing_res
+            return ListingGenerateResponse(
+                title_en=title_en,
+                title_hi=title_hi,
+                description_en=desc_en,
+                description_hi=desc_hi,
+                category=cat,
+                tags=tags,
+                cost_inputs=extracted_costs,
+                status="success",
+                is_degraded=False,
+                degraded_reason=None,
+            )
 
-        # ── 3. Offline / Mock Fallback ──────────────────────────────────────
+        # ── Offline / Mock Fallback ──────────────────────────────────────
         clean_text = self._sanitize_customer_facing_text((request.transcript or "").strip())
         detected_cat = effective_category or request.category_hint or "Handicrafts"
         title_snippet = (clean_text[:50] + "...") if len(clean_text) > 50 else clean_text
@@ -487,6 +624,9 @@ Please generate the structured bilingual catalog listing, strictly observing the
             category=detected_cat,
             tags=self._sanitize_tags(["handcrafted", "artisan", detected_cat.lower().replace(" ", "-"), "made-in-india"]),
             cost_inputs=extracted_costs,
+            status="fallback",
+            is_degraded=True,
+            degraded_reason="AI listing generation provider unavailable; generated editable draft template.",
         )
 
     # ── Voice Cost Cue Extractor ────────────────────────────────────────────

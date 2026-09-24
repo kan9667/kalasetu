@@ -9,8 +9,8 @@ import '../storage/private_media_cache.dart';
 class ApiConfig {
   static String? _cachedBaseUrl;
 
-  /// Default fallback Wi-Fi IP of the host machine
-  static const String hostLanIp = '192.168.1.5';
+  /// Current Wi-Fi IP of the host machine
+  static const String hostLanIp = '192.168.1.6';
 
   static String get baseUrl {
     if (_cachedBaseUrl != null) return _cachedBaseUrl!;
@@ -51,10 +51,10 @@ class ApiConfig {
     }
 
     final candidates = <String>[
-      'http://$hostLanIp:8000',
-      if (Platform.isAndroid) 'http://10.0.2.2:8000',
-      'http://127.0.0.1:8000',
+      'http://127.0.0.1:8000', // Responds immediately with adb reverse
       'http://localhost:8000',
+      'http://$hostLanIp:8000', // Physical Android device over Wi-Fi
+      if (Platform.isAndroid) 'http://10.0.2.2:8000', // Android emulator
     ];
 
     for (final candidate in candidates) {

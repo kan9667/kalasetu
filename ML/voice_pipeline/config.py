@@ -71,7 +71,15 @@ class Settings(BaseSettings):
     )
     stt_retry_attempts: int = Field(
         default=3,
-        description="Number of retry attempts for failed transcription requests.",
+        ge=1,
+        le=10,
+        description="Number of retry attempts for failed transcription requests (positive bounded).",
+    )
+    stt_retry_backoff_seconds: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=60.0,
+        description="Base backoff delay in seconds between failed transcription attempts.",
     )
     max_audio_duration_seconds: int = Field(
         default=180,
@@ -90,7 +98,7 @@ class Settings(BaseSettings):
     )
 
     model_config = {
-        "env_file": str(VOICE_ROOT.parents[1] / ".env"),
+        "env_file": None if os.getenv("DISABLE_DOTENV") == "1" or os.getenv("TESTING") == "1" else str(VOICE_ROOT.parents[1] / ".env"),
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
@@ -99,6 +107,8 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     """Return a cached Settings instance."""
+    if os.getenv("DISABLE_DOTENV") == "1" or os.getenv("TESTING") == "1":
+        return Settings(_env_file=None)
     return Settings()
 
 

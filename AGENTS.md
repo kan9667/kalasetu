@@ -369,18 +369,29 @@ Status of review findings after Phase 1 Trust & Data Integrity implementation:
   and media storage isolation in a process-owned temporary directory (`sys._kalasetu_test_storage_dir`), strictly prevents deletion
   of paths from environment variables, verifies cleanup only touches system temp subdirectories, validates that database engine and upload
   paths point strictly inside test storage, and fails closed immediately if an engine points outside test-owned storage (`test_backend_isolation.py`).
+- [RESOLVED] Voice Transcription & Bilingual Listing Review Integrity:
+  * Single-flight deduplication: concurrent listing calls coalesce onto existing in-flight future without duplicate transport dispatches.
+  * Fail-closed audio fingerprint verification: `computeFingerprint()` calculates cryptographic SHA-256 hash of raw audio bytes; missing, empty, or mismatched fingerprints strictly fail closed without dispatching to network, preserving recordings and operations in actionable recovery states.
+  * Invalidation of superseded operations: audio retakes increment `voiceInputGeneration` and discard prior transcript/listing responses.
+  * Preserving user edits: manual artisan edits to listing title or description are protected by per-field edit-generation counters (`titleEnEditGen`, `titleHiEditGen`, `descEnEditGen`, `descHiEditGen` against the operation's `baseline_edit_gens`), ensuring late-arriving AI suggestions do not overwrite artisan fields (title/description edits do not bump `listingInputGeneration`).
+  * Restart recovery with key preservation: response-lost or app restart boundaries recover in-flight transcription and listing operations from durable `ai_operations_box`. If retransmitted over the wire, replay may resend the request with the identical idempotency key and frozen payload; the server deduplicates via the key, preventing duplicate server-side processing.
+  * Comprehensive reconciliation context isolation: `ReconciliationContext` captures initiating `owner`, `backend`, `sessionGeneration`, `draftId`, and input generations prior to asynchronous storage reads; revalidates context after storage hydration, during record iteration, and before draft state mutations / persistence; account switch, session generation bump, backend switch, or draft switch during reconciliation strictly blocks applying stale cached results, preserving active and persisted draft states and keeping original records intact in storage.
+  * Automated testing coverage: 50 tests in `voice_transcription_retry_test.dart` and 15 tests in `diagnostic_review_test.dart` passing.
+  * Operational boundary: Automated tests execute with mocked HTTP transport and loopback test harnesses. Real physical-device microphone capture, ambient noise handling, hardware-level process termination, and live Whisper/LLM provider latency remain physical-device smoke-test verification boundaries (detailed in `docs/smoke_test_checklist.md`).
 - [RESOLVED] Test Coverage & Verification: 150 backend tests passing under Python 3.14 (1 skipped:
   `test_stage1_standalone_image_pipeline` in `backend/tests/test_image_pipeline_integration.py`, opt-in via
   `RUN_REMBG_TESTS=1` to isolate heavy rembg u2net ONNX model weight downloads); 3 migration tests passing
-  (fresh DB upgrade, upgrade from 0001, and downgrade/re-upgrade of 0004); 227 Flutter tests passing
-  (including all 11 in `queued_dispatch_test.dart`, all 6 in `actual_dispatch_test.dart`, all 6 in `ownership_lifecycle_test.dart`,
-  all 6 in `session_boundary_adversarial_test.dart`, all 6 in `replay_identity_test.dart`, all 4 in `session_race_test.dart`,
-  all 13 in `coalescing_and_unpublish_adversarial_test.dart`, all 6 in `offline_outbox_durability_test.dart`, all 6 in
-  `authenticated_http_client_test.dart`, and live FastAPI wire test `real_http_outbox_integration_test.dart`) with 0 `flutter analyze`
-  issues and clean `git diff --check`. Developer storage isolation is proven by explicit process-scoped path isolation and
-  fail-closed engine URL assertions (`engine.url.database.is_relative_to(_TEST_STORAGE_DIR)`) verifying developer files are neither
-  opened nor mutated. Earlier counts (138 backend / 186 Flutter, 144 backend / 198 Flutter, 144 backend / 204 Flutter,
-  144 backend / 210 Flutter, 144 backend / 216 Flutter, and 144 backend / 224 Flutter) represent previous baseline checkpoints.
+  (fresh DB upgrade, upgrade from 0001, and downgrade/re-upgrade of 0004); 301 Flutter tests passing
+  (including all 50 in `voice_transcription_retry_test.dart`, all 15 in `diagnostic_review_test.dart`, all 13 in
+  `speech_service_test.dart`, all 11 in `queued_dispatch_test.dart`, all 6 in `actual_dispatch_test.dart`, all 6 in
+  `ownership_lifecycle_test.dart`, all 6 in `session_boundary_adversarial_test.dart`, all 6 in `replay_identity_test.dart`,
+  all 4 in `session_race_test.dart`, all 13 in `coalescing_and_unpublish_adversarial_test.dart`, all 6 in
+  `offline_outbox_durability_test.dart`, all 6 in `authenticated_http_client_test.dart`, and live FastAPI wire test
+  `real_http_outbox_integration_test.dart`) with 0 `flutter analyze` issues and clean `git diff --check`. Developer
+  storage isolation is proven by explicit process-scoped path isolation and fail-closed engine URL assertions
+  (`engine.url.database.is_relative_to(_TEST_STORAGE_DIR)`) verifying developer files are neither opened nor mutated.
+  Earlier counts (138 backend / 186 Flutter, 144 backend / 198 Flutter, 144 backend / 204 Flutter, 144 backend / 210 Flutter,
+  144 backend / 216 Flutter, 144 backend / 224 Flutter, and 150 backend / 227 Flutter) represent previous baseline checkpoints.
 
 ### Verification Status & Operational Boundaries
 

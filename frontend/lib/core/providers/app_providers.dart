@@ -21,7 +21,10 @@ import '../../data/services/sync_service.dart';
 import '../offline_sync/models/queue_item.dart';
 import '../offline_sync/offline_sync_service.dart';
 import '../storage/secure_token_storage.dart';
+import '../network/active_session_manager.dart';
 import '../config/api_config.dart';
+import '../network/session_expired_exception.dart';
+import '../network/request_session_context.dart';
 import '../../data/models/ai_operation_record.dart';
 import '../../features/auth/providers/auth_provider.dart';
 
@@ -354,6 +357,16 @@ final userProfileProvider =
     });
 
 // --- Add Product Flow Draft Model & Notifier ---
+
+enum VoiceDegradedCode {
+  none,
+  noSpeech,
+  serviceUnavailable,
+  timedOut,
+  invalidAudio,
+  unknownFailure,
+}
+
 class AddProductDraft {
   final String draftId;
   final int currentStep; // 0 to 4
@@ -406,6 +419,7 @@ class AddProductDraft {
   final String? voiceListingOpId;
   final String? pricingOpId;
   final bool isVoiceDegraded;
+  final VoiceDegradedCode voiceDegradedCode;
   final String? voiceDegradedReason;
   final bool isListingDegraded;
   final String? listingDegradedReason;
@@ -419,6 +433,16 @@ class AddProductDraft {
   final String? voiceFingerprint;
   final int listingInputGeneration;
   final String? listingFingerprint;
+  final String immutableAudioSnapshotPath;
+  final String? immutableAudioSnapshotSha256;
+  final String listingStatus;
+  final int titleEnEditGen;
+  final int titleHiEditGen;
+  final int descEnEditGen;
+  final int descHiEditGen;
+  final int categoryEditGen;
+  final int tagsEditGen;
+  final int costEditGen;
 
   const AddProductDraft({
     this.draftId = '',
@@ -472,6 +496,7 @@ class AddProductDraft {
     this.voiceListingOpId,
     this.pricingOpId,
     this.isVoiceDegraded = false,
+    this.voiceDegradedCode = VoiceDegradedCode.none,
     this.voiceDegradedReason,
     this.isListingDegraded = false,
     this.listingDegradedReason,
@@ -485,6 +510,16 @@ class AddProductDraft {
     this.voiceFingerprint,
     this.listingInputGeneration = 0,
     this.listingFingerprint,
+    this.immutableAudioSnapshotPath = '',
+    this.immutableAudioSnapshotSha256,
+    this.listingStatus = '',
+    this.titleEnEditGen = 0,
+    this.titleHiEditGen = 0,
+    this.descEnEditGen = 0,
+    this.descHiEditGen = 0,
+    this.categoryEditGen = 0,
+    this.tagsEditGen = 0,
+    this.costEditGen = 0,
   });
 
   AddProductDraft copyWith({
@@ -539,6 +574,7 @@ class AddProductDraft {
     Object? voiceListingOpId = _unset,
     Object? pricingOpId = _unset,
     bool? isVoiceDegraded,
+    VoiceDegradedCode? voiceDegradedCode,
     Object? voiceDegradedReason = _unset,
     bool? isListingDegraded,
     Object? listingDegradedReason = _unset,
@@ -552,6 +588,16 @@ class AddProductDraft {
     Object? voiceFingerprint = _unset,
     int? listingInputGeneration,
     Object? listingFingerprint = _unset,
+    String? immutableAudioSnapshotPath,
+    Object? immutableAudioSnapshotSha256 = _unset,
+    String? listingStatus,
+    int? titleEnEditGen,
+    int? titleHiEditGen,
+    int? descEnEditGen,
+    int? descHiEditGen,
+    int? categoryEditGen,
+    int? tagsEditGen,
+    int? costEditGen,
   }) {
     return AddProductDraft(
       draftId: draftId ?? this.draftId,
@@ -626,6 +672,7 @@ class AddProductDraft {
           ? this.pricingOpId
           : pricingOpId as String?,
       isVoiceDegraded: isVoiceDegraded ?? this.isVoiceDegraded,
+      voiceDegradedCode: voiceDegradedCode ?? this.voiceDegradedCode,
       voiceDegradedReason: identical(voiceDegradedReason, _unset)
           ? this.voiceDegradedReason
           : voiceDegradedReason as String?,
@@ -653,6 +700,20 @@ class AddProductDraft {
       listingFingerprint: identical(listingFingerprint, _unset)
           ? this.listingFingerprint
           : listingFingerprint as String?,
+      immutableAudioSnapshotPath:
+          immutableAudioSnapshotPath ?? this.immutableAudioSnapshotPath,
+      immutableAudioSnapshotSha256:
+          identical(immutableAudioSnapshotSha256, _unset)
+              ? this.immutableAudioSnapshotSha256
+              : immutableAudioSnapshotSha256 as String?,
+      listingStatus: listingStatus ?? this.listingStatus,
+      titleEnEditGen: titleEnEditGen ?? this.titleEnEditGen,
+      titleHiEditGen: titleHiEditGen ?? this.titleHiEditGen,
+      descEnEditGen: descEnEditGen ?? this.descEnEditGen,
+      descHiEditGen: descHiEditGen ?? this.descHiEditGen,
+      categoryEditGen: categoryEditGen ?? this.categoryEditGen,
+      tagsEditGen: tagsEditGen ?? this.tagsEditGen,
+      costEditGen: costEditGen ?? this.costEditGen,
     );
   }
 
@@ -702,6 +763,7 @@ class AddProductDraft {
       'voice_listing_op_id': voiceListingOpId,
       'pricing_op_id': pricingOpId,
       'is_voice_degraded': isVoiceDegraded,
+      'voice_degraded_code': voiceDegradedCode.name,
       'voice_degraded_reason': voiceDegradedReason,
       'is_listing_degraded': isListingDegraded,
       'listing_degraded_reason': listingDegradedReason,
@@ -715,6 +777,16 @@ class AddProductDraft {
       'voice_fingerprint': voiceFingerprint,
       'listing_input_generation': listingInputGeneration,
       'listing_fingerprint': listingFingerprint,
+      'immutable_audio_snapshot_path': immutableAudioSnapshotPath,
+      'immutable_audio_snapshot_sha256': immutableAudioSnapshotSha256,
+      'listing_status': listingStatus,
+      'title_en_edit_gen': titleEnEditGen,
+      'title_hi_edit_gen': titleHiEditGen,
+      'desc_en_edit_gen': descEnEditGen,
+      'desc_hi_edit_gen': descHiEditGen,
+      'category_edit_gen': categoryEditGen,
+      'tags_edit_gen': tagsEditGen,
+      'cost_edit_gen': costEditGen,
     };
   }
 
@@ -777,6 +849,14 @@ class AddProductDraft {
       voiceListingOpId: json['voice_listing_op_id'] as String?,
       pricingOpId: json['pricing_op_id'] as String?,
       isVoiceDegraded: json['is_voice_degraded'] as bool? ?? false,
+      voiceDegradedCode: VoiceDegradedCode.values.firstWhere(
+        (e) => e.name == json['voice_degraded_code'],
+        orElse: () => (json['is_voice_degraded'] == true
+            ? (json['voice_degraded_reason']?.toString().contains('no audible speech') == true
+                ? VoiceDegradedCode.noSpeech
+                : VoiceDegradedCode.unknownFailure)
+            : VoiceDegradedCode.none),
+      ),
       voiceDegradedReason: json['voice_degraded_reason'] as String?,
       isListingDegraded: json['is_listing_degraded'] as bool? ?? false,
       listingDegradedReason: json['listing_degraded_reason'] as String?,
@@ -790,6 +870,16 @@ class AddProductDraft {
       voiceFingerprint: json['voice_fingerprint'] as String?,
       listingInputGeneration: (json['listing_input_generation'] as num?)?.toInt() ?? 0,
       listingFingerprint: json['listing_fingerprint'] as String?,
+      immutableAudioSnapshotPath: json['immutable_audio_snapshot_path'] as String? ?? '',
+      immutableAudioSnapshotSha256: json['immutable_audio_snapshot_sha256'] as String?,
+      listingStatus: json['listing_status'] as String? ?? '',
+      titleEnEditGen: (json['title_en_edit_gen'] as num?)?.toInt() ?? 0,
+      titleHiEditGen: (json['title_hi_edit_gen'] as num?)?.toInt() ?? 0,
+      descEnEditGen: (json['desc_en_edit_gen'] as num?)?.toInt() ?? 0,
+      descHiEditGen: (json['desc_hi_edit_gen'] as num?)?.toInt() ?? 0,
+      categoryEditGen: (json['category_edit_gen'] as num?)?.toInt() ?? 0,
+      tagsEditGen: (json['tags_edit_gen'] as num?)?.toInt() ?? 0,
+      costEditGen: (json['cost_edit_gen'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -811,6 +901,31 @@ class AddProductDraft {
       throw const FormatException('Invalid additional_image_paths in snapshot schema');
     }
   }
+}
+
+/// Identity and generation context captured before any asynchronous read during
+/// draft reconciliation, used to guarantee stale cached results or follow-up operations
+/// are never applied or dispatched after an account switch, logout, backend change, or draft switch.
+class ReconciliationContext {
+  final String owner;
+  final String backend;
+  final int sessionGeneration;
+  final String draftId;
+  final int voiceInputGeneration;
+  final int listingInputGeneration;
+  final int imageInputGeneration;
+  final int pricingInputGeneration;
+
+  const ReconciliationContext({
+    required this.owner,
+    required this.backend,
+    required this.sessionGeneration,
+    required this.draftId,
+    required this.voiceInputGeneration,
+    required this.listingInputGeneration,
+    required this.imageInputGeneration,
+    required this.pricingInputGeneration,
+  });
 }
 
 class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
@@ -839,6 +954,17 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   // from a transcribed voice note) is actually in flight right now.
   bool _listingGenerationInFlight = false;
 
+  // Tracks whether direct voice transcription is currently in flight.
+  bool _isVoiceTranscriptionInFlight = false;
+  Future<void>? _activeVoiceFlight;
+  String? _activeVoiceFingerprint;
+  String? _activeVoiceDraftId;
+  int? _activeVoiceGeneration;
+
+  Future<void>? _activeListingFlight;
+  String? _activeListingDraftId;
+  int? _activeListingGeneration;
+
   // isAiProcessing used to be written independently by several different
   // async completions (image enhancement, listing generation, the voice
   // queue watcher), each one clobbering whatever the others had just set.
@@ -859,6 +985,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         state.voiceQueueStatus != QueueStatus.failed;
     final stillProcessing = _imageEnhancementInFlight ||
         _listingGenerationInFlight ||
+        _isVoiceTranscriptionInFlight ||
         imageQueuePending ||
         voiceQueuePending;
 
@@ -1225,6 +1352,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     String? voiceListingOpId,
     String? pricingOpId,
     bool? isVoiceDegraded,
+    VoiceDegradedCode? voiceDegradedCode,
     String? voiceDegradedReason,
     bool? isListingDegraded,
     String? listingDegradedReason,
@@ -1240,6 +1368,16 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     String? listingFingerprint,
     String? immutablePhotoSnapshotPath,
     String? immutablePhotoSnapshotSha256,
+    String immutableAudioSnapshotPath = '',
+    String? immutableAudioSnapshotSha256,
+    String listingStatus = '',
+    int? titleEnEditGen,
+    int? titleHiEditGen,
+    int? descEnEditGen,
+    int? descHiEditGen,
+    int? categoryEditGen,
+    int? tagsEditGen,
+    int? costEditGen,
   }) async {
     final hasImage =
         (originalImagePath.isNotEmpty || enhancedImagePath.isNotEmpty);
@@ -1314,6 +1452,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       voiceListingOpId: voiceListingOpId,
       pricingOpId: pricingOpId,
       isVoiceDegraded: isVoiceDegraded ?? false,
+      voiceDegradedCode: voiceDegradedCode ?? state.voiceDegradedCode,
       voiceDegradedReason: voiceDegradedReason,
       isListingDegraded: isListingDegraded ?? false,
       listingDegradedReason: listingDegradedReason,
@@ -1327,6 +1466,16 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       voiceFingerprint: voiceFingerprint,
       listingInputGeneration: listingInputGeneration ?? 0,
       listingFingerprint: listingFingerprint,
+      immutableAudioSnapshotPath: immutableAudioSnapshotPath,
+      immutableAudioSnapshotSha256: immutableAudioSnapshotSha256,
+      listingStatus: listingStatus,
+      titleEnEditGen: titleEnEditGen ?? 0,
+      titleHiEditGen: titleHiEditGen ?? 0,
+      descEnEditGen: descEnEditGen ?? 0,
+      descHiEditGen: descHiEditGen ?? 0,
+      categoryEditGen: categoryEditGen ?? 0,
+      tagsEditGen: tagsEditGen ?? 0,
+      costEditGen: costEditGen ?? 0,
       hasExistingDraft: true,
       resumePromptHandled: false,
       isAiProcessing: false,
@@ -1403,6 +1552,16 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         listingFingerprint: restoredDraft.listingFingerprint,
         immutablePhotoSnapshotPath: restoredDraft.immutablePhotoSnapshotPath,
         immutablePhotoSnapshotSha256: restoredDraft.immutablePhotoSnapshotSha256,
+        immutableAudioSnapshotPath: restoredDraft.immutableAudioSnapshotPath,
+        immutableAudioSnapshotSha256: restoredDraft.immutableAudioSnapshotSha256,
+        listingStatus: restoredDraft.listingStatus,
+        titleEnEditGen: restoredDraft.titleEnEditGen,
+        titleHiEditGen: restoredDraft.titleHiEditGen,
+        descEnEditGen: restoredDraft.descEnEditGen,
+        descHiEditGen: restoredDraft.descHiEditGen,
+        categoryEditGen: restoredDraft.categoryEditGen,
+        tagsEditGen: restoredDraft.tagsEditGen,
+        costEditGen: restoredDraft.costEditGen,
       );
       _pendingDraftSnapshot = null;
       _pendingDraft = null;
@@ -1495,6 +1654,43 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     }
   }
 
+  bool _isReconciliationContextValid(
+    ReconciliationContext ctx, {
+    int? expectedVoiceGen,
+    int? expectedListingGen,
+    int? expectedImageGen,
+    int? expectedPricingGen,
+  }) {
+    if (!mounted) return false;
+    final currentOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+    final currentBackend = ApiConfig.baseUrl;
+    final currentSessionGen = ActiveSessionManager.sessionGeneration;
+    final currentDraftId = state.draftId;
+
+    if (ctx.owner != currentOwner ||
+        ctx.backend != currentBackend ||
+        ctx.sessionGeneration != currentSessionGen ||
+        ctx.draftId != currentDraftId) {
+      return false;
+    }
+    if (expectedVoiceGen != null && expectedVoiceGen != state.voiceInputGeneration) {
+      return false;
+    }
+    if (expectedListingGen != null && expectedListingGen != state.listingInputGeneration) {
+      return false;
+    }
+    if (expectedImageGen != null && expectedImageGen != state.imageInputGeneration) {
+      return false;
+    }
+    if (expectedPricingGen != null && expectedPricingGen != state.pricingInputGeneration) {
+      return false;
+    }
+    return true;
+  }
+
+  @visibleForTesting
+  Future<void> reconcileDraftOperations() => _reconcileDraftOperations();
+
   Future<void> _reconcileDraftOperations() async {
     if (!mounted) return;
     if (state.draftId.isEmpty) return;
@@ -1508,32 +1704,152 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       if (!mounted) return;
       final currentOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
       final currentBackend = ApiConfig.baseUrl;
+      final currentSessionGen = ActiveSessionManager.sessionGeneration;
 
-      final ops = await AiOperationStorage.getOperationsForDraft(state.draftId);
+      final reconcileContext = ReconciliationContext(
+        owner: currentOwner,
+        backend: currentBackend,
+        sessionGeneration: currentSessionGen,
+        draftId: state.draftId,
+        voiceInputGeneration: state.voiceInputGeneration,
+        listingInputGeneration: state.listingInputGeneration,
+        imageInputGeneration: state.imageInputGeneration,
+        pricingInputGeneration: state.pricingInputGeneration,
+      );
+
+      final ops = await AiOperationStorage.getOperationsForDraft(reconcileContext.draftId);
       if (!mounted) return;
+
+      // REVALIDATE context after async storage read!
+      if (!_isReconciliationContextValid(reconcileContext)) {
+        debugPrint(
+          '[AddProductFlow] Reconciliation context invalidated after loading operations. Aborting.',
+        );
+        return;
+      }
+
       for (final op in ops) {
         if (!mounted) return;
-        // INVARIANT: Check owner and backend before applying or replaying
-        if (op.owner != currentOwner ||
-            op.backend != currentBackend ||
-            op.draftId != state.draftId) {
+        if (!_isReconciliationContextValid(reconcileContext)) {
           debugPrint(
-            '[AddProductFlow] Skipping op ${op.id}: owner/backend/draft mismatch.',
+            '[AddProductFlow] Reconciliation context invalidated during op iteration. Aborting.',
+          );
+          return;
+        }
+
+        // INVARIANT: Check owner, backend, draft against reconcileContext
+        if (op.owner != reconcileContext.owner ||
+            op.backend != reconcileContext.backend ||
+            op.draftId != reconcileContext.draftId) {
+          debugPrint(
+            '[AddProductFlow] Skipping op ${op.id}: owner/backend/draft mismatch with reconciliation context.',
           );
           continue;
         }
 
-        if (op.status == AiOperationRecord.statusCompleted && op.resultData != null) {
-          if (op.operationType == 'image_enhance' &&
-              op.inputGeneration == state.imageInputGeneration &&
+        final hasPersistedResult = op.resultData != null && op.resultData!.isNotEmpty;
+        final isCompletedOrPersistedResult = op.status == AiOperationRecord.statusCompleted ||
+            (hasPersistedResult && op.resultData!.containsKey('status')) ||
+            (hasPersistedResult && (op.operationType == 'voice_transcribe' || op.operationType == 'listing_generate'));
+
+        if (isCompletedOrPersistedResult) {
+          if (op.operationType == 'voice_transcribe' &&
+              op.inputGeneration == state.voiceInputGeneration) {
+            final res = op.resultData!;
+            final transcript = res['transcript'] as String? ?? '';
+            if (transcript.isNotEmpty && state.voiceTranscript.isEmpty) {
+              if (!mounted) return;
+              state = state.copyWith(
+                voiceTranscript: transcript,
+                transcriptionConfidence: (res['confidence'] as num?)?.toDouble() ?? state.transcriptionConfidence,
+                isVoiceDegraded: res['is_degraded'] as bool? ?? state.isVoiceDegraded,
+              );
+              await _persistDraft();
+            }
+            // Durably continue into listing generation across process death!
+            if (state.voiceTranscript.isNotEmpty &&
+                (state.listingStatus.isEmpty || state.listingStatus == 'pending') &&
+                !_listingGenerationInFlight) {
+              if (!_isReconciliationContextValid(reconcileContext, expectedVoiceGen: op.inputGeneration)) {
+                debugPrint('[AddProductFlow] Context invalidated before listing continuation. Aborting.');
+                return;
+              }
+              // 1. Resolve matching persisted listing operation first
+              AiOperationRecord? matchingListing;
+              for (final candidate in ops) {
+                if (candidate.operationType == 'listing_generate' &&
+                    candidate.owner == reconcileContext.owner &&
+                    candidate.backend == reconcileContext.backend &&
+                    candidate.draftId == reconcileContext.draftId &&
+                    (reconcileContext.listingInputGeneration <= 0 || candidate.inputGeneration == reconcileContext.listingInputGeneration)) {
+                  matchingListing = candidate;
+                  break;
+                }
+              }
+              matchingListing ??= await AiOperationStorage.findOperation(
+                reconcileContext.draftId,
+                'listing_generate',
+                generation: reconcileContext.listingInputGeneration > 0 ? reconcileContext.listingInputGeneration : null,
+              );
+
+              if (!_isReconciliationContextValid(reconcileContext, expectedVoiceGen: op.inputGeneration)) {
+                debugPrint('[AddProductFlow] Context invalidated after findOperation for listing. Aborting.');
+                return;
+              }
+
+              if (matchingListing != null) {
+                final targetListing = matchingListing;
+                final hasPersistedResult = targetListing.resultData != null && targetListing.resultData!.isNotEmpty;
+                if (targetListing.status == AiOperationRecord.statusCompleted || hasPersistedResult) {
+                  await _reconcileCompletedListingResult(targetListing, context: reconcileContext);
+                } else if (targetListing.status == AiOperationRecord.statusInFlight ||
+                           targetListing.status == AiOperationRecord.statusPending ||
+                           targetListing.status == AiOperationRecord.statusFailed) {
+                  if (_activeListingFlight != null &&
+                      _activeListingDraftId == reconcileContext.draftId &&
+                      _activeListingGeneration == targetListing.inputGeneration) {
+                    debugPrint('[AddProductFlow] Joining active direct listing from completed-voice reconciliation');
+                    _trackBackgroundFuture(_activeListingFlight!);
+                  } else if (!_inFlightReplayOpIds.contains(targetListing.id)) {
+                    _inFlightReplayOpIds.add(targetListing.id);
+                    debugPrint('[AddProductFlow] Replaying existing matching listing operation: ${targetListing.id}');
+                    final fut = _replayListingOperation(targetListing).whenComplete(() {
+                      _inFlightReplayOpIds.remove(targetListing.id);
+                    });
+                    _trackBackgroundFuture(fut);
+                  }
+                }
+              } else {
+                // Create a new listing operation only when no applicable operation exists
+                if (!_isReconciliationContextValid(reconcileContext, expectedVoiceGen: op.inputGeneration)) {
+                  debugPrint('[AddProductFlow] Context invalidated before new listing generation. Aborting.');
+                  return;
+                }
+                final voiceLang = (op.requestSnapshot['language_code'] as String?) ?? 'auto';
+                debugPrint('[AddProductFlow] Durably continuing recovered transcript into listing generation with language $voiceLang.');
+                final fut = _generateListingInternal(
+                  transcript: state.voiceTranscript,
+                  languageCode: voiceLang,
+                );
+                _trackBackgroundFuture(fut);
+              }
+            }
+          } else if (op.operationType == 'image_enhance' &&
+              op.inputGeneration == reconcileContext.imageInputGeneration &&
               (state.mediaId == null || state.mediaId!.isEmpty)) {
+            if (!_isReconciliationContextValid(reconcileContext, expectedImageGen: op.inputGeneration)) {
+              debugPrint('[AddProductFlow] Context invalidated before applying cached image enhancement. Aborting.');
+              return;
+            }
             final res = op.resultData!;
             final mediaId = res['mediaId'] as String? ?? res['media_id'] as String?;
             final origId = res['originalMediaId'] as String? ?? res['original_media_id'] as String?;
             final checksum = res['sha256Checksum'] as String? ?? res['sha256_checksum'] as String?;
             final displayPath = res['displayPath'] as String? ?? res['enhanced_url'] as String?;
             if (mediaId != null && mediaId.isNotEmpty) {
-              if (!mounted) return;
+              if (!_isReconciliationContextValid(reconcileContext, expectedImageGen: op.inputGeneration)) {
+                return;
+              }
               state = state.copyWith(
                 mediaId: mediaId,
                 originalMediaId: origId,
@@ -1549,8 +1865,12 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
               await _persistDraft();
             }
           } else if (op.operationType == 'pricing_suggest' &&
-                     op.inputGeneration == state.pricingInputGeneration &&
+                     op.inputGeneration == reconcileContext.pricingInputGeneration &&
                      state.suggestedPrice == 0) {
+            if (!_isReconciliationContextValid(reconcileContext, expectedPricingGen: op.inputGeneration)) {
+              debugPrint('[AddProductFlow] Context invalidated before applying cached pricing. Aborting.');
+              return;
+            }
             final res = op.resultData!;
             final rawFloor = (res['floor_price'] as num?)?.toDouble() ?? state.floorPrice;
             final currentCostFloor = state.floorPrice > 0
@@ -1580,30 +1900,35 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
             );
             await _persistDraft();
           } else if (op.operationType == 'listing_generate' &&
-                     op.inputGeneration == state.listingInputGeneration &&
-                     state.titleEn.isEmpty) {
-            final res = op.resultData!;
-            if (!mounted) return;
-            state = state.copyWith(
-              titleEn: res['title_en'] as String? ?? state.titleEn,
-              titleHi: res['title_hi'] as String? ?? state.titleHi,
-              descriptionEn: res['description_en'] as String? ?? state.descriptionEn,
-              descriptionHi: res['description_hi'] as String? ?? state.descriptionHi,
-              category: (res['category'] as String?)?.isNotEmpty == true
-                  ? res['category'] as String
-                  : state.category,
-              tags: res['tags'] != null ? List<String>.from(res['tags'] as List) : state.tags,
-              isListingDegraded: res['is_degraded'] as bool? ?? state.isListingDegraded,
-              listingDegradedReason: res['degraded_reason'] as String? ?? state.listingDegradedReason,
-            );
-            await _persistDraft();
+                     op.inputGeneration == reconcileContext.listingInputGeneration) {
+            await _reconcileCompletedListingResult(op, context: reconcileContext);
           }
         } else if (op.status == AiOperationRecord.statusInFlight ||
                    op.status == AiOperationRecord.statusPending) {
+          if (!_isReconciliationContextValid(reconcileContext)) {
+            debugPrint('[AddProductFlow] Context invalidated before in-flight operation replay. Aborting.');
+            return;
+          }
           // Replay pending/in-flight operations using original persisted request & idempotency key
-          if (op.operationType == 'pricing_suggest' &&
-              op.inputGeneration == state.pricingInputGeneration &&
-              (state.pricingOpId == null || state.pricingOpId == op.id)) {
+          if (op.operationType == 'voice_transcribe' &&
+              op.inputGeneration == reconcileContext.voiceInputGeneration &&
+              (state.voiceListingOpId == null || state.voiceListingOpId == op.id)) {
+            if (_activeVoiceFlight != null &&
+                _activeVoiceDraftId == reconcileContext.draftId &&
+                _activeVoiceGeneration == op.inputGeneration) {
+              debugPrint('[AddProductFlow] Joining active direct voice from reconciliation');
+              _trackBackgroundFuture(_activeVoiceFlight!);
+            } else if (!_inFlightReplayOpIds.contains(op.id)) {
+              _inFlightReplayOpIds.add(op.id);
+              debugPrint('[AddProductFlow] Replaying in-flight voice transcription: ${op.id}');
+              final fut = _replayVoiceOperation(op).whenComplete(() {
+                _inFlightReplayOpIds.remove(op.id);
+              });
+              _trackBackgroundFuture(fut);
+            }
+          } else if (op.operationType == 'pricing_suggest' &&
+                     op.inputGeneration == reconcileContext.pricingInputGeneration &&
+                     (state.pricingOpId == null || state.pricingOpId == op.id)) {
             if (state.pricingFingerprint == null || state.pricingFingerprint == op.inputFingerprint) {
               if (!_inFlightReplayOpIds.contains(op.id)) {
                 _inFlightReplayOpIds.add(op.id);
@@ -1615,10 +1940,15 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
               }
             }
           } else if (op.operationType == 'listing_generate' &&
-                     op.inputGeneration == state.listingInputGeneration &&
+                     op.inputGeneration == reconcileContext.listingInputGeneration &&
                      (state.voiceListingOpId == null || state.voiceListingOpId == op.id)) {
             if (state.listingFingerprint == null || state.listingFingerprint == op.inputFingerprint) {
-              if (!_inFlightReplayOpIds.contains(op.id)) {
+              if (_activeListingFlight != null &&
+                  _activeListingDraftId == reconcileContext.draftId &&
+                  _activeListingGeneration == op.inputGeneration) {
+                debugPrint('[AddProductFlow] Joining active direct listing from reconciliation');
+                _trackBackgroundFuture(_activeListingFlight!);
+              } else if (!_inFlightReplayOpIds.contains(op.id)) {
                 _inFlightReplayOpIds.add(op.id);
                 debugPrint('[AddProductFlow] Replaying in-flight listing operation: ${op.id}');
                 final fut = _replayListingOperation(op).whenComplete(() {
@@ -1891,24 +2221,53 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     final opGeneration = op.inputGeneration;
     final owner = op.owner;
 
+    final targetVoiceGen = req['voice_generation'] as int? ?? state.voiceInputGeneration;
+
     // Validate preconditions before dispatch
     final preOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
     final preBackend = ApiConfig.baseUrl;
+    final preSessionGen = ActiveSessionManager.sessionGeneration;
     if (preOwner != op.owner ||
         preBackend != op.backend ||
+        preSessionGen != ActiveSessionManager.sessionGeneration ||
         state.draftId != op.draftId ||
         (state.voiceListingOpId != null && state.voiceListingOpId != op.id) ||
-        state.listingInputGeneration != opGeneration) {
+        state.listingInputGeneration != opGeneration ||
+        state.voiceInputGeneration != targetVoiceGen) {
       debugPrint('[AddProductFlow] Listing replay precondition mismatch for op $opId. Aborting replay.');
       return;
     }
 
+    if (_activeListingFlight != null &&
+        _activeListingDraftId == op.draftId &&
+        _activeListingGeneration == opGeneration) {
+      debugPrint('[AddProductFlow] Listing replay flight already active; joining existing unresolved request');
+      return _activeListingFlight!;
+    }
+
+    final flightCompleter = Completer<void>();
+    _activeListingFlight = flightCompleter.future;
+    _activeListingDraftId = op.draftId;
+    _activeListingGeneration = opGeneration;
+    _listingGenerationInFlight = true;
+    _recomputeAiProcessing();
+
     try {
-      final suggestion = await speechService.generateListingFromTranscript(
-        transcript: req['transcript'] as String? ?? '',
-        languageCode: req['language_code'] as String? ?? 'auto',
-        categoryHint: req['category_hint'] as String?,
-        idempotencyKey: op.idempotencyKey,
+      final sessionContext = RequestSessionContext.explicit(
+        userId: owner,
+        sessionGeneration: preSessionGen,
+        backendOrigin: op.backend,
+      );
+
+      final suggestion = await runZoned(
+        () => speechService.generateListingFromTranscript(
+          transcript: req['transcript'] as String? ?? '',
+          languageCode: req['language_code'] as String? ?? 'auto',
+          categoryHint: req['category_hint'] as String?,
+          idempotencyKey: op.idempotencyKey,
+          sessionContext: sessionContext,
+        ),
+        zoneValues: {RequestSessionContext.zoneKey: sessionContext},
       );
 
       await AiOperationStorage.updateResult(
@@ -1925,6 +2284,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
           'labor_hours': suggestion.laborHours,
           'hourly_rate': suggestion.hourlyRate,
           'floor_price': suggestion.floorPrice,
+          'status': suggestion.status,
           'is_degraded': suggestion.isDegraded,
           'degraded_reason': suggestion.degradedReason,
         },
@@ -1934,42 +2294,85 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       final cur = state;
       final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
       final curBackend = ApiConfig.baseUrl;
+      final curSessionGen = ActiveSessionManager.sessionGeneration;
       if (curOwner == owner &&
           curBackend == op.backend &&
+          curSessionGen == preSessionGen &&
           cur.draftId == op.draftId &&
           cur.listingInputGeneration == opGeneration &&
-          cur.voiceListingOpId == opId) {
-        final mat = (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0)
-            ? suggestion.rawMaterialCost!
-            : cur.rawMaterialCost;
-        final hours = (suggestion.laborHours != null && suggestion.laborHours! > 0)
-            ? suggestion.laborHours!
-            : cur.laborHours;
-        final rate = (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0)
-            ? suggestion.hourlyRate!
-            : cur.hourlyRate;
-        final calculatedFloor = mat + (hours * rate);
-        final rawFloor = (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
-            ? suggestion.floorPrice!
-            : cur.floorPrice;
-        final effectiveFloor = max(rawFloor, calculatedFloor);
+          cur.voiceInputGeneration == targetVoiceGen) {
+        final baselines = req['baseline_edit_gens'] as Map?;
+        final baseTitleEn = (baselines?['title_en'] as num?)?.toInt() ?? 0;
+        final baseTitleHi = (baselines?['title_hi'] as num?)?.toInt() ?? 0;
+        final baseDescEn = (baselines?['desc_en'] as num?)?.toInt() ?? 0;
+        final baseDescHi = (baselines?['desc_hi'] as num?)?.toInt() ?? 0;
+        final baseCategory = (baselines?['category'] as num?)?.toInt() ?? 0;
+        final baseTags = (baselines?['tags'] as num?)?.toInt() ?? 0;
+        final baseCost = (baselines?['cost'] as num?)?.toInt() ?? 0;
+
+        final newTitleEn = cur.titleEnEditGen == baseTitleEn && suggestion.titleEn.isNotEmpty
+            ? suggestion.titleEn
+            : cur.titleEn;
+        final newTitleHi = cur.titleHiEditGen == baseTitleHi && suggestion.titleHi.isNotEmpty
+            ? suggestion.titleHi
+            : cur.titleHi;
+        final newDescEn = cur.descEnEditGen == baseDescEn && suggestion.descriptionEn.isNotEmpty
+            ? suggestion.descriptionEn
+            : cur.descriptionEn;
+        final newDescHi = cur.descHiEditGen == baseDescHi && suggestion.descriptionHi.isNotEmpty
+            ? suggestion.descriptionHi
+            : cur.descriptionHi;
+        final newCategory = cur.categoryEditGen == baseCategory && suggestion.category.isNotEmpty
+            ? suggestion.category
+            : cur.category;
+        final newTags = cur.tagsEditGen == baseTags && suggestion.tags.isNotEmpty
+            ? suggestion.tags
+            : cur.tags;
+
+        double newMat = cur.rawMaterialCost;
+        double newHours = cur.laborHours;
+        double newRate = cur.hourlyRate;
+        double newFloor = cur.floorPrice;
+        if (cur.costEditGen == baseCost) {
+          if (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0) {
+            newMat = suggestion.rawMaterialCost!;
+          }
+          if (suggestion.laborHours != null && suggestion.laborHours! > 0) {
+            newHours = suggestion.laborHours!;
+          }
+          if (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0) {
+            newRate = suggestion.hourlyRate!;
+          }
+          final calculatedFloor = newMat + (newHours * newRate);
+          final rawFloor = (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
+              ? suggestion.floorPrice!
+              : cur.floorPrice;
+          newFloor = max(rawFloor, calculatedFloor);
+        }
+
+        const validStatuses = {'success', 'fallback', 'needs_clarification', 'failed'};
+        final resolvedStatus = validStatuses.contains(suggestion.status)
+            ? suggestion.status
+            : (suggestion.isDegraded ? 'fallback' : 'fallback');
+        final resolvedDegraded = suggestion.isDegraded || resolvedStatus != 'success';
 
         if (!mounted) return;
         state = state.copyWith(
-          titleEn: suggestion.titleEn,
-          titleHi: suggestion.titleHi,
-          descriptionEn: suggestion.descriptionEn,
-          descriptionHi: suggestion.descriptionHi,
-          category: suggestion.category.isNotEmpty ? suggestion.category : cur.category,
-          tags: suggestion.tags.isNotEmpty ? suggestion.tags : cur.tags,
-          rawMaterialCost: mat,
-          laborHours: hours,
-          hourlyRate: rate,
-          floorPrice: effectiveFloor,
-          minPrice: cur.minPrice < effectiveFloor ? effectiveFloor : cur.minPrice,
-          finalPrice: cur.finalPrice < effectiveFloor ? effectiveFloor : cur.finalPrice,
-          isListingDegraded: suggestion.isDegraded,
-          listingDegradedReason: suggestion.degradedReason,
+          titleEn: newTitleEn,
+          titleHi: newTitleHi,
+          descriptionEn: newDescEn,
+          descriptionHi: newDescHi,
+          category: newCategory,
+          tags: newTags,
+          rawMaterialCost: newMat,
+          laborHours: newHours,
+          hourlyRate: newRate,
+          floorPrice: newFloor,
+          minPrice: cur.minPrice < newFloor ? newFloor : cur.minPrice,
+          finalPrice: cur.finalPrice < newFloor ? newFloor : cur.finalPrice,
+          listingStatus: resolvedStatus,
+          isListingDegraded: resolvedDegraded,
+          listingDegradedReason: suggestion.degradedReason ?? (resolvedDegraded && suggestion.status != 'success' ? 'Listing degraded' : null),
           isAiProcessing: false,
         );
         await _persistDraft();
@@ -1981,6 +2384,347 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
         status: AiOperationRecord.statusFailed,
         errorMessage: e.toString(),
       );
+    } finally {
+      if (_activeListingFlight == flightCompleter.future) {
+        _activeListingFlight = null;
+        _activeListingDraftId = null;
+        _activeListingGeneration = null;
+        _listingGenerationInFlight = false;
+        _recomputeAiProcessing();
+      }
+      if (!flightCompleter.isCompleted) {
+        flightCompleter.complete();
+      }
+    }
+  }
+
+  Future<void> _reconcileCompletedListingResult(
+    AiOperationRecord op, {
+    required ReconciliationContext context,
+  }) async {
+    final res = op.resultData;
+    if (res == null || res.isEmpty) return;
+    if (!mounted) return;
+
+    if (!_isReconciliationContextValid(context, expectedListingGen: op.inputGeneration)) {
+      debugPrint('[AddProductFlow] _reconcileCompletedListingResult: context invalidated. Discarding cached result.');
+      return;
+    }
+
+    if (op.owner != context.owner ||
+        op.backend != context.backend ||
+        op.draftId != context.draftId ||
+        (context.listingInputGeneration > 0 && op.inputGeneration != context.listingInputGeneration)) {
+      debugPrint('[AddProductFlow] _reconcileCompletedListingResult: operation does not match expected context. Discarding.');
+      return;
+    }
+
+    final req = op.requestSnapshot;
+    final baselines = req['baseline_edit_gens'] as Map?;
+    final baseTitleEn = (baselines?['title_en'] as num?)?.toInt() ?? 0;
+    final baseTitleHi = (baselines?['title_hi'] as num?)?.toInt() ?? 0;
+    final baseDescEn = (baselines?['desc_en'] as num?)?.toInt() ?? 0;
+    final baseDescHi = (baselines?['desc_hi'] as num?)?.toInt() ?? 0;
+    final baseCategory = (baselines?['category'] as num?)?.toInt() ?? 0;
+    final baseTags = (baselines?['tags'] as num?)?.toInt() ?? 0;
+    final baseCost = (baselines?['cost'] as num?)?.toInt() ?? 0;
+
+    final rawStatus = res['status'] as String? ?? '';
+    final isDegraded = res['is_degraded'] as bool? ?? (rawStatus == 'fallback');
+    const validStatuses = {'success', 'fallback', 'needs_clarification', 'failed'};
+    final resolvedStatus = validStatuses.contains(rawStatus)
+        ? rawStatus
+        : (isDegraded ? 'fallback' : 'fallback');
+
+    double newMat = state.rawMaterialCost;
+    double newHours = state.laborHours;
+    double newRate = state.hourlyRate;
+    double newFloor = state.floorPrice;
+    if (state.costEditGen == baseCost) {
+      if (res['raw_material_cost'] != null && (res['raw_material_cost'] as num) > 0) {
+        newMat = (res['raw_material_cost'] as num).toDouble();
+      }
+      if (res['labor_hours'] != null && (res['labor_hours'] as num) > 0) {
+        newHours = (res['labor_hours'] as num).toDouble();
+      }
+      if (res['hourly_rate'] != null && (res['hourly_rate'] as num) > 0) {
+        newRate = (res['hourly_rate'] as num).toDouble();
+      }
+      final calculatedFloor = newMat + (newHours * newRate);
+      final rawFloor = (res['floor_price'] != null && (res['floor_price'] as num) > 0)
+          ? (res['floor_price'] as num).toDouble()
+          : state.floorPrice;
+      newFloor = max(rawFloor, calculatedFloor);
+    }
+
+    // Final sanity check before state mutation
+    if (!_isReconciliationContextValid(context, expectedListingGen: op.inputGeneration)) {
+      debugPrint('[AddProductFlow] _reconcileCompletedListingResult: context invalidated before state mutation. Discarding.');
+      return;
+    }
+
+    state = state.copyWith(
+      titleEn: state.titleEnEditGen == baseTitleEn && (res['title_en'] as String?)?.isNotEmpty == true
+          ? res['title_en'] as String
+          : state.titleEn,
+      titleHi: state.titleHiEditGen == baseTitleHi && (res['title_hi'] as String?)?.isNotEmpty == true
+          ? res['title_hi'] as String
+          : state.titleHi,
+      descriptionEn: state.descEnEditGen == baseDescEn && (res['description_en'] as String?)?.isNotEmpty == true
+          ? res['description_en'] as String
+          : state.descriptionEn,
+      descriptionHi: state.descHiEditGen == baseDescHi && (res['description_hi'] as String?)?.isNotEmpty == true
+          ? res['description_hi'] as String
+          : state.descriptionHi,
+      category: state.categoryEditGen == baseCategory && (res['category'] as String?)?.isNotEmpty == true
+          ? res['category'] as String
+          : state.category,
+      tags: state.tagsEditGen == baseTags && res['tags'] != null
+          ? List<String>.from(res['tags'] as List)
+          : state.tags,
+      rawMaterialCost: newMat,
+      laborHours: newHours,
+      hourlyRate: newRate,
+      floorPrice: newFloor,
+      minPrice: state.minPrice < newFloor ? newFloor : state.minPrice,
+      finalPrice: state.finalPrice < newFloor ? newFloor : state.finalPrice,
+      listingStatus: resolvedStatus,
+      isListingDegraded: isDegraded || resolvedStatus != 'success',
+      listingDegradedReason: res['degraded_reason'] as String? ?? state.listingDegradedReason,
+    );
+    await _persistDraft();
+  }
+
+  Future<void> _replayVoiceOperation(AiOperationRecord op) async {
+    final speechService = _ref.read(speechServiceProvider);
+    final req = op.requestSnapshot;
+    final opId = op.id;
+    final opGeneration = op.inputGeneration;
+    final owner = op.owner;
+    final backend = op.backend;
+    final draftId = op.draftId;
+
+    final preOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+    final preBackend = ApiConfig.baseUrl;
+    final preSessionGen = ActiveSessionManager.sessionGeneration;
+    if (preOwner != owner ||
+        preBackend != backend ||
+        state.draftId != draftId ||
+        state.voiceInputGeneration != opGeneration) {
+      debugPrint('[AddProductFlow] Voice replay precondition mismatch for op $opId. Aborting replay.');
+      return;
+    }
+
+    if (_activeVoiceFlight != null &&
+        _activeVoiceDraftId == draftId &&
+        _activeVoiceGeneration == opGeneration) {
+      debugPrint('[AddProductFlow] Voice replay flight already active; joining existing unresolved request');
+      return _activeVoiceFlight!;
+    }
+
+    final flightCompleter = Completer<void>();
+    _activeVoiceFlight = flightCompleter.future;
+    _activeVoiceDraftId = draftId;
+    _activeVoiceGeneration = opGeneration;
+
+    try {
+      final audioPath = req['audio_path'] as String? ?? state.immutableAudioSnapshotPath;
+      if (audioPath.isEmpty || !File(audioPath).existsSync()) {
+        debugPrint('[AddProductFlow] Voice replay audio file missing: $audioPath');
+        state = state.copyWith(
+          isVoiceDegraded: true,
+          voiceDegradedCode: VoiceDegradedCode.invalidAudio,
+          voiceDegradedReason: 'Audio snapshot missing for voice replay',
+        );
+        await _persistDraft();
+        await AiOperationStorage.updateResult(
+          opId,
+          status: AiOperationRecord.statusFailed,
+          errorMessage: 'Audio snapshot missing for voice replay',
+        );
+        return;
+      }
+
+      final languageCode = req['language_code'] as String? ?? 'auto';
+
+      if (op.inputFingerprint.isEmpty) {
+        debugPrint('[AddProductFlow] Voice replay audio fingerprint missing. Aborting replay.');
+        state = state.copyWith(
+          isVoiceDegraded: true,
+          voiceDegradedCode: VoiceDegradedCode.invalidAudio,
+          voiceDegradedReason: 'Audio fingerprint missing for voice replay',
+        );
+        await _persistDraft();
+        await AiOperationStorage.updateResult(
+          opId,
+          status: AiOperationRecord.statusFailed,
+          errorMessage: 'Audio fingerprint missing for voice replay',
+        );
+        return;
+      }
+
+      try {
+        final currentFp = await AiOperationRecord.computeFingerprint(
+          operationType: 'voice_transcribe',
+          owner: owner,
+          backend: backend,
+          inputs: {
+            'draft_id': draftId,
+            'language_code': languageCode,
+          },
+          files: [File(audioPath)],
+        );
+        if (currentFp != op.inputFingerprint) {
+          debugPrint('[AddProductFlow] Voice replay audio fingerprint mismatch. Aborting replay.');
+          state = state.copyWith(
+            isVoiceDegraded: true,
+            voiceDegradedCode: VoiceDegradedCode.invalidAudio,
+            voiceDegradedReason: 'Audio fingerprint mismatch for voice replay',
+          );
+          await _persistDraft();
+          await AiOperationStorage.updateResult(
+            opId,
+            status: AiOperationRecord.statusFailed,
+            errorMessage: 'Audio fingerprint mismatch for voice replay',
+          );
+          return;
+        }
+      } catch (e) {
+        debugPrint('[AddProductFlow] Error verifying audio fingerprint on replay: $e');
+        state = state.copyWith(
+          isVoiceDegraded: true,
+          voiceDegradedCode: VoiceDegradedCode.invalidAudio,
+          voiceDegradedReason: 'Failed to verify audio fingerprint: $e',
+        );
+        await _persistDraft();
+        await AiOperationStorage.updateResult(
+          opId,
+          status: AiOperationRecord.statusFailed,
+          errorMessage: 'Audio fingerprint verification error: $e',
+        );
+        return;
+      }
+
+      final sessionContext = RequestSessionContext.explicit(
+        userId: owner,
+        sessionGeneration: preSessionGen,
+        backendOrigin: backend,
+      );
+
+      final result = await runZoned(
+        () => speechService.transcribeAudio(
+          audioPath: audioPath,
+          languageCode: languageCode,
+          idempotencyKey: op.idempotencyKey,
+          sessionContext: sessionContext,
+        ),
+        zoneValues: {RequestSessionContext.zoneKey: sessionContext},
+      );
+
+      if (!mounted) return;
+      final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+      final curBackend = ApiConfig.baseUrl;
+      final curSessionGen = ActiveSessionManager.sessionGeneration;
+      if (curOwner != owner ||
+          curBackend != backend ||
+          curSessionGen != preSessionGen ||
+          state.draftId != draftId ||
+          state.voiceInputGeneration != opGeneration) {
+        debugPrint('[AddProductFlow] Voice replay post-dispatch mismatch (owner, backend, sessionGen or draft changed). Discarding.');
+        return;
+      }
+
+      await AiOperationStorage.updateResult(
+        opId,
+        status: result.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
+        resultData: {
+          'transcript': result.transcript,
+          'confidence': result.confidence,
+          'is_degraded': result.isDegraded,
+        },
+      );
+
+      state = state.copyWith(
+        voiceTranscript: result.transcript,
+        transcriptionConfidence: result.confidence,
+        isVoiceDegraded: result.isDegraded,
+      );
+      await _persistDraft();
+
+      // Durably continue into listing operation
+      if (result.transcript.isNotEmpty) {
+        final replayReconcileContext = ReconciliationContext(
+          owner: owner,
+          backend: backend,
+          sessionGeneration: preSessionGen,
+          draftId: draftId,
+          voiceInputGeneration: opGeneration,
+          listingInputGeneration: state.listingInputGeneration,
+          imageInputGeneration: state.imageInputGeneration,
+          pricingInputGeneration: state.pricingInputGeneration,
+        );
+
+        final existingListingOp = await AiOperationStorage.findOperation(
+          draftId,
+          'listing_generate',
+          generation: state.listingInputGeneration > 0 ? state.listingInputGeneration : null,
+        );
+
+        if (!_isReconciliationContextValid(replayReconcileContext, expectedVoiceGen: opGeneration)) {
+          debugPrint('[AddProductFlow] Voice replay post-dispatch mismatch after listing search. Aborting.');
+          return;
+        }
+
+        if (existingListingOp != null) {
+          final hasPersistedResult = existingListingOp.resultData != null && existingListingOp.resultData!.isNotEmpty;
+          if (existingListingOp.status == AiOperationRecord.statusCompleted || hasPersistedResult) {
+            await _reconcileCompletedListingResult(existingListingOp, context: replayReconcileContext);
+          } else if (existingListingOp.status == AiOperationRecord.statusInFlight ||
+                     existingListingOp.status == AiOperationRecord.statusPending ||
+                     existingListingOp.status == AiOperationRecord.statusFailed) {
+            if (_activeListingFlight != null &&
+                _activeListingDraftId == draftId &&
+                _activeListingGeneration == existingListingOp.inputGeneration) {
+              debugPrint('[AddProductFlow] Joining active direct listing from replayed-voice recovery');
+              _trackBackgroundFuture(_activeListingFlight!);
+            } else if (!_inFlightReplayOpIds.contains(existingListingOp.id)) {
+              _inFlightReplayOpIds.add(existingListingOp.id);
+              debugPrint('[AddProductFlow] Replaying existing matching listing operation: ${existingListingOp.id}');
+              final fut = _replayListingOperation(existingListingOp).whenComplete(() {
+                _inFlightReplayOpIds.remove(existingListingOp.id);
+              });
+              _trackBackgroundFuture(fut);
+            }
+          }
+        } else if (!_listingGenerationInFlight) {
+          if (!_isReconciliationContextValid(replayReconcileContext, expectedVoiceGen: opGeneration)) {
+            debugPrint('[AddProductFlow] Voice replay post-dispatch mismatch before new listing dispatch. Aborting.');
+            return;
+          }
+          debugPrint('[AddProductFlow] Recovered pending voice proceeds to listing generation with language $languageCode.');
+          final fut = _generateListingInternal(
+            transcript: result.transcript,
+            languageCode: languageCode,
+          );
+          _trackBackgroundFuture(fut);
+        }
+      }
+    } catch (e) {
+      debugPrint('[AddProductFlow] Error during voice replay: $e');
+      await AiOperationStorage.updateResult(
+        opId,
+        status: AiOperationRecord.statusFailed,
+        errorMessage: e.toString(),
+      );
+    } finally {
+      if (_activeVoiceFlight == flightCompleter.future) {
+        _activeVoiceFlight = null;
+        _activeVoiceDraftId = null;
+        _activeVoiceGeneration = null;
+      }
+      if (!flightCompleter.isCompleted) {
+        flightCompleter.complete();
+      }
     }
   }
 
@@ -1994,7 +2738,17 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       isAiProcessing: false,
     );
     if (Hive.isBoxOpen('draft_box')) {
-      Hive.box('draft_box').clear();
+      try {
+        final box = Hive.box('draft_box');
+        if (box.isOpen) {
+          box.clear().catchError((e) {
+            debugPrint('[AddProductFlow] Error clearing draft_box: $e');
+            return 0;
+          });
+        }
+      } catch (e) {
+        debugPrint('[AddProductFlow] Error clearing draft_box: $e');
+      }
     }
   }
 
@@ -2166,6 +2920,104 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     );
     await imageFile.copy(target.path);
     return target.path;
+  }
+
+  Future<File> _createAudioSnapshot(File audioFile, {required int voiceGen}) async {
+    if (!audioFile.existsSync()) return audioFile;
+    final bytes = await audioFile.readAsBytes();
+    if (bytes.length < 4) {
+      throw const TranscriptionException(
+        'Audio recording file is too small or truncated',
+        statusCode: TranscriptionStatusCode.invalidAudio,
+      );
+    }
+
+    // Inspect magic bytes to validate audio container format
+    String detectedExt = '';
+    // 1. WAV: 'RIFF' .... 'WAVE'
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
+        bytes[8] == 0x57 && bytes[9] == 0x41 && bytes[10] == 0x56 && bytes[11] == 0x45) {
+      detectedExt = 'wav';
+    }
+    // 2. MP4 / M4A: '....ftyp'
+    else if (bytes.length >= 8 &&
+        bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70) {
+      detectedExt = 'm4a';
+    }
+    // 3. Raw ADTS AAC stream without container:
+    // ADTS syncword is 12 bits 0xFFF with layer bits (bits 2..1) == 00 -> (b1 & 0xF6) == 0xF0
+    else if (bytes.length >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xF6) == 0xF0) {
+      throw const TranscriptionException(
+        'Raw AAC streams without container are unsupported. Container required.',
+        statusCode: TranscriptionStatusCode.invalidAudio,
+      );
+    }
+    // 4. MP3: ID3 tag or valid MPEG audio frame (0xFF with sync bits 7..5 == 111, layer bits != 00)
+    else if (bytes.length >= 3 && bytes[0] == 0x49 && bytes[1] == 0x44 && bytes[2] == 0x33) {
+      detectedExt = 'mp3';
+    }
+    else if (bytes.length >= 2 &&
+        bytes[0] == 0xFF &&
+        (bytes[1] & 0xE0) == 0xE0 &&
+        (bytes[1] & 0x06) != 0x00) {
+      detectedExt = 'mp3';
+    }
+    // 5. OGG: 'OggS'
+    else if (bytes.length >= 4 &&
+        bytes[0] == 0x4F && bytes[1] == 0x67 && bytes[2] == 0x67 && bytes[3] == 0x53) {
+      detectedExt = 'ogg';
+    }
+    // 6. FLAC: 'fLaC'
+    else if (bytes.length >= 4 &&
+        bytes[0] == 0x66 && bytes[1] == 0x4C && bytes[2] == 0x61 && bytes[3] == 0x43) {
+      detectedExt = 'flac';
+    }
+
+    if (detectedExt.isEmpty) {
+      throw const TranscriptionException(
+        'Unsupported audio format. Audio must be in a supported container (WAV, MP4/M4A, MP3, OGG, FLAC).',
+        statusCode: TranscriptionStatusCode.invalidAudio,
+      );
+    }
+
+    Directory appDir;
+    try {
+      appDir = await getApplicationDocumentsDirectory();
+    } catch (_) {
+      appDir = Directory.systemTemp;
+    }
+    final snapshotDir = Directory('${appDir.path}/voice_snapshots');
+    await snapshotDir.create(recursive: true);
+
+    final uniqueId = DateTime.now().microsecondsSinceEpoch;
+    final targetPath = '${snapshotDir.path}/snap_${state.draftId.isNotEmpty ? state.draftId : "draft"}_g${voiceGen}_$uniqueId.$detectedExt';
+    final tmpPath = '$targetPath.tmp';
+    await audioFile.copy(tmpPath);
+    final tmpFile = File(tmpPath);
+    return tmpFile.rename(targetPath);
+  }
+
+  Future<void> proceedFromStep2({
+    required bool isOnline,
+    required String languageCode,
+  }) async {
+    nextStep();
+    if (isOnline &&
+        state.originalImagePath.isNotEmpty &&
+        (!state.isEnhanced ||
+            state.enhancedImagePath.isEmpty ||
+            state.enhancedImagePath == state.originalImagePath)) {
+      try {
+        await enhanceProductImageAndWait();
+      } catch (e) {
+        debugPrint('[AddProductFlow] Error waiting for image enhancement: $e');
+      }
+    }
+    submitForAiProcessing(
+      isOnline,
+      languageCode: languageCode,
+    );
   }
 
   Future<void> submitForAiProcessing(
@@ -2653,102 +3505,12 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     String languageCode, {
     int? gen,
   }) async {
-    _listingGenerationInFlight = true;
-    _recomputeAiProcessing();
-    if (kMockAiBackend) {
-      await Future.delayed(const Duration(milliseconds: 700));
-      _listingGenerationInFlight = false;
-      if (gen != null && gen != _aiProcessingGen) return;
-      state = state.copyWith(
-        titleEn: state.manualDescription,
-        titleHi: state.titleHi.isNotEmpty ? state.titleHi : state.manualDescription,
-        descriptionEn: state.manualDescription,
-        descriptionHi:
-            state.descriptionHi.isNotEmpty ? state.descriptionHi : state.manualDescription,
-      );
-      _recomputeAiProcessing();
-      _persistDraft();
-      return;
-    }
-    final opId = state.voiceListingOpId ??
-        'list_${state.draftId.isNotEmpty ? state.draftId : "temp"}_${state.manualDescription.hashCode.abs()}';
-    if (state.voiceListingOpId != opId) {
-      state = state.copyWith(voiceListingOpId: opId);
-      _persistDraft();
-    }
-
-    try {
-      final speechService = _ref.read(speechServiceProvider);
-      // Cap at 25 s so isAiProcessing always resolves, even if the backend
-      // is unreachable — without this, a hung request left the full-screen
-      // loader stuck forever.
-      final suggestion = await speechService
-          .generateListingFromTranscript(
-            transcript: state.manualDescription,
-            languageCode: languageCode,
-            categoryHint: (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null,
-            idempotencyKey: opId,
-          )
-          .timeout(
-            const Duration(seconds: 25),
-            onTimeout: () {
-              debugPrint(
-                '[AddProductFlow] Manual-description listing generation timed out.',
-              );
-              return AiListingSuggestion(
-                titleEn: state.manualDescription,
-                titleHi: state.titleHi,
-                descriptionEn: state.manualDescription,
-                descriptionHi: state.descriptionHi,
-                category: state.category,
-                tags: state.tags,
-                isDegraded: true,
-                degradedReason: 'Manual description listing generation timed out after 25 seconds.',
-              );
-            },
-          );
-      _listingGenerationInFlight = false;
-      if (gen != null && gen != _aiProcessingGen) return;
-      state = state.copyWith(
-        titleEn: suggestion.titleEn,
-        titleHi: suggestion.titleHi,
-        descriptionEn: suggestion.descriptionEn,
-        descriptionHi: suggestion.descriptionHi,
-        category: suggestion.category,
-        tags: suggestion.tags,
-        rawMaterialCost: (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0)
-            ? suggestion.rawMaterialCost!
-            : state.rawMaterialCost,
-        laborHours: (suggestion.laborHours != null && suggestion.laborHours! > 0)
-            ? suggestion.laborHours!
-            : state.laborHours,
-        hourlyRate: (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0)
-            ? suggestion.hourlyRate!
-            : state.hourlyRate,
-        floorPrice: (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
-            ? suggestion.floorPrice!
-            : state.floorPrice,
-        isListingDegraded: suggestion.isDegraded,
-        listingDegradedReason: suggestion.degradedReason,
-      );
-      _recomputeAiProcessing();
-      _persistDraft();
-    } catch (e) {
-      _listingGenerationInFlight = false;
-      final errStr = e.toString().toLowerCase();
-      if (errStr.contains('401') || errStr.contains('403') || errStr.contains('unauthorized')) {
-        _ref.read(authStateProvider.notifier).expireSession();
-      }
-      if (gen != null && gen != _aiProcessingGen) return;
-      state = state.copyWith(
-        titleEn: state.manualDescription,
-        descriptionEn: state.manualDescription,
-        isListingDegraded: true,
-        listingDegradedReason: 'Listing generation failed: $e',
-      );
-      _recomputeAiProcessing();
-      _persistDraft();
-    }
+    final text = state.manualDescription.trim();
+    if (text.isEmpty) return;
+    await _generateListingInternal(
+      transcript: text,
+      languageCode: languageCode,
+    );
   }
 
   Future<void> addAdditionalImage(String path) async {
@@ -2774,6 +3536,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     final newPricingGen = state.pricingInputGeneration + 1;
     state = state.copyWith(
       tags: [...state.tags, trimmed],
+      tagsEditGen: state.tagsEditGen + 1,
       pricingInputGeneration: newPricingGen,
       pricingOpId: null,
       pricingFingerprint: null,
@@ -2790,6 +3553,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     final newPricingGen = state.pricingInputGeneration + 1;
     state = state.copyWith(
       tags: state.tags.where((t) => t != tag).toList(),
+      tagsEditGen: state.tagsEditGen + 1,
       pricingInputGeneration: newPricingGen,
       pricingOpId: null,
       pricingFingerprint: null,
@@ -2807,6 +3571,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     final newPricingGen = state.pricingInputGeneration + 1;
     state = state.copyWith(
       manualDescription: desc,
+      descEnEditGen: state.descEnEditGen + 1,
       listingInputGeneration: newListingGen,
       voiceListingOpId: null,
       listingFingerprint: null,
@@ -2833,6 +3598,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     final newPricingGen = state.pricingInputGeneration + 1;
     state = state.copyWith(
       recordedAudioPath: '',
+      immutableAudioSnapshotPath: '',
+      immutableAudioSnapshotSha256: null,
       voiceTranscript: '',
       manualDescription: '',
       voiceQueueItemId: null,
@@ -2841,6 +3608,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       listingInputGeneration: newListingGen,
       voiceListingOpId: null,
       listingFingerprint: null,
+      listingStatus: '',
       pricingInputGeneration: newPricingGen,
       pricingOpId: null,
       pricingFingerprint: null,
@@ -2961,144 +3729,714 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     return '';
   }
 
-  Future<void> transcribeVoiceDirectly(File audioFile, {String languageCode = 'auto'}) async {
-    if (kMockAiBackend) {
-      await Future.delayed(const Duration(milliseconds: 700));
-      const fakeTranscript = 'Mock transcription (backend bypassed for testing)';
-      _listingGenerationInFlight = true;
-      state = state.copyWith(voiceTranscript: fakeTranscript, transcriptionConfidence: 1.0);
-      _recomputeAiProcessing();
-      _persistDraft();
-      await Future.delayed(const Duration(milliseconds: 700));
-      _listingGenerationInFlight = false;
-      state = state.copyWith(
-        titleEn: fakeTranscript,
-        descriptionEn: fakeTranscript,
+  bool _isStaleVoiceContext(
+    String targetDraftId,
+    String targetOwner,
+    String targetBackend,
+    String targetAudioPath,
+    int targetVoiceGen,
+    int targetSessionGen,
+  ) {
+    final currentOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+    final currentBackend = ApiConfig.baseUrl;
+    final currentSessionGen = ActiveSessionManager.sessionGeneration;
+    return state.draftId != targetDraftId ||
+        currentOwner != targetOwner ||
+        currentBackend != targetBackend ||
+        currentSessionGen != targetSessionGen ||
+        state.voiceInputGeneration != targetVoiceGen;
+  }
+
+  Future<void> _generateListingInternal({
+    required String transcript,
+    required String languageCode,
+    bool isExplicitUserRegeneration = false,
+  }) async {
+    final cleanedTranscript = transcript.trim();
+    if (cleanedTranscript.isEmpty) return;
+
+    // 1. Synchronously snapshot baseline edit generations before ANY await
+    final baseTitleEnGen = state.titleEnEditGen;
+    final baseTitleHiGen = state.titleHiEditGen;
+    final baseDescEnGen = state.descEnEditGen;
+    final baseDescHiGen = state.descHiEditGen;
+    final baseCategoryGen = state.categoryEditGen;
+    final baseTagsGen = state.tagsEditGen;
+    final baseCostGen = state.costEditGen;
+
+    // 2. Synchronously capture initiating identity context before ANY await
+    final owner = _ref.read(authStateProvider).userId ?? 'anonymous';
+    final backend = ApiConfig.baseUrl;
+    final targetDraftId = state.draftId;
+    final targetOwner = owner;
+    final targetBackend = backend;
+    final targetSessionGen = ActiveSessionManager.sessionGeneration;
+    final targetVoiceGen = state.voiceInputGeneration;
+
+    final initialListingGen = state.listingInputGeneration;
+    final int opGeneration;
+    if (isExplicitUserRegeneration &&
+        (state.listingStatus == 'fallback' && state.isListingDegraded)) {
+      opGeneration = initialListingGen + 1;
+    } else {
+      opGeneration = initialListingGen > 0 ? initialListingGen : 1;
+    }
+    if (state.listingInputGeneration != opGeneration) {
+      state = state.copyWith(listingInputGeneration: opGeneration);
+    }
+
+    // 3. ATOMIC SINGLE-FLIGHT OWNERSHIP:
+    // If an unresolved preparation/flight is already registered for this draft and generation, join it synchronously!
+    if (_activeListingFlight != null &&
+        _activeListingDraftId == targetDraftId &&
+        _activeListingGeneration == opGeneration) {
+      debugPrint('[AddProductFlow] Listing generation already active; joining existing unresolved request');
+      return _activeListingFlight!;
+    }
+
+    // Register joinable flight handle SYNCHRONOUSLY before fingerprinting or persistence
+    final flightCompleter = Completer<void>();
+    _activeListingFlight = flightCompleter.future;
+    _activeListingDraftId = targetDraftId;
+    _activeListingGeneration = opGeneration;
+    _listingGenerationInFlight = true;
+    _recomputeAiProcessing();
+
+    final categoryHint = (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null;
+    final frozenListingInputs = <String, dynamic>{
+      'draft_id': targetDraftId,
+      'transcript': cleanedTranscript,
+      'language_code': languageCode,
+      'category_hint': categoryHint,
+      'generation': opGeneration,
+      'voice_generation': targetVoiceGen,
+      'baseline_edit_gens': {
+        'title_en': baseTitleEnGen,
+        'title_hi': baseTitleHiGen,
+        'desc_en': baseDescEnGen,
+        'desc_hi': baseDescHiGen,
+        'category': baseCategoryGen,
+        'tags': baseTagsGen,
+        'cost': baseCostGen,
+      },
+    };
+
+    unawaited(() async {
+      String? opId;
+      try {
+        final listingFingerprint = await AiOperationRecord.computeFingerprint(
+          operationType: 'voice_to_listing',
+          owner: targetOwner,
+          backend: targetBackend,
+          inputs: frozenListingInputs,
+        );
+
+        // REVALIDATE AFTER PREPARATION AWAIT:
+        final postPrepOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+        final postPrepBackend = ApiConfig.baseUrl;
+        final postPrepSessionGen = ActiveSessionManager.sessionGeneration;
+        if (_isDisposed ||
+            state.draftId != targetDraftId ||
+            postPrepOwner != targetOwner ||
+            postPrepBackend != targetBackend ||
+            postPrepSessionGen != targetSessionGen ||
+            state.listingInputGeneration != opGeneration ||
+            state.voiceInputGeneration != targetVoiceGen) {
+          debugPrint('[AddProductFlow] Aborting listing preparation: draft or context changed before dispatch');
+          return;
+        }
+
+        opId = 'listing_${targetDraftId.isNotEmpty ? targetDraftId : "draft"}_g${opGeneration}_${listingFingerprint.substring(0, 16)}';
+
+        final record = AiOperationRecord(
+          id: opId,
+          idempotencyKey: opId,
+          owner: targetOwner,
+          backend: targetBackend,
+          operationType: 'listing_generate',
+          inputGeneration: opGeneration,
+          draftId: targetDraftId,
+          status: AiOperationRecord.statusInFlight,
+          inputFingerprint: listingFingerprint,
+          requestSnapshot: frozenListingInputs,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        await AiOperationStorage.save(record);
+
+        // REVALIDATE AFTER STORAGE AWAIT:
+        if (_isDisposed ||
+            state.draftId != targetDraftId ||
+            state.listingInputGeneration != opGeneration ||
+            state.voiceInputGeneration != targetVoiceGen) {
+          debugPrint('[AddProductFlow] Aborting listing preparation: draft changed after storage');
+          return;
+        }
+
+        state = state.copyWith(
+          voiceListingOpId: opId,
+          listingFingerprint: listingFingerprint,
+          listingInputGeneration: opGeneration,
+          listingStatus: 'pending',
+          isListingDegraded: false,
+          listingDegradedReason: null,
+        );
+        await _persistDraft();
+
+        final sessionContext = RequestSessionContext.explicit(
+          userId: targetOwner,
+          sessionGeneration: targetSessionGen,
+          backendOrigin: targetBackend,
+        );
+
+        final speechService = _ref.read(speechServiceProvider);
+        final suggestion = await runZoned(
+          () => speechService.generateListingFromTranscript(
+            transcript: cleanedTranscript,
+            languageCode: languageCode,
+            categoryHint: categoryHint,
+            idempotencyKey: opId,
+            sessionContext: sessionContext,
+          ),
+          zoneValues: {
+            #kalasetuExpectedUserId: targetOwner,
+            #kalasetuExpectedSessionGen: targetSessionGen,
+            #kalasetuExpectedBackend: targetBackend,
+          },
+        );
+
+        final isDegraded = suggestion.isDegraded || suggestion.status == 'fallback' || suggestion.status == 'failed';
+        await AiOperationStorage.updateResult(
+          opId,
+          status: isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
+          resultData: {
+            'title_en': suggestion.titleEn,
+            'title_hi': suggestion.titleHi,
+            'description_en': suggestion.descriptionEn,
+            'description_hi': suggestion.descriptionHi,
+            'category': suggestion.category,
+            'tags': suggestion.tags,
+            'raw_material_cost': suggestion.rawMaterialCost,
+            'labor_hours': suggestion.laborHours,
+            'hourly_rate': suggestion.hourlyRate,
+            'floor_price': suggestion.floorPrice,
+            'status': suggestion.status,
+            'is_degraded': suggestion.isDegraded,
+            'degraded_reason': suggestion.degradedReason,
+          },
+        );
+
+        if (_isDisposed) return;
+        final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
+        final curBackend = ApiConfig.baseUrl;
+        final curSessionGen = ActiveSessionManager.sessionGeneration;
+        if (curOwner != targetOwner ||
+            curBackend != targetBackend ||
+            curSessionGen != targetSessionGen ||
+            state.draftId != targetDraftId) {
+          debugPrint('[AddProductFlow] Discarding stale listing result after context switch.');
+          return;
+        }
+
+        // EXACT-INPUT INVALIDATION:
+        // Retaking voice must invalidate every result derived from the discarded recording.
+        if (state.voiceInputGeneration != targetVoiceGen ||
+            state.listingInputGeneration != opGeneration) {
+          debugPrint('[AddProductFlow] Discarding stale listing result: source recording or generation invalidated.');
+          return;
+        }
+
+        final cur = state;
+        // Protect artisan manual edits by comparing current edit gen with baseline
+        final newTitleEn = cur.titleEnEditGen == baseTitleEnGen && suggestion.titleEn.isNotEmpty
+            ? suggestion.titleEn
+            : cur.titleEn;
+        final newTitleHi = cur.titleHiEditGen == baseTitleHiGen && suggestion.titleHi.isNotEmpty
+            ? suggestion.titleHi
+            : cur.titleHi;
+        final newDescEn = cur.descEnEditGen == baseDescEnGen && suggestion.descriptionEn.isNotEmpty
+            ? suggestion.descriptionEn
+            : cur.descriptionEn;
+        final newDescHi = cur.descHiEditGen == baseDescHiGen && suggestion.descriptionHi.isNotEmpty
+            ? suggestion.descriptionHi
+            : cur.descriptionHi;
+        final newCategory = cur.categoryEditGen == baseCategoryGen && suggestion.category.isNotEmpty
+            ? suggestion.category
+            : cur.category;
+        final newTags = cur.tagsEditGen == baseTagsGen && suggestion.tags.isNotEmpty
+            ? suggestion.tags
+            : cur.tags;
+
+        double newMat = cur.rawMaterialCost;
+        double newHours = cur.laborHours;
+        double newRate = cur.hourlyRate;
+        double newFloor = cur.floorPrice;
+        if (cur.costEditGen == baseCostGen) {
+          if (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0) {
+            newMat = suggestion.rawMaterialCost!;
+          }
+          if (suggestion.laborHours != null && suggestion.laborHours! > 0) {
+            newHours = suggestion.laborHours!;
+          }
+          if (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0) {
+            newRate = suggestion.hourlyRate!;
+          }
+          final calculatedFloor = newMat + (newHours * newRate);
+          final rawFloor = (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
+              ? suggestion.floorPrice!
+              : cur.floorPrice;
+          newFloor = max(rawFloor, calculatedFloor);
+        }
+
+        // UNKNOWN STATUS DEFENSE:
+        // Unknown listing status values must not silently become successful AI output.
+        const validStatuses = {'success', 'fallback', 'needs_clarification', 'failed'};
+        final resolvedStatus = validStatuses.contains(suggestion.status)
+            ? suggestion.status
+            : (suggestion.isDegraded ? 'fallback' : 'fallback');
+        final resolvedDegraded = suggestion.isDegraded || resolvedStatus != 'success';
+
+        state = state.copyWith(
+          titleEn: newTitleEn,
+          titleHi: newTitleHi,
+          descriptionEn: newDescEn,
+          descriptionHi: newDescHi,
+          category: newCategory,
+          tags: newTags,
+          rawMaterialCost: newMat,
+          laborHours: newHours,
+          hourlyRate: newRate,
+          floorPrice: newFloor,
+          minPrice: cur.minPrice < newFloor ? newFloor : cur.minPrice,
+          finalPrice: cur.finalPrice < newFloor ? newFloor : cur.finalPrice,
+          listingStatus: resolvedStatus,
+          isListingDegraded: resolvedDegraded,
+          listingDegradedReason: suggestion.degradedReason ?? (resolvedDegraded && suggestion.status != 'success' ? 'Listing degraded' : null),
+        );
+        await _persistDraft();
+      } catch (e) {
+        debugPrint('[AddProductFlow] Error during listing generation: $e');
+        if (opId != null) {
+          await AiOperationStorage.updateResult(
+            opId,
+            status: AiOperationRecord.statusFailed,
+            errorMessage: e.toString(),
+          );
+        }
+        if (!_isDisposed &&
+            state.draftId == targetDraftId &&
+            state.listingInputGeneration == opGeneration &&
+            state.voiceInputGeneration == targetVoiceGen) {
+          state = state.copyWith(
+            listingStatus: 'failed',
+            isListingDegraded: true,
+            listingDegradedReason: 'Listing generation failed',
+          );
+          await _persistDraft();
+        }
+      } finally {
+        if (_activeListingFlight == flightCompleter.future) {
+          _activeListingFlight = null;
+          _activeListingDraftId = null;
+          _activeListingGeneration = null;
+          _listingGenerationInFlight = false;
+          _recomputeAiProcessing();
+        }
+        if (!flightCompleter.isCompleted) {
+          flightCompleter.complete();
+        }
+      }
+    }());
+
+    _trackBackgroundFuture(flightCompleter.future);
+    return flightCompleter.future;
+  }
+
+  Future<void> retryListingGeneration({String languageCode = 'auto'}) async {
+    final transcript = state.voiceTranscript.trim();
+    if (transcript.isEmpty) return;
+
+    // Distinguish uncertain transport outcomes from authoritative completed fallback responses.
+    // Retrying an uncertain transport error (listingStatus == 'failed') replays the original operation and key.
+    // Only an authoritative completed fallback response (listingStatus == 'fallback') gets a new operation generation.
+    final isAuthoritativeFallback = state.listingStatus == 'fallback' && state.isListingDegraded;
+    if (isAuthoritativeFallback) {
+      return _generateListingInternal(
+        transcript: transcript,
+        languageCode: languageCode,
+        isExplicitUserRegeneration: true,
       );
-      _recomputeAiProcessing();
-      _persistDraft();
+    }
+
+    final opGeneration = state.listingInputGeneration > 0 ? state.listingInputGeneration : 1;
+    final existingOp = await AiOperationStorage.findOperation(
+      state.draftId,
+      'listing_generate',
+      generation: opGeneration,
+    );
+
+    if (existingOp != null) {
+      return _replayListingOperation(existingOp);
+    }
+
+    return _generateListingInternal(
+      transcript: transcript,
+      languageCode: languageCode,
+      isExplicitUserRegeneration: false,
+    );
+  }
+
+  Future<void> transcribeVoiceDirectly(
+    File audioFile, {
+    String languageCode = 'auto',
+  }) async {
+    // If the UI is already actively processing a transcription, ignore synchronous duplicate calls
+    if (_isVoiceTranscriptionInFlight) {
+      debugPrint('[AddProductFlow] Voice transcription already in flight, ignoring duplicate call');
       return;
     }
-    final opId = state.voiceListingOpId ??
-        'voice_${state.draftId.isNotEmpty ? state.draftId : "temp"}_${audioFile.path.hashCode.abs()}';
-    if (state.voiceListingOpId != opId) {
-      state = state.copyWith(voiceListingOpId: opId);
-      _persistDraft();
+
+    // If an underlying network flight is already unresolved in the background, join it without re-dispatching
+    if (_activeVoiceFlight != null &&
+        _activeVoiceDraftId == state.draftId &&
+        _activeVoiceGeneration == state.voiceInputGeneration) {
+      debugPrint('[AddProductFlow] Voice transcription flight already active (fp: $_activeVoiceFingerprint); joining existing unresolved request');
+      return _activeVoiceFlight!;
     }
 
+    final owner = _ref.read(authStateProvider).userId ?? 'anonymous';
+    final backend = ApiConfig.baseUrl;
+    final targetDraftId = state.draftId;
+    final targetOwner = owner;
+    final targetBackend = backend;
+    final targetVoiceGen = state.voiceInputGeneration;
+    final targetSessionGen = ActiveSessionManager.sessionGeneration;
+
+    final flightCompleter = Completer<void>();
+    _activeVoiceFlight = flightCompleter.future;
+    _activeVoiceDraftId = targetDraftId;
+    _activeVoiceGeneration = targetVoiceGen;
+    _isVoiceTranscriptionInFlight = true;
+    _recomputeAiProcessing();
+
     try {
-      final speechService = _ref.read(speechServiceProvider);
-
-      // Step 1: Transcribe audio via Whisper. Cap at 20 s — backend may be
-      // unreachable, and this must always resolve so the loader can't hang.
-      final result = await speechService
-          .transcribeAudio(
-            audioPath: audioFile.path,
-            languageCode: languageCode,
-            idempotencyKey: opId,
-          )
-          .timeout(
-            const Duration(seconds: 20),
-            onTimeout: () {
-              debugPrint('[AddProductFlow] Direct transcription timed out.');
-              return const TranscriptionResult(
-                transcript: '',
-                confidence: 0,
-                isDegraded: true,
-                degradedReason: 'Direct transcription timed out after 20 seconds.',
-              );
-            },
-          );
-      final transcript = result.transcript;
-
-      if (transcript.isEmpty ||
-          HttpSpeechService.isSilenceHallucination(transcript)) {
-        debugPrint('[AddProductFlow] Transcription empty or hallucination — skipping listing generation.');
+      if (kMockAiBackend) {
+        await Future.delayed(const Duration(milliseconds: 700));
+        const fakeTranscript = 'Mock transcription (backend bypassed for testing)';
+        _listingGenerationInFlight = true;
+        state = state.copyWith(voiceTranscript: fakeTranscript, transcriptionConfidence: 1.0);
+        _recomputeAiProcessing();
+        _persistDraft();
+        await Future.delayed(const Duration(milliseconds: 700));
+        _listingGenerationInFlight = false;
         state = state.copyWith(
-          isVoiceDegraded: true,
-          voiceDegradedReason: result.degradedReason ?? 'Transcription returned no audible speech.',
+          titleEn: fakeTranscript,
+          descriptionEn: fakeTranscript,
         );
         _recomputeAiProcessing();
         _persistDraft();
+        if (!flightCompleter.isCompleted) flightCompleter.complete();
         return;
       }
 
-      _listingGenerationInFlight = true;
+      if (!audioFile.existsSync()) {
+        state = state.copyWith(
+          isVoiceDegraded: true,
+          voiceDegradedCode: VoiceDegradedCode.invalidAudio,
+          voiceDegradedReason: 'Recording file missing on disk',
+        );
+        _isVoiceTranscriptionInFlight = false;
+        _recomputeAiProcessing();
+        await _persistDraft();
+        if (!flightCompleter.isCompleted) flightCompleter.complete();
+        return;
+      }
+
+      final File snapshotFile;
+      final String snapshotSha256;
+      final String targetAudioPath;
+      try {
+        // Create atomically finalized immutable snapshot preserving validated extension
+        snapshotFile = await _createAudioSnapshot(audioFile, voiceGen: targetVoiceGen);
+        if (!snapshotFile.existsSync()) {
+          state = state.copyWith(
+            isVoiceDegraded: true,
+            voiceDegradedCode: VoiceDegradedCode.invalidAudio,
+            voiceDegradedReason: 'Snapshot file missing from disk before upload',
+          );
+          _isVoiceTranscriptionInFlight = false;
+          _recomputeAiProcessing();
+          await _persistDraft();
+          if (!flightCompleter.isCompleted) flightCompleter.complete();
+          return;
+        }
+
+        final snapshotBytes = await snapshotFile.readAsBytes();
+        snapshotSha256 = sha256.convert(snapshotBytes).toString();
+        targetAudioPath = snapshotFile.path;
+
+        // Pre-upload checksum verification:
+        final currentBytes = await snapshotFile.readAsBytes();
+        final currentChecksum = sha256.convert(currentBytes).toString();
+        if (currentChecksum != snapshotSha256) {
+          throw const TranscriptionException(
+            'Snapshot file on disk was corrupted or tampered before upload',
+            statusCode: TranscriptionStatusCode.invalidAudio,
+          );
+        }
+      } on TranscriptionException catch (e) {
+        state = state.copyWith(
+          isVoiceDegraded: true,
+          voiceDegradedCode: switch (e.statusCode) {
+            TranscriptionStatusCode.invalidAudio => VoiceDegradedCode.invalidAudio,
+            TranscriptionStatusCode.timedOut => VoiceDegradedCode.timedOut,
+            TranscriptionStatusCode.serviceUnavailable => VoiceDegradedCode.serviceUnavailable,
+            TranscriptionStatusCode.noSpeech => VoiceDegradedCode.noSpeech,
+            _ => VoiceDegradedCode.unknownFailure,
+          },
+          voiceDegradedReason: e.message,
+        );
+        _isVoiceTranscriptionInFlight = false;
+        _recomputeAiProcessing();
+        await _persistDraft();
+        if (!flightCompleter.isCompleted) flightCompleter.complete();
+        return;
+      }
+
+      // Cryptographic fingerprint over immutable audio bytes and request parameters
+      final voiceFingerprint = await AiOperationRecord.computeFingerprint(
+        operationType: 'voice_transcribe',
+        owner: targetOwner,
+        backend: targetBackend,
+        inputs: {
+          'draft_id': targetDraftId,
+          'language_code': languageCode,
+        },
+        files: [snapshotFile],
+      );
+
+      // REVALIDATE AFTER PREPARATION AWAIT:
+      if (_isDisposed || _isStaleVoiceContext(targetDraftId, targetOwner, targetBackend, targetAudioPath, targetVoiceGen, targetSessionGen)) {
+        debugPrint('[AddProductFlow] Aborting voice transcription: draft or context changed during preparation');
+        if (!flightCompleter.isCompleted) flightCompleter.complete();
+        return;
+      }
+
+      _activeVoiceFingerprint = voiceFingerprint;
+
+      final String opId;
+      if (state.voiceFingerprint == voiceFingerprint && state.voiceListingOpId != null) {
+        opId = state.voiceListingOpId!;
+      } else {
+        opId = 'voice_${targetDraftId.isNotEmpty ? targetDraftId : "draft"}_g${targetVoiceGen}_${voiceFingerprint.substring(0, 16)}';
+      }
+
+      final record = AiOperationRecord(
+        id: opId,
+        idempotencyKey: opId,
+        owner: targetOwner,
+        backend: targetBackend,
+        operationType: 'voice_transcribe',
+        draftId: targetDraftId,
+        inputGeneration: targetVoiceGen,
+        inputFingerprint: voiceFingerprint,
+        requestSnapshot: {
+          'audio_path': snapshotFile.path,
+          'language_code': languageCode,
+          'draft_id': targetDraftId,
+        },
+        status: AiOperationRecord.statusInFlight,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      await AiOperationStorage.save(record);
+
+      // REVALIDATE AFTER STORAGE AWAIT:
+      if (_isDisposed || _isStaleVoiceContext(targetDraftId, targetOwner, targetBackend, targetAudioPath, targetVoiceGen, targetSessionGen)) {
+        debugPrint('[AddProductFlow] Aborting voice transcription: draft changed after storage');
+        if (!flightCompleter.isCompleted) flightCompleter.complete();
+        return;
+      }
+
       state = state.copyWith(
-        voiceTranscript: transcript,
-        transcriptionConfidence: result.confidence,
-        isVoiceDegraded: result.isDegraded,
-        voiceDegradedReason: result.degradedReason,
+        recordedAudioPath: snapshotFile.path,
+        immutableAudioSnapshotPath: snapshotFile.path,
+        immutableAudioSnapshotSha256: snapshotSha256,
+        voiceListingOpId: opId,
+        voiceFingerprint: voiceFingerprint,
+        isVoiceDegraded: false,
+        voiceDegradedCode: VoiceDegradedCode.none,
+        voiceDegradedReason: null,
       );
       _recomputeAiProcessing();
-      _persistDraft();
+      await _persistDraft();
 
-      // Step 2: Generate bilingual SEO listing from transcript via Gemini.
-      // Cap at 25 s for the same reason as above.
-      debugPrint('[AddProductFlow] Transcript ready — calling generate-listing...');
-      final suggestion = await speechService
-          .generateListingFromTranscript(
-            transcript: transcript,
-            languageCode: languageCode,
-            categoryHint: (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null,
-            idempotencyKey: opId,
-          )
-          .timeout(
-            const Duration(seconds: 25),
-            onTimeout: () {
-              debugPrint('[AddProductFlow] Direct listing generation timed out.');
-              return AiListingSuggestion(
-                titleEn: transcript,
-                titleHi: state.titleHi,
-                descriptionEn: transcript,
-                descriptionHi: state.descriptionHi,
-                category: state.category,
-                tags: state.tags,
-                isDegraded: true,
-                degradedReason: 'Listing generation timed out after 25 seconds.',
-              );
+      // Background network execution decoupled from UI timeout
+      final voiceWorker = () async {
+        try {
+          final speechService = _ref.read(speechServiceProvider);
+          final sessionContext = RequestSessionContext.explicit(
+            userId: targetOwner,
+            sessionGeneration: targetSessionGen,
+            backendOrigin: targetBackend,
+          );
+          final result = await runZoned(
+            () => speechService.transcribeAudio(
+              audioPath: snapshotFile.path,
+              languageCode: languageCode,
+              idempotencyKey: opId,
+              sessionContext: sessionContext,
+            ),
+            zoneValues: {RequestSessionContext.zoneKey: sessionContext},
+          );
+
+          if (_isStaleVoiceContext(targetDraftId, targetOwner, targetBackend, targetAudioPath, targetVoiceGen, targetSessionGen)) {
+            debugPrint('[AddProductFlow] Rejecting stale transcription result after context change.');
+            return;
+          }
+
+          if (result.statusCode == TranscriptionStatusCode.noSpeech ||
+              result.transcript.isEmpty ||
+              HttpSpeechService.isSilenceHallucination(result.transcript)) {
+            debugPrint('[AddProductFlow] Genuine silence or no-speech detected.');
+            state = state.copyWith(
+              isVoiceDegraded: true,
+              voiceDegradedCode: VoiceDegradedCode.noSpeech,
+              voiceDegradedReason: 'Transcription returned no audible speech.',
+            );
+            await AiOperationStorage.updateResult(
+              opId,
+              status: AiOperationRecord.statusCompleted,
+              resultData: {'transcript': '', 'confidence': 0.0},
+            );
+            if (!flightCompleter.isCompleted) flightCompleter.complete();
+            return;
+          }
+
+          // Preserve successful transcription immediately!
+          final transcript = result.transcript;
+          state = state.copyWith(
+            voiceTranscript: transcript,
+            transcriptionConfidence: result.confidence,
+            isVoiceDegraded: result.isDegraded,
+            voiceDegradedCode: result.isDegraded ? VoiceDegradedCode.unknownFailure : VoiceDegradedCode.none,
+            voiceDegradedReason: result.degradedReason,
+          );
+
+          await AiOperationStorage.updateResult(
+            opId,
+            status: result.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
+            resultData: {
+              'transcript': transcript,
+              'confidence': result.confidence,
             },
           );
 
-      _listingGenerationInFlight = false;
-      state = state.copyWith(
-        titleEn: suggestion.titleEn,
-        titleHi: suggestion.titleHi,
-        descriptionEn: suggestion.descriptionEn,
-        descriptionHi: suggestion.descriptionHi,
-        category: suggestion.category,
-        tags: suggestion.tags,
-        rawMaterialCost: (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0)
-            ? suggestion.rawMaterialCost!
-            : state.rawMaterialCost,
-        laborHours: (suggestion.laborHours != null && suggestion.laborHours! > 0)
-            ? suggestion.laborHours!
-            : state.laborHours,
-        hourlyRate: (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0)
-            ? suggestion.hourlyRate!
-            : state.hourlyRate,
-        floorPrice: (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
-            ? suggestion.floorPrice!
-            : state.floorPrice,
-        isListingDegraded: suggestion.isDegraded,
-        listingDegradedReason: suggestion.degradedReason,
-      );
-      _recomputeAiProcessing();
-      _persistDraft();
-      debugPrint('[AddProductFlow] Listing generation complete: "${suggestion.titleEn}"');
-    } catch (e) {
-      debugPrint('[AddProductFlow] Error during voice transcription/listing: $e');
-      _listingGenerationInFlight = false;
-      final errStr = e.toString().toLowerCase();
-      if (errStr.contains('401') || errStr.contains('403') || errStr.contains('unauthorized')) {
-        _ref.read(authStateProvider.notifier).expireSession();
+          await _persistDraft();
+
+          // Complete transcription UI immediately so UI timer stops!
+          if (!flightCompleter.isCompleted) {
+            flightCompleter.complete();
+          }
+
+          // Trigger listing generation decoupled from voice transcription flight
+          await _generateListingInternal(
+            transcript: transcript,
+            languageCode: languageCode,
+          );
+        } on TranscriptionException catch (e) {
+          if (!_isStaleVoiceContext(targetDraftId, targetOwner, targetBackend, targetAudioPath, targetVoiceGen, targetSessionGen)) {
+            final degradedCode = switch (e.statusCode) {
+              TranscriptionStatusCode.timedOut => VoiceDegradedCode.timedOut,
+              TranscriptionStatusCode.serviceUnavailable => VoiceDegradedCode.serviceUnavailable,
+              TranscriptionStatusCode.invalidAudio => VoiceDegradedCode.invalidAudio,
+              TranscriptionStatusCode.noSpeech => VoiceDegradedCode.noSpeech,
+              _ => VoiceDegradedCode.unknownFailure,
+            };
+            state = state.copyWith(
+              isVoiceDegraded: true,
+              voiceDegradedCode: degradedCode,
+              voiceDegradedReason: e.statusCode == TranscriptionStatusCode.noSpeech
+                  ? 'Transcription returned no audible speech.'
+                  : 'Transcription failed—retry',
+            );
+            await AiOperationStorage.updateResult(
+              opId,
+              status: AiOperationRecord.statusFailed,
+              errorMessage: e.toString(),
+            );
+          }
+          if (!flightCompleter.isCompleted) flightCompleter.complete();
+        } catch (e) {
+          if (!_isStaleVoiceContext(targetDraftId, targetOwner, targetBackend, targetAudioPath, targetVoiceGen, targetSessionGen)) {
+            if (e is SessionExpiredException) {
+              _ref.read(authStateProvider.notifier).expireSession();
+              if (!flightCompleter.isCompleted) flightCompleter.complete();
+              return;
+            }
+            debugPrint('[AddProductFlow] Error during voice transcription: ${e.runtimeType}');
+            state = state.copyWith(
+              isVoiceDegraded: true,
+              voiceDegradedCode: VoiceDegradedCode.unknownFailure,
+              voiceDegradedReason: 'Transcription failed—retry',
+            );
+            await AiOperationStorage.updateResult(
+              opId,
+              status: AiOperationRecord.statusFailed,
+              errorMessage: e.toString(),
+            );
+          }
+          if (!flightCompleter.isCompleted) flightCompleter.complete();
+        } finally {
+          if (_activeVoiceFlight == flightCompleter.future) {
+            _activeVoiceFlight = null;
+            _activeVoiceFingerprint = null;
+            _activeVoiceDraftId = null;
+            _activeVoiceGeneration = null;
+          }
+          _isVoiceTranscriptionInFlight = false;
+          _recomputeAiProcessing();
+          if (!_isDisposed && !_isStaleVoiceContext(targetDraftId, targetOwner, targetBackend, targetAudioPath, targetVoiceGen, targetSessionGen)) {
+            await _persistDraft();
+          }
+          if (!flightCompleter.isCompleted) {
+            flightCompleter.complete();
+          }
+        }
+      }();
+      _trackBackgroundFuture(voiceWorker);
+
+      // UI timeout separation: wait for completer or UI timeout
+      const effectiveTimeout = Duration(seconds: 20);
+      var timedOut = false;
+      try {
+        await flightCompleter.future.timeout(
+          effectiveTimeout,
+          onTimeout: () {
+            timedOut = true;
+            debugPrint('[AddProductFlow] UI timeout reached for voice transcription; flight continues in background.');
+            if (!_isStaleVoiceContext(targetDraftId, targetOwner, targetBackend, targetAudioPath, targetVoiceGen, targetSessionGen)) {
+              state = state.copyWith(
+                isVoiceDegraded: true,
+                voiceDegradedCode: VoiceDegradedCode.timedOut,
+                voiceDegradedReason: 'Transcription failed—retry',
+              );
+            }
+            _isVoiceTranscriptionInFlight = false;
+            _recomputeAiProcessing();
+          },
+        );
+      } finally {
+        _isVoiceTranscriptionInFlight = false;
+        _recomputeAiProcessing();
       }
-      state = state.copyWith(
-        isVoiceDegraded: true,
-        voiceDegradedReason: 'Voice transcription failed: $e',
-      );
+
+      if (!timedOut) {
+        await voiceWorker;
+      }
+    } finally {
+      _isVoiceTranscriptionInFlight = false;
       _recomputeAiProcessing();
-      _persistDraft();
     }
   }
 
@@ -3156,6 +4494,9 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     state = state.copyWith(
       recordedAudioPath: newAudio.path,
       voiceTranscript: '',
+      isVoiceDegraded: false,
+      voiceDegradedCode: VoiceDegradedCode.none,
+      voiceDegradedReason: null,
       voiceQueueItemId: null,
       voiceQueueStatus: QueueStatus.pending,
       voiceInputGeneration: newVoiceGen,
@@ -3208,6 +4549,9 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     state = state.copyWith(
       recordedAudioPath: '',
       voiceTranscript: '',
+      isVoiceDegraded: false,
+      voiceDegradedCode: VoiceDegradedCode.none,
+      voiceDegradedReason: null,
       voiceQueueItemId: null,
       voiceQueueStatus: QueueStatus.completed,
       voiceInputGeneration: newVoiceGen,
@@ -3239,264 +4583,43 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     await _persistDraft();
   }
 
-  Future<void> generateAiListing(String languageCode) async {
-    state = state.copyWith(isAiProcessing: true);
-    try {
-      final speechService = _ref.read(speechServiceProvider);
-
-      String transcript = state.voiceTranscript.trim();
-      if (transcript.isEmpty) {
-        transcript = state.manualDescription.trim();
-      }
-      if (transcript.isEmpty) {
-        transcript = state.descriptionEn.trim();
-      }
-      if (transcript.isEmpty) {
-        transcript = state.descriptionHi.trim();
-      }
-      if (transcript.isEmpty) {
-        transcript = state.titleEn.trim();
-      }
-
-      if (transcript.isEmpty && state.recordedAudioPath.isNotEmpty) {
-        final audioFile = File(state.recordedAudioPath);
-        if (audioFile.existsSync()) {
-          try {
-            // Cap transcription at 20 s — backend may be unreachable.
-            final transResult = await speechService
-                .transcribeAudio(
-                  audioPath: audioFile.path,
-                  languageCode: languageCode,
-                )
-                .timeout(
-                  const Duration(seconds: 20),
-                  onTimeout: () {
-                    debugPrint('[AddProductFlow] Transcription timed out.');
-                    return const TranscriptionResult(transcript: '', confidence: 0);
-                  },
-                );
-            if (transResult.transcript.isNotEmpty &&
-                !HttpSpeechService.isSilenceHallucination(transResult.transcript)) {
-              transcript = transResult.transcript;
-              state = state.copyWith(voiceTranscript: transcript);
-            }
-          } catch (e) {
-            debugPrint('[AddProductFlow] Error transcribing in generateAiListing: $e');
-          }
-        }
-      }
-
-      if (transcript.isEmpty) {
-        transcript = (state.category.isNotEmpty && state.category != 'Handicrafts')
-            ? 'Handcrafted ${state.category} artisan product made with traditional techniques'
-            : 'Handcrafted traditional artisan product';
-      }
-
-      final owner = _ref.read(authStateProvider).userId ?? 'anonymous';
-      final backend = ApiConfig.baseUrl;
-      final categoryHint = (state.category.isNotEmpty && state.category != 'Handicrafts') ? state.category : null;
-      final targetDraftId = state.draftId;
-      final targetOwner = owner;
-      final targetBackend = backend;
-
-      final listingInputs = <String, dynamic>{
-        'transcript': transcript,
-        'language_code': languageCode,
-        'category_hint': categoryHint,
-      };
-
-      final frozenListingInputs = Map<String, dynamic>.from(listingInputs);
-
-      final fingerprint = await AiOperationRecord.computeFingerprint(
-        operationType: 'listing_generate',
-        owner: owner,
-        backend: backend,
-        inputs: frozenListingInputs,
-      );
-
-      final String opId;
-      final int opGeneration;
-      if (state.listingFingerprint == fingerprint && state.voiceListingOpId != null) {
-        opId = state.voiceListingOpId!;
-        opGeneration = state.listingInputGeneration;
-      } else {
-        opGeneration = state.listingInputGeneration + 1;
-        opId = 'voice_gen_${state.draftId.isNotEmpty ? state.draftId : "temp"}_${fingerprint.substring(0, 12)}';
-        final record = AiOperationRecord(
-          id: opId,
-          idempotencyKey: opId,
-          owner: owner,
-          backend: backend,
-          operationType: 'listing_generate',
-          draftId: state.draftId,
-          inputGeneration: opGeneration,
-          inputFingerprint: fingerprint,
-          requestSnapshot: frozenListingInputs,
-          status: AiOperationRecord.statusInFlight,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
-        await AiOperationStorage.save(record);
-        state = state.copyWith(
-          voiceListingOpId: opId,
-          listingFingerprint: fingerprint,
-          listingInputGeneration: opGeneration,
-        );
-        await _persistDraft();
-      }
-
-      final networkFuture = speechService.generateListingFromTranscript(
-        transcript: transcript,
-        languageCode: languageCode,
-        categoryHint: categoryHint,
-        idempotencyKey: opId,
-      );
-
-      // Decouple background network future to persist late results
-      final bgFuture = networkFuture.then((res) async {
-        await AiOperationStorage.updateResult(
-          opId,
-          status: res.isDegraded ? AiOperationRecord.statusFailed : AiOperationRecord.statusCompleted,
-          resultData: {
-            'title_en': res.titleEn,
-            'title_hi': res.titleHi,
-            'description_en': res.descriptionEn,
-            'description_hi': res.descriptionHi,
-            'category': res.category,
-            'tags': res.tags,
-            'raw_material_cost': res.rawMaterialCost,
-            'labor_hours': res.laborHours,
-            'hourly_rate': res.hourlyRate,
-            'floor_price': res.floorPrice,
-            'is_degraded': res.isDegraded,
-            'degraded_reason': res.degradedReason,
-          },
-        );
-        if (_isDisposed) return;
-        final cur = state;
-        final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
-        final curBackend = ApiConfig.baseUrl;
-        if (curOwner == targetOwner &&
-            curBackend == targetBackend &&
-            cur.draftId == targetDraftId &&
-            cur.listingInputGeneration == opGeneration &&
-            cur.voiceListingOpId == opId) {
-          final mat = (res.rawMaterialCost != null && res.rawMaterialCost! > 0)
-              ? res.rawMaterialCost!
-              : cur.rawMaterialCost;
-          final hours = (res.laborHours != null && res.laborHours! > 0)
-              ? res.laborHours!
-              : cur.laborHours;
-          final rate = (res.hourlyRate != null && res.hourlyRate! > 0)
-              ? res.hourlyRate!
-              : cur.hourlyRate;
-          final calculatedFloor = mat + (hours * rate);
-          final rawFloor = (res.floorPrice != null && res.floorPrice! > 0)
-              ? res.floorPrice!
-              : cur.floorPrice;
-          final effectiveFloor = max(rawFloor, calculatedFloor);
-
-          state = state.copyWith(
-            titleEn: res.titleEn,
-            titleHi: res.titleHi,
-            descriptionEn: res.descriptionEn,
-            descriptionHi: res.descriptionHi,
-            category: res.category.isNotEmpty ? res.category : cur.category,
-            tags: res.tags.isNotEmpty ? res.tags : cur.tags,
-            rawMaterialCost: mat,
-            laborHours: hours,
-            hourlyRate: rate,
-            floorPrice: effectiveFloor,
-            minPrice: cur.minPrice < effectiveFloor ? effectiveFloor : cur.minPrice,
-            finalPrice: cur.finalPrice < effectiveFloor ? effectiveFloor : cur.finalPrice,
-            isListingDegraded: res.isDegraded,
-            listingDegradedReason: res.degradedReason,
-            isAiProcessing: false,
-          );
-          await _persistDraft();
-        }
-      }).catchError((err) async {
-        await AiOperationStorage.updateResult(
-          opId,
-          status: AiOperationRecord.statusFailed,
-          errorMessage: err.toString(),
-        );
-      });
-      _trackBackgroundFuture(bgFuture);
-
-      // Cap listing generation at 25 s for foreground UI responsiveness
-      final suggestion = await networkFuture.timeout(
-        const Duration(seconds: 25),
-        onTimeout: () {
-          debugPrint('[AddProductFlow] Listing generation timed out — using placeholder.');
-          return AiListingSuggestion(
-            titleEn: state.titleEn.isNotEmpty ? state.titleEn : transcript,
-            titleHi: state.titleHi,
-            descriptionEn: state.descriptionEn.isNotEmpty ? state.descriptionEn : transcript,
-            descriptionHi: state.descriptionHi,
-            category: state.category,
-            tags: state.tags,
-            isDegraded: true,
-            degradedReason: 'Listing generation timed out after 25 seconds.',
-          );
-        },
-      );
-
-      final cur = state;
-      final curOwner = _ref.read(authStateProvider).userId ?? 'anonymous';
-      final curBackend = ApiConfig.baseUrl;
-      if (curOwner == targetOwner &&
-          curBackend == targetBackend &&
-          cur.draftId == targetDraftId &&
-          cur.listingInputGeneration == opGeneration &&
-          cur.voiceListingOpId == opId) {
-        final mat = (suggestion.rawMaterialCost != null && suggestion.rawMaterialCost! > 0)
-            ? suggestion.rawMaterialCost!
-            : cur.rawMaterialCost;
-        final hours = (suggestion.laborHours != null && suggestion.laborHours! > 0)
-            ? suggestion.laborHours!
-            : cur.laborHours;
-        final rate = (suggestion.hourlyRate != null && suggestion.hourlyRate! > 0)
-            ? suggestion.hourlyRate!
-            : cur.hourlyRate;
-        final calculatedFloor = mat + (hours * rate);
-        final rawFloor = (suggestion.floorPrice != null && suggestion.floorPrice! > 0)
-            ? suggestion.floorPrice!
-            : cur.floorPrice;
-        final effectiveFloor = max(rawFloor, calculatedFloor);
-
-        state = state.copyWith(
-          titleEn: suggestion.titleEn,
-          titleHi: suggestion.titleHi,
-          descriptionEn: suggestion.descriptionEn,
-          descriptionHi: suggestion.descriptionHi,
-          category: suggestion.category.isNotEmpty ? suggestion.category : state.category,
-          tags: suggestion.tags.isNotEmpty ? suggestion.tags : state.tags,
-          rawMaterialCost: mat,
-          laborHours: hours,
-          hourlyRate: rate,
-          floorPrice: effectiveFloor,
-          minPrice: cur.minPrice < effectiveFloor ? effectiveFloor : cur.minPrice,
-          finalPrice: cur.finalPrice < effectiveFloor ? effectiveFloor : cur.finalPrice,
-          isListingDegraded: suggestion.isDegraded,
-          listingDegradedReason: suggestion.degradedReason,
-          isAiProcessing: false,
-        );
-        await _persistDraft();
-      }
-    } catch (e) {
-      debugPrint('[AddProductFlow] Error in generateAiListing: $e');
-      final errStr = e.toString().toLowerCase();
-      if (errStr.contains('401') || errStr.contains('403') || errStr.contains('unauthorized')) {
-        _ref.read(authStateProvider.notifier).expireSession();
-      }
-      state = state.copyWith(
-        isAiProcessing: false,
-        isListingDegraded: true,
-        listingDegradedReason: 'Listing generation failed: $e',
-      );
-      await _persistDraft();
+  Future<void> generateAiListing(
+    String languageCode, {
+    bool isExplicitUserRegeneration = false,
+  }) async {
+    String transcript = state.voiceTranscript.trim();
+    if (transcript.isEmpty) {
+      transcript = state.manualDescription.trim();
     }
+    if (transcript.isEmpty) {
+      transcript = state.descriptionEn.trim();
+    }
+    if (transcript.isEmpty) {
+      transcript = state.descriptionHi.trim();
+    }
+    if (transcript.isEmpty) {
+      transcript = state.titleEn.trim();
+    }
+
+    if (transcript.isEmpty && state.recordedAudioPath.isNotEmpty) {
+      final audioFile = File(state.recordedAudioPath);
+      if (audioFile.existsSync()) {
+        await transcribeVoiceDirectly(audioFile, languageCode: languageCode);
+        return;
+      }
+    }
+
+    if (transcript.isEmpty) {
+      transcript = (state.category.isNotEmpty && state.category != 'Handicrafts')
+          ? 'Handcrafted ${state.category} artisan product made with traditional techniques'
+          : 'Handcrafted traditional artisan product';
+    }
+
+    await _generateListingInternal(
+      transcript: transcript,
+      languageCode: languageCode,
+      isExplicitUserRegeneration: isExplicitUserRegeneration,
+    );
   }
 
   Future<void> regenerateAll({String languageCode = 'en'}) async {
@@ -3519,7 +4642,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       }
     }
 
-    final listingFuture = generateAiListing(languageCode);
+    final listingFuture = generateAiListing(languageCode, isExplicitUserRegeneration: true);
 
     try {
       await Future.wait([
@@ -3825,6 +4948,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       floorPrice: floor,
       minPrice: newMin,
       finalPrice: newPrice,
+      costEditGen: state.costEditGen + 1,
       pricingInputGeneration: newPricingGen,
       pricingOpId: null,
       pricingFingerprint: null,
@@ -3851,7 +4975,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     String? category,
     List<String>? tags,
   }) async {
-    final newListingGen = state.listingInputGeneration + 1;
+    final categoryChanged = category != null && category != state.category;
+    final newListingGen = categoryChanged ? state.listingInputGeneration + 1 : state.listingInputGeneration;
     final newPricingGen = state.pricingInputGeneration + 1;
 
     state = state.copyWith(
@@ -3861,19 +4986,32 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       descriptionHi: descriptionHi ?? state.descriptionHi,
       category: category ?? state.category,
       tags: tags ?? state.tags,
+      titleEnEditGen: titleEn != null ? state.titleEnEditGen + 1 : state.titleEnEditGen,
+      titleHiEditGen: titleHi != null ? state.titleHiEditGen + 1 : state.titleHiEditGen,
+      descEnEditGen: descriptionEn != null ? state.descEnEditGen + 1 : state.descEnEditGen,
+      descHiEditGen: descriptionHi != null ? state.descHiEditGen + 1 : state.descHiEditGen,
+      categoryEditGen: category != null ? state.categoryEditGen + 1 : state.categoryEditGen,
+      tagsEditGen: tags != null ? state.tagsEditGen + 1 : state.tagsEditGen,
       listingInputGeneration: newListingGen,
-      voiceListingOpId: null,
-      listingFingerprint: null,
+      voiceListingOpId: categoryChanged ? null : state.voiceListingOpId,
+      listingFingerprint: categoryChanged ? null : state.listingFingerprint,
       pricingInputGeneration: newPricingGen,
       pricingOpId: null,
       pricingFingerprint: null,
     );
 
-    await AiOperationStorage.markSuperseded(
-      state.draftId,
-      'listing_generate',
-      newListingGen,
-    );
+    if (categoryChanged) {
+      await AiOperationStorage.markSuperseded(
+        state.draftId,
+        'listing_generate',
+        newListingGen,
+      );
+      await AiOperationStorage.markSuperseded(
+        state.draftId,
+        'voice_to_listing',
+        newListingGen,
+      );
+    }
     await AiOperationStorage.markSuperseded(
       state.draftId,
       'pricing_suggest',
@@ -3889,7 +5027,17 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
       resumePromptHandled: true,
     );
     if (Hive.isBoxOpen('draft_box')) {
-      Hive.box('draft_box').clear();
+      try {
+        final box = Hive.box('draft_box');
+        if (box.isOpen) {
+          box.clear().catchError((e) {
+            debugPrint('[AddProductFlow] Error clearing draft_box in reset: $e');
+            return 0;
+          });
+        }
+      } catch (e) {
+        debugPrint('[AddProductFlow] Error clearing draft_box in reset: $e');
+      }
     }
   }
 }

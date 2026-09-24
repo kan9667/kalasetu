@@ -16,9 +16,14 @@ class RequestSessionContext {
     required this.backendOrigin,
   });
 
+  static const Symbol zoneKey = #kalasetuRequestSessionContext;
+
   /// Captures initiating identity context before asynchronous preparation.
   /// Prefers scoped Zone overrides when present, falling back to current active session.
   factory RequestSessionContext.capture() {
+    final scoped = Zone.current[zoneKey] as RequestSessionContext?;
+    if (scoped != null) return scoped;
+
     final zoneUserId = Zone.current[#kalasetuExpectedUserId] as String?;
     final zoneSessionGen = Zone.current[#kalasetuExpectedSessionGen] as int?;
     final zoneBackend = Zone.current[#kalasetuExpectedBackend] as String?;

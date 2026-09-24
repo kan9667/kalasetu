@@ -248,6 +248,23 @@ class AiOperationStorage {
     return list;
   }
 
+  /// Finds an active, pending, or completed operation for the given draft and type.
+  static Future<AiOperationRecord?> findOperation(
+    String draftId,
+    String operationType, {
+    int? generation,
+  }) async {
+    final ops = await getOperationsForDraft(draftId);
+    for (final op in ops.reversed) {
+      if (op.operationType == operationType &&
+          (generation == null || op.inputGeneration == generation) &&
+          op.status != AiOperationRecord.statusSuperseded) {
+        return op;
+      }
+    }
+    return null;
+  }
+
   /// Marks any older operations for this draft & operation type as superseded.
   static Future<void> markSuperseded(
     String draftId,

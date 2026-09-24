@@ -200,32 +200,10 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
       localeCode = context.locale.languageCode;
     } catch (_) {}
 
-    final draft = ref.read(addProductFlowProvider);
-
-    if (!isOnline ||
-        draft.originalImagePath.isEmpty ||
-        (draft.isEnhanced &&
-            draft.enhancedImagePath.isNotEmpty &&
-            draft.enhancedImagePath != draft.originalImagePath)) {
-      ref.read(addProductFlowProvider.notifier).submitForAiProcessing(
-        isOnline,
-        languageCode: localeCode,
-      );
-      ref.read(addProductFlowProvider.notifier).nextStep();
-      return;
-    }
-
-    ref.read(addProductFlowProvider.notifier).nextStep();
-
-    try {
-      await ref.read(addProductFlowProvider.notifier).enhanceProductImageAndWait();
-      ref.read(addProductFlowProvider.notifier).submitForAiProcessing(
-        isOnline,
-        languageCode: localeCode,
-      );
-    } catch (e) {
-      debugPrint('[Step2] Error waiting for image enhancement: $e');
-    }
+    ref.read(addProductFlowProvider.notifier).proceedFromStep2(
+      isOnline: isOnline,
+      languageCode: localeCode,
+    );
   }
 
   @override
@@ -460,6 +438,124 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
                       'Some words might need review. You can edit the text above.',
                       style: AppTextStyles.bodySmall.copyWith(color: AppColors.goldDark),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          if (draft.isVoiceDegraded && draft.voiceDegradedCode != VoiceDegradedCode.none) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: (draft.voiceDegradedCode == VoiceDegradedCode.serviceUnavailable ||
+                        draft.voiceDegradedCode == VoiceDegradedCode.timedOut)
+                    ? AppColors.terracottaLight.withValues(alpha: 0.25)
+                    : AppColors.goldLight,
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+                border: Border.all(
+                  color: (draft.voiceDegradedCode == VoiceDegradedCode.serviceUnavailable ||
+                          draft.voiceDegradedCode == VoiceDegradedCode.timedOut)
+                      ? AppColors.terracotta.withValues(alpha: 0.4)
+                      : AppColors.gold.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    (draft.voiceDegradedCode == VoiceDegradedCode.serviceUnavailable ||
+                            draft.voiceDegradedCode == VoiceDegradedCode.timedOut)
+                        ? Icons.error_outline_rounded
+                        : (draft.voiceDegradedCode == VoiceDegradedCode.noSpeech
+                            ? Icons.mic_off_outlined
+                            : Icons.info_outline),
+                    color: (draft.voiceDegradedCode == VoiceDegradedCode.serviceUnavailable ||
+                            draft.voiceDegradedCode == VoiceDegradedCode.timedOut)
+                        ? AppColors.terracottaDark
+                        : AppColors.goldDark,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      (draft.voiceDegradedCode == VoiceDegradedCode.serviceUnavailable ||
+                              draft.voiceDegradedCode == VoiceDegradedCode.timedOut)
+                          ? 'Transcription failed—retry'
+                          : (draft.voiceDegradedCode == VoiceDegradedCode.noSpeech
+                              ? 'No audible speech detected. Speak closer to the microphone or enter text below.'
+                              : (draft.voiceDegradedReason ?? 'Transcription degraded.')),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: (draft.voiceDegradedCode == VoiceDegradedCode.serviceUnavailable ||
+                                draft.voiceDegradedCode == VoiceDegradedCode.timedOut)
+                            ? AppColors.terracottaDark
+                            : AppColors.goldDark,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (hasAudio &&
+                      (draft.voiceDegradedCode == VoiceDegradedCode.serviceUnavailable ||
+                          draft.voiceDegradedCode == VoiceDegradedCode.timedOut)) ...[
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.terracottaDark,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      ),
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: Text('retry'.tr().isNotEmpty && 'retry'.tr() != 'retry' ? 'retry'.tr() : 'Retry'),
+                      onPressed: () {
+                        final audioFile = File(draft.recordedAudioPath);
+                        if (audioFile.existsSync()) {
+                          ref.read(addProductFlowProvider.notifier).transcribeVoiceDirectly(
+                            audioFile,
+                            languageCode: 'auto',
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+
+          if (draft.isListingDegraded && draft.voiceTranscript.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.goldLight,
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+                border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: AppColors.goldDark, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'AI listing generation failed. Your transcript was saved.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.goldDark,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.terracottaDark,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: Text('retry'.tr().isNotEmpty && 'retry'.tr() != 'retry' ? 'retry'.tr() : 'Retry'),
+                    onPressed: () {
+                      ref.read(addProductFlowProvider.notifier).retryListingGeneration();
+                    },
                   ),
                 ],
               ),

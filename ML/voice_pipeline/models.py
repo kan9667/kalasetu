@@ -85,6 +85,10 @@ class Transcript(BaseModel):
             "Never publish a listing built from a fallback transcript."
         ),
     )
+    fallback_reason: Optional[str] = Field(
+        default=None,
+        description="Reason for fallback substitution when is_fallback is True.",
+    )
     duration_seconds: Optional[float] = Field(
         default=None, description="Length of the source audio."
     )

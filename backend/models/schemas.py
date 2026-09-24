@@ -9,7 +9,7 @@ Designed for full compatibility with Flutter Dart models:
 """
 
 from datetime import datetime
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Literal
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
@@ -309,6 +309,7 @@ class AudioTranscribeResponse(BaseModel):
     provider: Optional[str] = "whisper"
     is_fallback: bool = False
     status: str = "completed"
+    fallback_reason: Optional[str] = None
 
 
 class ListingGenerateRequest(BaseModel):
@@ -316,6 +317,9 @@ class ListingGenerateRequest(BaseModel):
     language_code: str = "hi"
     category_hint: Optional[str] = None
     image_url: Optional[str] = None
+
+
+ListingStatusType = Literal["success", "fallback", "needs_clarification", "failed"]
 
 
 class ListingGenerateResponse(BaseModel):
@@ -326,6 +330,9 @@ class ListingGenerateResponse(BaseModel):
     category: str
     tags: List[str]
     cost_inputs: Optional[CostInputsSchema] = None
+    status: ListingStatusType = "success"
+    is_degraded: bool = False
+    degraded_reason: Optional[str] = None
 
 
 class ImageEnhanceResponse(BaseModel):

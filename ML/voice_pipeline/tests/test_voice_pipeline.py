@@ -286,3 +286,222 @@ def test_handoff_uses_transcript_when_not_translated():
 def test_handoff_is_empty_when_transcription_failed():
     result = VoicePipelineResult(voice_note_id="1", status=JobStatus.FAILED)
     assert result.text_for_listing == ""
+
+
+# ---- Retry backoff and format validation tests ----
+
+
+def test_stt_retry_backoff_seconds_validation():
+    from pydantic import ValidationError
+    from ML.voice_pipeline.config import Settings
+
+    s = Settings(stt_retry_backoff_seconds=2.5, stt_retry_attempts=5)
+    assert s.stt_retry_backoff_seconds == 2.5
+    assert s.stt_retry_attempts == 5
+
+    # Negative backoff must fail
+    with pytest.raises(ValidationError):
+        Settings(stt_retry_backoff_seconds=-1.0)
+
+    # Negative/zero attempts must fail
+    with pytest.raises(ValidationError):
+        Settings(stt_retry_attempts=0)
+
+    # Over 10 attempts must fail
+    with pytest.raises(ValidationError):
+        Settings(stt_retry_attempts=15)
+
+
+def test_whisper_retry_transient_failure_then_succeeds(voice_note):
+    from unittest.mock import MagicMock, patch
+    import requests
+
+    transcriber = WhisperTranscriber()
+    transcriber.settings.whisper_api_key = "test-mock-key"
+    transcriber.settings.stt_retry_attempts = 3
+    transcriber.settings.stt_retry_backoff_seconds = 2.0
+
+    mock_resp_fail = MagicMock()
+    mock_resp_fail.status_code = 503
+    mock_resp_fail.raise_for_status.side_effect = requests.exceptions.HTTPError(
+        "503 Server Error", response=mock_resp_fail
+    )
+
+    mock_resp_ok = MagicMock()
+    mock_resp_ok.status_code = 200
+    mock_resp_ok.json.return_value = {
+        "text": "हाथ से बना घड़ा",
+        "language": "hindi",
+    }
+
+    with patch.object(WhisperTranscriber, "_is_audio_silent", return_value=False):
+        with patch("requests.post", side_effect=[mock_resp_fail.raise_for_status.side_effect, mock_resp_ok]) as mock_post:
+            with patch("time.sleep") as mock_sleep:
+                result = transcriber.transcribe(voice_note)
+
+                assert mock_post.call_count == 2
+                assert mock_sleep.call_count == 1
+                mock_sleep.assert_called_once_with(2.0 * 1)  # backoff * attempt 1
+                assert result.is_fallback is False
+                assert result.text == "हाथ से बना घड़ा"
+                assert result.language_code == "hi"
+
+
+def test_whisper_permanent_error_does_not_retry(voice_note):
+    from unittest.mock import MagicMock, patch
+    import requests
+
+    transcriber = WhisperTranscriber()
+    transcriber.settings.whisper_api_key = "test-mock-key"
+    transcriber.settings.stt_retry_attempts = 3
+
+    mock_resp_400 = MagicMock()
+    mock_resp_400.status_code = 400
+    mock_err = requests.exceptions.HTTPError("400 Client Error", response=mock_resp_400)
+
+    with patch.object(WhisperTranscriber, "_is_audio_silent", return_value=False):
+        with patch("requests.post", side_effect=mock_err) as mock_post:
+            with patch("time.sleep") as mock_sleep:
+                result = transcriber.transcribe(voice_note)
+
+                # Permanent error must abort immediately without burning retries
+                assert mock_post.call_count == 1
+                assert mock_sleep.call_count == 0
+                assert result.is_fallback is True
+                assert "provider_permanent_error: 400" in result.fallback_reason
+
+
+def test_whisper_retry_exhausted(voice_note):
+    from unittest.mock import MagicMock, patch
+    import requests
+
+    transcriber = WhisperTranscriber()
+    transcriber.settings.whisper_api_key = "test-mock-key"
+    transcriber.settings.stt_retry_attempts = 3
+    transcriber.settings.stt_retry_backoff_seconds = 1.0
+
+    mock_resp_503 = MagicMock()
+    mock_resp_503.status_code = 503
+    mock_err = requests.exceptions.HTTPError("503 Server Error", response=mock_resp_503)
+
+    with patch.object(WhisperTranscriber, "_is_audio_silent", return_value=False):
+        with patch("requests.post", side_effect=mock_err) as mock_post:
+            with patch("time.sleep") as mock_sleep:
+                result = transcriber.transcribe(voice_note)
+
+                assert mock_post.call_count == 3
+                assert mock_sleep.call_count == 2  # slept after attempt 1 and 2
+                assert result.is_fallback is True
+                assert result.fallback_reason == "all retry attempts exhausted"
+
+
+def test_detect_format_inspects_magic_bytes_for_staged_tmp_file(tmp_path):
+    staged_wav = create_wav(tmp_path / "stage_abc123.tmp")
+    note = VoiceNote(id="note-1", audio_path=str(staged_wav))
+
+    fmt, ext, mime = BaseTranscriber.inspect_audio_format(staged_wav)
+    assert fmt == "wav"
+    assert ext == ".wav"
+    assert mime == "audio/wav"
+    assert BaseTranscriber.detect_format(note) == "wav"
+
+
+@pytest.fixture(autouse=True)
+def isolate_test_environment(monkeypatch):
+    """Ensure tests run isolated from developer .env and external credentials."""
+    monkeypatch.setenv("DISABLE_DOTENV", "1")
+    monkeypatch.setenv("TESTING", "1")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+def test_raw_aac_without_container_is_rejected(tmp_path):
+    # Test ADTS header syncwords across varying bitmasks (0xFFF0, 0xFFF1, 0xFFF8, 0xFFF9)
+    for second_byte in (0xF0, 0xF1, 0xF8, 0xF9):
+        raw_aac_file = tmp_path / f"test_raw_{second_byte:02x}.aac"
+        raw_aac_file.write_bytes(bytes([0xFF, second_byte, 0x50, 0x80]) + b"\x00" * 30)
+
+        with pytest.raises(ValueError, match="Raw AAC streams without container are unsupported"):
+            BaseTranscriber.inspect_audio_format(raw_aac_file)
+
+
+def test_invalid_audio_format_rejected_regardless_of_api_key(tmp_path):
+    """Invalid audio formats must be rejected before checking provider credentials."""
+    raw_aac_file = tmp_path / "test_no_key.aac"
+    raw_aac_file.write_bytes(b"\xff\xf0\x50\x80" + b"\x00" * 30)
+    note = VoiceNote(id="note-aac", audio_path=str(raw_aac_file))
+
+    transcriber = WhisperTranscriber()
+    # Blank the key explicitly
+    transcriber.settings.whisper_api_key = ""
+
+    result = transcriber.transcribe(note)
+    assert result.is_fallback is True
+    assert "invalid_audio_format" in result.fallback_reason
+    assert "Raw AAC streams without container are unsupported" in result.fallback_reason
+
+
+def test_non_transient_error_aborts_immediately_without_retrying(voice_note):
+    """Arbitrary errors (e.g. 422 or unexpected exceptions) must abort immediately without retrying."""
+    from unittest.mock import MagicMock, patch
+    import requests
+
+    transcriber = WhisperTranscriber()
+    transcriber.settings.whisper_api_key = "test-mock-key"
+    transcriber.settings.stt_retry_attempts = 3
+
+    mock_resp_422 = MagicMock()
+    mock_resp_422.status_code = 422
+    mock_err = requests.exceptions.HTTPError("422 Unprocessable Entity", response=mock_resp_422)
+
+    with patch.object(WhisperTranscriber, "_is_audio_silent", return_value=False):
+        with patch("requests.post", side_effect=mock_err) as mock_post:
+            with patch("time.sleep") as mock_sleep:
+                result = transcriber.transcribe(voice_note)
+
+                assert mock_post.call_count == 1
+                assert mock_sleep.call_count == 0
+                assert result.is_fallback is True
+                assert "provider_permanent_error: 422" in result.fallback_reason
+
+
+def test_inconclusive_tmp_file_is_rejected(tmp_path):
+    unknown_file = tmp_path / "stage_unknown.tmp"
+    unknown_file.write_bytes(b"RANDOM_UNKNOWN_BYTES_NOT_AUDIO" * 4)
+
+    with pytest.raises(ValueError, match="Inconclusive audio format"):
+        BaseTranscriber.inspect_audio_format(unknown_file)
+
+
+def test_valid_mp3_with_id3_or_syncword_accepted(tmp_path):
+    # 1. MP3 with ID3 header
+    mp3_id3 = tmp_path / "test_id3.mp3"
+    mp3_id3.write_bytes(b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"\x00" * 30)
+    fmt, ext, mime = BaseTranscriber.inspect_audio_format(mp3_id3)
+    assert fmt == "mp3"
+    assert ext == ".mp3"
+    assert mime == "audio/mpeg"
+
+    # 2. Raw MP3 frame without ID3 (MPEG-1 Layer 3, no CRC: 0xFFFB)
+    mp3_raw_nocrc = tmp_path / "test_raw_nocrc.mp3"
+    mp3_raw_nocrc.write_bytes(b"\xff\xfb\x90\x64" + b"\x00" * 30)
+    fmt, ext, mime = BaseTranscriber.inspect_audio_format(mp3_raw_nocrc)
+    assert fmt == "mp3"
+    assert ext == ".mp3"
+    assert mime == "audio/mpeg"
+
+    # 3. Raw MP3 frame without ID3 (MPEG-1 Layer 3, with CRC: 0xFFFA)
+    mp3_raw_crc = tmp_path / "test_raw_crc.mp3"
+    mp3_raw_crc.write_bytes(b"\xff\xfa\x90\x64" + b"\x00" * 30)
+    fmt, ext, mime = BaseTranscriber.inspect_audio_format(mp3_raw_crc)
+    assert fmt == "mp3"
+    assert ext == ".mp3"
+    assert mime == "audio/mpeg"
+
+    # 4. Raw ADTS AAC frames (0xFFF0, 0xFFF1, 0xFFF8, 0xFFF9) must be rejected
+    for b1 in [0xF0, 0xF1, 0xF8, 0xF9]:
+        raw_aac = tmp_path / f"test_adts_{b1:02x}.aac"
+        raw_aac.write_bytes(bytes([0xFF, b1, 0x40, 0x20]) + b"\x00" * 20)
+        with pytest.raises(ValueError, match="Raw AAC streams without container are unsupported"):
+            BaseTranscriber.inspect_audio_format(raw_aac)

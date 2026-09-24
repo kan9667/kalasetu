@@ -137,12 +137,12 @@ def get_glossary_terms(
     if category:
         preferred = domain_map.get(category.strip().lower(), [])
         remaining = [t for t in ALL_TERMS if t not in preferred]
-        if not language_code or language_code in DEVANAGARI_LANGUAGES or language_code in ["auto", "detect", "None"]:
+        if language_code and language_code in DEVANAGARI_LANGUAGES:
             ordered = preferred + DEVANAGARI_TERMS + MATERIAL_TERMS + remaining
         else:
             ordered = preferred + MATERIAL_TERMS + remaining
     else:
-        if not language_code or language_code in DEVANAGARI_LANGUAGES or language_code in ["auto", "detect", "None"]:
+        if language_code and language_code in DEVANAGARI_LANGUAGES:
             conversational_terms = ["नमस्ते", "कलासेतु", "उत्पाद", "नया सामान", "कैटलॉग", "बिक्री", "कमाई"]
             ordered = conversational_terms + DEVANAGARI_TERMS + list(ALL_TERMS)
         else:

@@ -65,8 +65,16 @@ class WhisperTranscriber(BaseTranscriber):
 
     provider = STTProvider.WHISPER
 
-    def __init__(self):
-        self.settings = get_settings()
+    def __init__(self, settings: Settings | None = None):
+        self._settings = settings
+
+    @property
+    def settings(self) -> Settings:
+        return self._settings or get_settings()
+
+    @settings.setter
+    def settings(self, value: Settings) -> None:
+        self._settings = value
 
     @staticmethod
     def _is_audio_silent(path: Path) -> bool:
@@ -112,6 +120,13 @@ class WhisperTranscriber(BaseTranscriber):
         except (FileNotFoundError, ValueError) as e:
             return self.fallback_transcript(note, str(e))
 
+        # Inspect format BEFORE checking provider credentials to validate invalid audio independently
+        path = Path(note.audio_path)
+        try:
+            audio_format, ext, mime = self.inspect_audio_format(path)
+        except ValueError as e:
+            return self.fallback_transcript(note, f"invalid_audio_format: {e}")
+
         if not self.settings.whisper_api_key:
             return self.fallback_transcript(note, "no API key configured")
 
@@ -125,16 +140,16 @@ class WhisperTranscriber(BaseTranscriber):
         )
 
         # ── Step 2: Submit the recording ─────────────────────────────────
-        audio_format = self.detect_format(note)
+
         logger.info(
-            "Submitting audio to Whisper (%s, format=%s, lang=%s)...",
+            "Submitting audio to Whisper (%s, format=%s, mime=%s, lang=%s)...",
             note.audio_path,
             audio_format,
+            mime,
             note.language_code,
         )
 
         url = f"{self.settings.whisper_base_url.rstrip('/')}/audio/transcriptions"
-        path = Path(note.audio_path)
         if self._is_audio_silent(path):
             logger.warning("Audio note %s has no audible sound (silent). Skipping Whisper.", note.id)
             return self.fallback_transcript(
@@ -157,13 +172,15 @@ class WhisperTranscriber(BaseTranscriber):
         if not is_auto_lang:
             request_data["language"] = note.language_code
 
+        upload_filename = f"{path.stem}{ext}"
+
         for attempt in range(1, self.settings.stt_retry_attempts + 1):
             try:
                 with path.open("rb") as audio:
                     response = requests.post(
                         url,
                         headers={"Authorization": f"Bearer {self.settings.whisper_api_key}"},
-                        files={"file": (path.name, audio, f"audio/{audio_format}")},
+                        files={"file": (upload_filename, audio, mime)},
                         data=request_data,
                         timeout=self.settings.stt_request_timeout,
                     )
@@ -211,7 +228,7 @@ class WhisperTranscriber(BaseTranscriber):
 
                 if is_hallucination:
                     logger.warning(
-                        "Whisper silence hallucination detected: '%s'. Marking as unusable.", text
+                        "Whisper silence hallucination detected (%d chars). Marking as unusable.", len(text)
                     )
                     return self.fallback_transcript(
                         note, "No audible speech detected. Please speak closer to the microphone."
@@ -231,14 +248,35 @@ class WhisperTranscriber(BaseTranscriber):
                 )
 
             except Exception as e:
+                status_code = getattr(getattr(e, "response", None), "status_code", None)
+                error_type = type(e).__name__
+
+                # Log allowlisted diagnostic fields only (no secrets, credentials, or raw response bodies)
                 logger.warning(
-                    "Transcription attempt %d/%d failed: %s",
+                    "Transcription attempt %d/%d failed: status_code=%s, error_type=%s",
                     attempt,
                     self.settings.stt_retry_attempts,
-                    e,
+                    status_code,
+                    error_type,
                 )
-                if attempt < self.settings.stt_retry_attempts:
-                    import time
-                    time.sleep(self.settings.stt_retry_backoff_seconds * attempt)
+
+                # Retry ONLY allowlisted transient failures: timeouts, connection errors, and 429/500/502/503/504
+                is_transient = (
+                    isinstance(e, (requests.exceptions.Timeout, requests.exceptions.ConnectionError))
+                    or (isinstance(e, requests.exceptions.HTTPError) and status_code in (429, 500, 502, 503, 504))
+                )
+                if not is_transient or attempt >= self.settings.stt_retry_attempts:
+                    if status_code in (400, 401, 403, 404, 413, 422):
+                        fail_reason = f"provider_permanent_error: {status_code}"
+                    elif is_transient and attempt >= self.settings.stt_retry_attempts:
+                        fail_reason = "all retry attempts exhausted"
+                    elif status_code is not None:
+                        fail_reason = f"provider_error: {status_code}"
+                    else:
+                        fail_reason = f"provider_error: {error_type}"
+                    return self.fallback_transcript(note, fail_reason)
+
+                import time
+                time.sleep(self.settings.stt_retry_backoff_seconds * attempt)
 
         return self.fallback_transcript(note, "all retry attempts exhausted")

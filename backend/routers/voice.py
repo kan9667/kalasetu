@@ -24,7 +24,11 @@ from ..models.schemas import (
     VoiceGlossaryResponse,
     CostInputsSchema,
 )
-from ..services.catalog_service import CatalogService
+from ..services.catalog_service import (
+    CatalogService,
+    VoiceServiceUnavailableException,
+    InvalidAudioException,
+)
 from ..services.streaming_ingest import (
     AUDIO_MAX_BYTES,
     IMAGE_MAX_BYTES,
@@ -107,10 +111,31 @@ async def transcribe_artisan_voice(
         db.commit()
 
         return res
-    except Exception:
+    except VoiceServiceUnavailableException as e:
+        db.rollback()
+        release_idempotency_claim(db, artisan.id, endpoint, idempotency_key)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"detail": str(e), "code": "SERVICE_UNAVAILABLE"},
+        )
+    except InvalidAudioException as e:
+        db.rollback()
+        release_idempotency_claim(db, artisan.id, endpoint, idempotency_key)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"detail": str(e), "code": "INVALID_AUDIO"},
+        )
+    except HTTPException:
         db.rollback()
         release_idempotency_claim(db, artisan.id, endpoint, idempotency_key)
         raise
+    except Exception as e:
+        db.rollback()
+        release_idempotency_claim(db, artisan.id, endpoint, idempotency_key)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"detail": "Voice transcription service temporarily unavailable", "code": "SERVICE_UNAVAILABLE"},
+        )
     finally:
         staged.cleanup()
 

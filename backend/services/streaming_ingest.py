@@ -53,14 +53,22 @@ def inspect_media_magic_bytes(header: bytes, allowed_categories: Set[str]) -> Tu
     if "audio" in allowed_categories:
         if len(header) >= 12 and header.startswith(b"RIFF") and header[8:12] == b"WAVE":
             return ("audio/wav", "audio")
+        if len(header) >= 8 and header[4:8] == b"ftyp":
+            return ("audio/mp4", "audio")
+        # Check raw ADTS AAC BEFORE MP3 syncword check because (0xF0 & 0xE0) == 0xE0
+        # ADTS syncword is 12 bits 0xFFF with layer bits (bits 2..1) == 00
+        if len(header) >= 2 and header[0] == 0xFF and (header[1] & 0xF6) == 0xF0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Raw AAC streams without container are unsupported. Please provide containerized audio (M4A, WAV, MP3, FLAC, OGG).",
+            )
         if header.startswith(b"ID3") or (
-            len(header) >= 2 and header[0] == 0xFF and (header[1] & 0xE0) == 0xE0
+            len(header) >= 2
+            and header[0] == 0xFF
+            and (header[1] & 0xE0) == 0xE0
+            and (header[1] & 0x06) != 0x00
         ):
             return ("audio/mpeg", "audio")
-        if len(header) >= 8 and (
-            header[4:8] == b"ftyp" or header.startswith(b"\xff\xf1") or header.startswith(b"\xff\xf9")
-        ):
-            return ("audio/mp4", "audio")
         if header.startswith(b"OggS"):
             return ("audio/ogg", "audio")
         if header.startswith(b"fLaC"):

@@ -9,17 +9,43 @@ import '../../core/network/request_session_context.dart';
 import '../../core/network/session_expired_exception.dart';
 import '../../core/storage/secure_token_storage.dart';
 
+enum TranscriptionStatusCode {
+  success,
+  noSpeech,
+  serviceUnavailable,
+  timedOut,
+  invalidAudio,
+  unknownFailure,
+}
+
+class TranscriptionException implements Exception {
+  final String message;
+  final TranscriptionStatusCode statusCode;
+  final int? httpStatusCode;
+
+  const TranscriptionException(
+    this.message, {
+    required this.statusCode,
+    this.httpStatusCode,
+  });
+
+  @override
+  String toString() => 'TranscriptionException($statusCode, http=$httpStatusCode): $message';
+}
+
 class TranscriptionResult {
   final String transcript;
   final double confidence; // 0.0–1.0
   final bool isDegraded;
   final String? degradedReason;
+  final TranscriptionStatusCode statusCode;
 
   const TranscriptionResult({
     required this.transcript,
     required this.confidence,
     this.isDegraded = false,
     this.degradedReason,
+    this.statusCode = TranscriptionStatusCode.success,
   });
 }
 
@@ -36,6 +62,7 @@ class AiListingSuggestion {
   final double? floorPrice;
   final bool isDegraded;
   final String? degradedReason;
+  final String status;
 
   const AiListingSuggestion({
     required this.titleEn,
@@ -50,6 +77,7 @@ class AiListingSuggestion {
     this.floorPrice,
     this.isDegraded = false,
     this.degradedReason,
+    this.status = 'success',
   });
 }
 
@@ -58,6 +86,7 @@ abstract class SpeechService {
     required String audioPath,
     required String languageCode,
     String? idempotencyKey,
+    RequestSessionContext? sessionContext,
   });
 
   Future<AiListingSuggestion> generateListingFromTranscript({
@@ -65,6 +94,7 @@ abstract class SpeechService {
     required String languageCode,
     String? categoryHint,
     String? idempotencyKey,
+    RequestSessionContext? sessionContext,
   });
 }
 
@@ -76,6 +106,7 @@ class MockSpeechService implements SpeechService {
     required String audioPath,
     required String languageCode,
     String? idempotencyKey,
+    RequestSessionContext? sessionContext,
   }) async {
     await Future.delayed(const Duration(milliseconds: 1200));
 
@@ -100,6 +131,7 @@ class MockSpeechService implements SpeechService {
     required String languageCode,
     String? categoryHint,
     String? idempotencyKey,
+    RequestSessionContext? sessionContext,
   }) async {
     await Future.delayed(const Duration(milliseconds: 1300));
 
@@ -153,7 +185,7 @@ class HttpSpeechService implements SpeechService {
 
   /// Check if the returned transcript matches known Whisper silence artifacts / hallucinations
   static bool isSilenceHallucination(String text) {
-    if (text.trim().isEmpty) return true;
+    if (text.trim().isEmpty) return false;
     final clean = text
         .replaceAll(RegExp(r"""[\s\.,!?:;\-_"'()\[\]{}।…~*]+"""), ' ')
         .trim()
@@ -215,13 +247,41 @@ class HttpSpeechService implements SpeechService {
     required String audioPath,
     required String languageCode,
     String? idempotencyKey,
+    RequestSessionContext? sessionContext,
   }) async {
-    final sessionExtra = RequestSessionContext.capture().toExtra();
+    final sessionExtra = (sessionContext ?? RequestSessionContext.capture()).toExtra();
     final file = File(audioPath);
     if (!await file.exists()) {
       debugPrint('[HttpSpeechService] Audio file does not exist: $audioPath');
-      return const TranscriptionResult(transcript: '', confidence: 0.0);
+      throw const TranscriptionException(
+        'Audio recording file does not exist',
+        statusCode: TranscriptionStatusCode.invalidAudio,
+      );
     }
+
+    final rawName = audioPath.split(Platform.pathSeparator).last;
+    final dotIndex = rawName.lastIndexOf('.');
+    final ext = dotIndex != -1 ? rawName.substring(dotIndex + 1).toLowerCase() : '';
+
+    final (uploadExt, mimeType) = switch (ext) {
+      'm4a' => ('m4a', 'audio/mp4'),
+      'mp4' => ('mp4', 'audio/mp4'),
+      'wav' => ('wav', 'audio/wav'),
+      'mp3' => ('mp3', 'audio/mpeg'),
+      'ogg' => ('ogg', 'audio/ogg'),
+      'flac' => ('flac', 'audio/flac'),
+      _ => ('', ''),
+    };
+
+    if (uploadExt.isEmpty || mimeType.isEmpty) {
+      debugPrint('[HttpSpeechService] Unsupported audio extension: $ext');
+      throw TranscriptionException(
+        'Unsupported or inconclusive audio format: $ext',
+        statusCode: TranscriptionStatusCode.invalidAudio,
+      );
+    }
+
+    final uploadFilename = rawName.endsWith('.$uploadExt') ? rawName : 'recording.$uploadExt';
 
     final operationKey = idempotencyKey ??
         'idem_stt_${file.path.hashCode.abs()}';
@@ -230,11 +290,11 @@ class HttpSpeechService implements SpeechService {
       final activeUrl = ApiConfig.baseUrl;
       _dio.options.baseUrl = activeUrl;
 
-      final fileName = audioPath.split(Platform.pathSeparator).last;
       final formData = FormData.fromMap({
         'audio': await MultipartFile.fromFile(
           audioPath,
-          filename: fileName.isNotEmpty ? fileName : 'recording.m4a',
+          filename: uploadFilename,
+          contentType: DioMediaType.parse(mimeType),
         ),
         'language_code': languageCode.isNotEmpty ? languageCode : 'auto',
       });
@@ -251,12 +311,28 @@ class HttpSpeechService implements SpeechService {
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data as Map<String, dynamic>;
+        final status = data['status'] as String? ?? 'completed';
+        final fallbackReason = data['fallback_reason'] as String?;
         final transcript = (data['transcript'] as String? ?? '').trim();
-        debugPrint('[HttpSpeechService] Whisper transcription received: "$transcript"');
+        debugPrint('[HttpSpeechService] Whisper transcription response: status=$status, length=${transcript.length}');
 
-        if (isSilenceHallucination(transcript)) {
-          debugPrint('[HttpSpeechService] Filtered silence hallucination: "$transcript"');
-          return const TranscriptionResult(transcript: '', confidence: 0.0);
+        if (status == 'no_speech' || fallbackReason == 'no_speech' || isSilenceHallucination(transcript)) {
+          debugPrint('[HttpSpeechService] Silence or no-speech detected.');
+          return const TranscriptionResult(
+            transcript: '',
+            confidence: 0.0,
+            isDegraded: true,
+            degradedReason: 'Transcription returned no audible speech.',
+            statusCode: TranscriptionStatusCode.noSpeech,
+          );
+        }
+
+        if (transcript.isEmpty) {
+          throw const TranscriptionException(
+            'Transcription returned empty text without no-speech confirmation',
+            statusCode: TranscriptionStatusCode.serviceUnavailable,
+            httpStatusCode: 200,
+          );
         }
 
         final isDegraded = data['is_degraded'] as bool? ?? data['is_fallback'] as bool? ?? false;
@@ -264,39 +340,71 @@ class HttpSpeechService implements SpeechService {
 
         return TranscriptionResult(
           transcript: transcript,
-          confidence: transcript.isNotEmpty ? 0.95 : 0.0,
+          confidence: 0.95,
           isDegraded: isDegraded,
           degradedReason: degradedReason,
+          statusCode: TranscriptionStatusCode.success,
         );
       }
+
+      throw TranscriptionException(
+        'Transcription returned invalid response (${response.statusCode})',
+        statusCode: TranscriptionStatusCode.serviceUnavailable,
+        httpStatusCode: response.statusCode,
+      );
     } on DioException catch (e) {
       if (e.error is SessionExpiredException ||
           e.response?.statusCode == 401 ||
           e.response?.statusCode == 403) {
         throw e.error is SessionExpiredException
-            ? e.error as SessionExpiredException
+            ? (e.error as SessionExpiredException)
             : SessionExpiredException(
                 'Session expired (${e.response?.statusCode})',
                 e.response?.statusCode,
               );
       }
       final statusCode = e.response?.statusCode;
-      if (statusCode == 409 || statusCode == 413 || statusCode == 422) {
-        final msg = e.response?.data is Map ? e.response?.data['detail']?.toString() : e.message;
-        throw DioException(
-          requestOptions: e.requestOptions,
-          response: e.response,
-          type: DioExceptionType.badResponse,
-          error: 'Validation error ($statusCode): $msg',
+      debugPrint('[HttpSpeechService] Voice transcription failed: status=$statusCode, type=${e.type}');
+
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        throw TranscriptionException(
+          'Transcription connection timed out',
+          statusCode: TranscriptionStatusCode.timedOut,
+          httpStatusCode: statusCode,
         );
       }
-      debugPrint('[HttpSpeechService] Error during voice transcription: $e');
-    } catch (e) {
-      if (e is SessionExpiredException || e is DioException) rethrow;
-      debugPrint('[HttpSpeechService] Error during voice transcription: $e');
-    }
 
-    return const TranscriptionResult(transcript: '', confidence: 0.0);
+      if (statusCode == 422) {
+        throw TranscriptionException(
+          'Invalid audio format or content',
+          statusCode: TranscriptionStatusCode.invalidAudio,
+          httpStatusCode: 422,
+        );
+      }
+
+      if (statusCode != null && statusCode >= 500) {
+        throw TranscriptionException(
+          'Transcription service temporarily unavailable',
+          statusCode: TranscriptionStatusCode.serviceUnavailable,
+          httpStatusCode: statusCode,
+        );
+      }
+
+      throw TranscriptionException(
+        'Transcription request failed',
+        statusCode: TranscriptionStatusCode.unknownFailure,
+        httpStatusCode: statusCode,
+      );
+    } catch (e) {
+      if (e is SessionExpiredException || e is TranscriptionException) rethrow;
+      debugPrint('[HttpSpeechService] Unexpected error during voice transcription: ${e.runtimeType}');
+      throw const TranscriptionException(
+        'Unexpected error during voice transcription',
+        statusCode: TranscriptionStatusCode.unknownFailure,
+      );
+    }
   }
 
   @override
@@ -305,10 +413,11 @@ class HttpSpeechService implements SpeechService {
     required String languageCode,
     String? categoryHint,
     String? idempotencyKey,
+    RequestSessionContext? sessionContext,
   }) async {
     final cleanTranscript = transcript.trim();
 
-    AiListingSuggestion fallback() => AiListingSuggestion(
+    AiListingSuggestion fallback({String status = 'fallback', String? degradedReason}) => AiListingSuggestion(
           titleEn: cleanTranscript.isNotEmpty
               ? cleanTranscript
               : 'Handcrafted Artisan Product',
@@ -319,9 +428,12 @@ class HttpSpeechService implements SpeechService {
           descriptionHi: cleanTranscript,
           category: categoryHint ?? 'Handicrafts',
           tags: ['handcrafted', 'artisan', 'kalasetu'],
+          isDegraded: true,
+          degradedReason: degradedReason ?? 'Listing generation provider unavailable; using editable draft template.',
+          status: status,
         );
 
-    final sessionExtra = RequestSessionContext.capture().toExtra();
+    final sessionExtra = (sessionContext ?? RequestSessionContext.capture()).toExtra();
     if (cleanTranscript.isEmpty) return fallback();
 
     final operationKey = idempotencyKey ??
@@ -379,8 +491,17 @@ class HttpSpeechService implements SpeechService {
           floor = m + (h * r);
         }
 
+        final rawStatus = data['status'] as String?;
         final isDegraded = data['is_degraded'] as bool? ?? data['is_fallback'] as bool? ?? false;
         final degradedReason = data['degraded_reason'] as String?;
+        final status = switch (rawStatus) {
+          'success' => isDegraded ? 'fallback' : 'success',
+          'fallback' => 'fallback',
+          'needs_clarification' => 'needs_clarification',
+          'failed' => 'failed',
+          _ => 'fallback', // Unknown status MUST NOT silently become success!
+        };
+        final effectiveDegraded = isDegraded || status != 'success';
 
         return AiListingSuggestion(
           titleEn: (data['title_en'] as String?)?.trim().isNotEmpty == true
@@ -402,8 +523,9 @@ class HttpSpeechService implements SpeechService {
           laborHours: laborHrs,
           hourlyRate: hourlyRate,
           floorPrice: floor,
-          isDegraded: isDegraded,
+          isDegraded: effectiveDegraded,
           degradedReason: degradedReason,
+          status: status,
         );
       }
     } on DioException catch (e) {
@@ -427,12 +549,15 @@ class HttpSpeechService implements SpeechService {
           error: 'Validation error ($statusCode): $msg',
         );
       }
-      debugPrint('[HttpSpeechService] Listing generation failed: $e');
+      debugPrint('[HttpSpeechService] Listing generation failed: status=$statusCode, type=${e.type}');
     } catch (e) {
       if (e is SessionExpiredException || e is DioException) rethrow;
-      debugPrint('[HttpSpeechService] Listing generation failed: $e');
+      debugPrint('[HttpSpeechService] Listing generation failed: ${e.runtimeType}');
     }
 
-    return fallback();
+    return fallback(
+      status: 'fallback',
+      degradedReason: 'Listing generation provider unavailable; using editable draft template.',
+    );
   }
 }
