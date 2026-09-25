@@ -11,6 +11,8 @@ import '../../features/auth/screens/otp_screen.dart';
 import '../../features/home/screens/home_shell.dart';
 import '../../features/catalogue/screens/catalogue_screen.dart';
 import '../../features/catalogue/screens/product_detail_screen.dart';
+import '../../data/models/product.dart';
+import '../../features/catalogue/screens/review_existing_product_screen.dart';
 import '../../features/add_product/screens/add_product_flow_screen.dart';
 import '../../features/social_media/providers/social_media_provider.dart';
 import '../../features/social_media/screens/social_media_screen.dart';
@@ -33,7 +35,9 @@ class RouterNotifier extends ChangeNotifier {
     _ref.listen<AuthState>(
       authStateProvider,
       (previous, next) {
-        final justLoggedIn = previous?.isAuthenticated != true && next.isAuthenticated;
+        final prevAccess = previous?.isAuthenticated == true || previous?.isNgoSimulation == true;
+        final nextAccess = next.isAuthenticated || next.isNgoSimulation;
+        final justLoggedIn = !prevAccess && nextAccess;
         if (justLoggedIn) {
           _ref.read(homeTabIndexProvider.notifier).state = 1;
         }
@@ -59,7 +63,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: notifier,
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
-      final isAuthenticated = authState.isAuthenticated;
+      final isAccessAllowed = authState.isAuthenticated || authState.isNgoSimulation;
       final hasLanguage = ref.read(hasSelectedLanguageProvider);
 
       final isOnSplash = state.matchedLocation == '/splash';
@@ -82,15 +86,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // Step 2: language is selected — don't let the user linger on the
       // language screen.
       if (isOnLanguage) {
-        return isAuthenticated ? '/home' : '/sign-in';
+        return isAccessAllowed ? '/home' : '/sign-in';
       }
 
-      // Step 3: must be authenticated for everything except the auth screens.
-      if (!isAuthenticated) {
+      // Step 3: must be authenticated (or in NGO simulation) for everything except auth screens.
+      if (!isAccessAllowed) {
         return isOnAuth ? null : '/sign-in';
       }
 
-      // Step 4: authenticated users shouldn't sit on auth screens.
+      // Step 4: authenticated/simulation users shouldn't sit on auth screens.
       if (isOnAuth) {
         return '/home';
       }
@@ -171,6 +175,26 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final productId = state.pathParameters['id'] ?? '';
           return ProductDetailScreen(productId: productId);
+        },
+      ),
+      GoRoute(
+        path: '/review-product/:id',
+        name: AppRouteConstants.reviewProduct,
+        builder: (context, state) {
+          final productId = state.pathParameters['id'] ?? '';
+          final extraProduct = state.extra is Product ? state.extra as Product : null;
+          final product = extraProduct ??
+              Product(
+                id: productId,
+                title: '',
+                description: '',
+                category: '',
+                price: 0,
+                photoPath: '',
+                status: ProductStatus.draft,
+                createdAt: DateTime.now(),
+              );
+          return ReviewExistingProductScreen(initialProduct: product);
         },
       ),
       GoRoute(

@@ -160,7 +160,13 @@
   "filter_paintings": "Paintings",
   "status_live": "Live",
   "status_pending_sync": "Pending Sync",
-  "status_draft": "Draft",
+  "status_pending_approval_sync": "অনুমোদন সিঙ্কের অপেক্ষায়",
+  "status_pending_unpublish_sync": "অপসারণ সিঙ্কের অপেক্ষায়",
+  "removal_queued_notice": "অপসারণের অনুরোধ তালিকায় রাখা হয়েছে। সিঙ্ক শেষ না হওয়া পর্যন্ত তালিকাটি সর্বজনীন থাকতে পারে।",
+  "approval_queued_offline": "অনুমোদন অফলাইনে সংরক্ষিত হয়েছে। অনলাইনে এলে প্রকাশিত হবে।",
+  "product_published_successfully": "পণ্য সফলভাবে প্রকাশিত হয়েছে।",
+  "review_listing": "তালিকা পর্যালোচনা করুন",
+  "status_draft": "খসড়া",
   "no_products_title": "No products in your catalogue",
   "no_products_desc": "Start showcasing your creations. Add your first craft product in 5 simple guided steps.",
   "add_first_product": "Add Your First Product",
@@ -352,5 +358,6 @@
   "artisan_analytics_tooltip": "কর্মক্ষমতা এবং বিশ্লেষণ",
   "listing_online_desc": "আপনার কারুশিল্প তালিকা ONDC-তে লাইভ এবং ক্রেতাদের জন্য দৃশ্যমান।",
   "listing_offline_desc": "পণ্যটি স্থানীয়ভাবে সংরক্ষিত হয়েছে। ইন্টারনেট ফিরে এলে স্বয়ংক্রিয়ভাবে আপলোড হবে।",
+  "saved_offline_awaiting_sync": "অফলাইনে সংরক্ষিত — সিঙ্ক এবং অনুমোদনের অপেক্ষায়",
   "listing_actions": "তালিকা অ্যাকশন"
 }

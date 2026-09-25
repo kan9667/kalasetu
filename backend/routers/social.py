@@ -1,7 +1,7 @@
 """
 Social Media Helper Router.
 
-Streamlined Endpoints:
+Endpoints with complete tenant isolation:
   GET  /api/v1/social-drafts/lookup    — find a saved draft by (listing/draft_key, image)
   POST /api/v1/social-drafts/generate  — generate caption + hashtags for listing or draft
   POST /api/v1/social-drafts/link      — link add-flow drafts to a published listing
@@ -10,14 +10,14 @@ Streamlined Endpoints:
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models.db_models import SocialDraftDB
+from ..models.db_models import ArtisanDB, ProductDB, SocialDraftDB
 from ..models.schemas import (
     SocialDraftRequest,
     SocialDraftUnsavedRequest,
@@ -25,6 +25,7 @@ from ..models.schemas import (
     SocialDraftResponse,
 )
 from ..services.social_media_service import SocialMediaService
+from ..utils.auth import get_current_artisan
 
 router = APIRouter(tags=["Social Media Helper"])
 
@@ -37,9 +38,6 @@ def _get_service() -> SocialMediaService:
     if _service is None:
         _service = SocialMediaService()
     return _service
-
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
 
 
 def _draft_to_response(draft: SocialDraftDB) -> SocialDraftResponse:
@@ -57,15 +55,12 @@ def _upsert_draft(
     hashtags: list[str],
     image_url: str,
     source: str,
+    artisan_id: str,
     channel: str = "instagram",
     listing_id: Optional[str] = None,
     draft_key: Optional[str] = None,
     edited_by_user: bool = False,
 ) -> SocialDraftDB:
-    """
-    Find an existing draft for (listing_id, image_url, channel) or (draft_key, image_url, channel)
-    and update it; otherwise create a new row.
-    """
     existing: Optional[SocialDraftDB] = None
 
     if listing_id:
@@ -75,6 +70,7 @@ def _upsert_draft(
                 SocialDraftDB.listing_id == listing_id,
                 SocialDraftDB.image_url == image_url,
                 SocialDraftDB.channel == channel,
+                SocialDraftDB.artisan_id == artisan_id,
             )
             .first()
         )
@@ -85,23 +81,26 @@ def _upsert_draft(
                 SocialDraftDB.draft_key == draft_key,
                 SocialDraftDB.image_url == image_url,
                 SocialDraftDB.channel == channel,
+                SocialDraftDB.artisan_id == artisan_id,
             )
             .first()
         )
 
+    now = datetime.now(timezone.utc)
     if existing:
         existing.caption = caption
         existing.hashtags = json.dumps(hashtags)
         existing.source = source
         existing.channel = channel
         existing.edited_by_user = edited_by_user
-        existing.updated_at = datetime.now()
+        existing.updated_at = now
         db.commit()
         db.refresh(existing)
         return existing
 
     new_draft = SocialDraftDB(
         id=f"sd_{uuid.uuid4().hex[:16]}",
+        artisan_id=artisan_id,
         listing_id=listing_id,
         draft_key=draft_key,
         image_url=image_url,
@@ -110,6 +109,8 @@ def _upsert_draft(
         hashtags=json.dumps(hashtags),
         source=source,
         edited_by_user=edited_by_user,
+        created_at=now,
+        updated_at=now,
     )
     db.add(new_draft)
     db.commit()
@@ -123,27 +124,39 @@ def _upsert_draft(
 @router.get(
     "/api/v1/social-drafts/lookup",
     response_model=SocialDraftResponse,
-    summary="Find a saved social draft by listing or draft key and image and channel",
+    summary="Find a saved social draft with tenant ownership check",
 )
-# Updated lookup with fallback for image_url mismatch
 async def lookup_draft(
     image_url: str = Query(...),
     listing_id: Optional[str] = Query(None),
     draft_key: Optional[str] = Query(None),
     channel: Optional[str] = Query(None),
+    artisan: ArtisanDB = Depends(get_current_artisan),
     db: Session = Depends(get_db),
 ) -> SocialDraftResponse:
-    """Return a saved draft for an image and channel, or 404 when none exists.
-    Includes fallback to the most recent draft for a listing when the image URL differs.
-    """
+    """Return a saved draft for an image and channel owned by the caller."""
     if not listing_id and not draft_key:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Either listing_id or draft_key is required.",
         )
 
-    # Primary query: match by image_url plus listing_id/draft_key and optional channel
-    query = db.query(SocialDraftDB).filter(SocialDraftDB.image_url == image_url)
+    if listing_id:
+        # Verify product ownership
+        product = db.query(ProductDB).filter(ProductDB.id == listing_id).first()
+        if not product or product.artisan_id != artisan.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Social draft not found.",
+            )
+
+    query = (
+        db.query(SocialDraftDB)
+        .filter(
+            SocialDraftDB.image_url == image_url,
+            SocialDraftDB.artisan_id == artisan.id,
+        )
+    )
     if listing_id:
         query = query.filter(SocialDraftDB.listing_id == listing_id)
     else:
@@ -155,36 +168,19 @@ async def lookup_draft(
     if draft:
         return _draft_to_response(draft)
 
-    # Fallback: if not found and we have a listing_id, ignore image_url and fetch the latest draft for that listing and channel
+    # Fallback for listing
     if listing_id:
-        fallback_query = db.query(SocialDraftDB).filter(SocialDraftDB.listing_id == listing_id)
+        fallback_query = db.query(SocialDraftDB).filter(
+            SocialDraftDB.listing_id == listing_id,
+            SocialDraftDB.artisan_id == artisan.id,
+        )
         if channel:
             fallback_query = fallback_query.filter(SocialDraftDB.channel == channel)
         fallback = fallback_query.order_by(SocialDraftDB.updated_at.desc()).first()
         if fallback:
             return _draft_to_response(fallback)
 
-    raise HTTPException(status_code=404, detail="Social draft not found.")
-    """Return a saved draft for an image and channel, or 404 when none exists."""
-    if not listing_id and not draft_key:
-        raise HTTPException(
-            status_code=400,
-            detail="Either listing_id or draft_key is required.",
-        )
-
-    query = db.query(SocialDraftDB).filter(SocialDraftDB.image_url == image_url)
-    if listing_id:
-        query = query.filter(SocialDraftDB.listing_id == listing_id)
-    else:
-        query = query.filter(SocialDraftDB.draft_key == draft_key)
-
-    if channel:
-        query = query.filter(SocialDraftDB.channel == channel)
-
-    draft = query.order_by(SocialDraftDB.updated_at.desc()).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Social draft not found.")
-    return _draft_to_response(draft)
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Social draft not found.")
 
 
 @router.post(
@@ -195,12 +191,23 @@ async def lookup_draft(
 async def link_drafts_to_listing(
     draft_key: str = Query(...),
     listing_id: str = Query(...),
+    artisan: ArtisanDB = Depends(get_current_artisan),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Associate all drafts from an add-flow draft key with its listing."""
+    """Associate all drafts from an add-flow draft key with its listing with ownership checks."""
+    product = db.query(ProductDB).filter(ProductDB.id == listing_id).first()
+    if not product or product.artisan_id != artisan.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Cannot link drafts to a product you do not own.",
+        )
+
     updated = (
         db.query(SocialDraftDB)
-        .filter(SocialDraftDB.draft_key == draft_key)
+        .filter(
+            SocialDraftDB.draft_key == draft_key,
+            SocialDraftDB.artisan_id == artisan.id,
+        )
         .update({SocialDraftDB.listing_id: listing_id}, synchronize_session=False)
     )
     db.commit()
@@ -214,13 +221,21 @@ async def link_drafts_to_listing(
 )
 async def generate_draft(
     body: SocialDraftRequest,
+    artisan: ArtisanDB = Depends(get_current_artisan),
     db: Session = Depends(get_db),
     service: SocialMediaService = Depends(_get_service),
 ) -> SocialDraftResponse:
     """
-    Unified endpoint to generate an AI-drafted caption and hashtag set.
-    Accepts either listing_id (saved catalogue product) or draft_key (add-flow draft).
+    Generate an AI-drafted caption and hashtag set scoped to the authenticated artisan.
     """
+    if body.listing_id:
+        product = db.query(ProductDB).filter(ProductDB.id == body.listing_id).first()
+        if not product or product.artisan_id != artisan.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Product not found",
+            )
+
     channel = (body.channel or "instagram").lower()
     rate_key = f"{body.listing_id or body.draft_key or 'unknown'}:{body.image_url}:{channel}"
     result = await service.generate(
@@ -241,14 +256,13 @@ async def generate_draft(
         hashtags=result["hashtags"],
         image_url=body.image_url,
         source=body.source,
+        artisan_id=artisan.id,
         channel=channel,
         listing_id=body.listing_id,
         draft_key=body.draft_key,
     )
     return _draft_to_response(draft)
 
-
-# ── Backward-Compatible Route Aliases ─────────────────────────────────────────
 
 @router.post(
     "/api/v1/listings/unsaved/social-draft",
@@ -257,11 +271,11 @@ async def generate_draft(
 )
 async def generate_for_unsaved_priority(
     body: SocialDraftUnsavedRequest,
+    artisan: ArtisanDB = Depends(get_current_artisan),
     db: Session = Depends(get_db),
     service: SocialMediaService = Depends(_get_service),
 ) -> SocialDraftResponse:
-    """Legacy alias routing to unified generate_draft."""
-    return await generate_draft(body, db, service)
+    return await generate_draft(body, artisan, db, service)
 
 
 @router.post(
@@ -272,15 +286,13 @@ async def generate_for_unsaved_priority(
 async def generate_for_listing(
     listing_id: str,
     body: SocialDraftRequest,
+    artisan: ArtisanDB = Depends(get_current_artisan),
     db: Session = Depends(get_db),
     service: SocialMediaService = Depends(_get_service),
 ) -> SocialDraftResponse:
-    """Legacy alias routing to unified generate_draft."""
     body.listing_id = listing_id
-    return await generate_draft(body, db, service)
+    return await generate_draft(body, artisan, db, service)
 
-
-# ── Save Edits ───────────────────────────────────────────────────────────────
 
 @router.put(
     "/api/v1/social-drafts/{draft_id}",
@@ -290,20 +302,18 @@ async def generate_for_listing(
 async def save_draft(
     draft_id: str,
     body: SocialDraftSaveRequest,
+    artisan: ArtisanDB = Depends(get_current_artisan),
     db: Session = Depends(get_db),
 ) -> SocialDraftResponse:
-    """
-    Persist the user's edits to an existing draft.
-    Sets edited_by_user = True when the user has made changes.
-    """
+    """Persist user edits to a draft with tenant ownership verification."""
     draft = db.query(SocialDraftDB).filter(SocialDraftDB.id == draft_id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Social draft not found.")
+    if not draft or draft.artisan_id != artisan.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Social draft not found.")
 
     draft.caption = body.caption
     draft.hashtags = json.dumps(body.hashtags)
     draft.edited_by_user = body.edited_by_user
-    draft.updated_at = datetime.now()
+    draft.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(draft)
     return _draft_to_response(draft)

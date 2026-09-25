@@ -49,12 +49,11 @@ class SyncManager {
     _processingPollTimer = null;
   }
 
-  /// Copies [file] into app-private storage and writes a PENDING queue
-  /// record. Returns almost instantly — never waits on the network.
   Future<String> enqueue({
     required File file,
     required QueueItemType type,
     required String productDraftId,
+    String? explicitLocalId,
   }) async {
     final appDir = await getApplicationDocumentsDirectory();
     final queueDir = Directory('${appDir.path}/offline_sync_queue');
@@ -62,7 +61,7 @@ class SyncManager {
       await queueDir.create(recursive: true);
     }
 
-    final localId = _uuid.v4();
+    final localId = explicitLocalId ?? _uuid.v4();
     final ext = file.path.contains('.') ? file.path.split('.').last : 'dat';
     final localPath = '${queueDir.path}/$localId.$ext';
     await file.copy(localPath);

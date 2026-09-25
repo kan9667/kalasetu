@@ -55,29 +55,49 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     if (index == 0) {
       final draft = ref.read(addProductFlowProvider);
       if (draft.hasExistingDraft && !draft.resumePromptHandled) {
-        final shouldResume = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: Text('resume_draft_title'.tr(context: context)),
-            content: Text('resume_draft_msg'.tr(context: context)),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text('start_fresh_btn'.tr(context: context)),
+        if (draft.hasCorruptedDraft) {
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text('Draft Recovery Needed'),
+              content: const Text(
+                'A saved draft was found but cannot be loaded safely. To protect data integrity, the corrupted draft will be reset so you can start fresh.',
               ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text('resume_btn'.tr(context: context)),
-              ),
-            ],
-          ),
-        );
-
-        if (shouldResume == true) {
-          ref.read(addProductFlowProvider.notifier).resumeExistingDraft();
-        } else {
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Start Fresh'),
+                ),
+              ],
+            ),
+          );
           ref.read(addProductFlowProvider.notifier).discardPreviousDraft();
+        } else {
+          final shouldResume = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: Text('resume_draft_title'.tr(context: context)),
+              content: Text('resume_draft_msg'.tr(context: context)),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text('start_fresh_btn'.tr(context: context)),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text('resume_btn'.tr(context: context)),
+                ),
+              ],
+            ),
+          );
+
+          if (shouldResume == true) {
+            ref.read(addProductFlowProvider.notifier).resumeExistingDraft();
+          } else {
+            ref.read(addProductFlowProvider.notifier).discardPreviousDraft();
+          }
         }
       }
     }

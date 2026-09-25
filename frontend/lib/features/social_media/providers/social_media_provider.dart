@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/social_draft.dart';
 import '../../../data/services/social_media_service.dart';
 import '../../../core/services/social_sharing_service.dart';
+import '../../../core/providers/app_providers.dart';
 
 class SocialMediaArgs {
   final String? listingId;
@@ -73,7 +74,8 @@ class SocialMediaState {
 }
 
 final socialMediaServiceProvider = Provider<SocialMediaService>((ref) {
-  return HttpSocialMediaService();
+  final tokenStorage = ref.watch(secureTokenStorageProvider);
+  return HttpSocialMediaService(tokenStorage: tokenStorage);
 });
 
 final socialSharingServiceProvider = Provider<SocialSharingService>((ref) {

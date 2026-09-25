@@ -35,6 +35,7 @@ class _FakeChatService implements ChatService {
     String languageCode = 'en',
     String? currentScreen,
     String? artisanCraft,
+    String? idempotencyKey,
   }) async {
     return ChatMessageModel.assistant(text: 'Mock response');
   }
@@ -42,10 +43,10 @@ class _FakeChatService implements ChatService {
   @override
   Future<VoiceChatResult> sendVoiceMessage({
     required String audioPath,
-    List<ChatMessageModel> history = const [],
     String languageCode = 'en',
     String? currentScreen,
     String? artisanCraft,
+    String? idempotencyKey,
   }) async {
     return VoiceChatResult(
       userTranscript: 'voice question',

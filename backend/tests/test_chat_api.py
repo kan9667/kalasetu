@@ -4,8 +4,22 @@ Tests for KalaMitra Chatbot & In-App Navigation Agent API.
 
 from fastapi.testclient import TestClient
 from backend.main import app
+from backend.database import SessionLocal, init_db
+from backend.models.db_models import ArtisanDB
+from backend.utils.auth import create_access_token
 
-client = TestClient(app)
+init_db()
+_db = SessionLocal()
+if not _db.query(ArtisanDB).filter(ArtisanDB.id == "artisan_chat_test").first():
+    _db.add(ArtisanDB(id="artisan_chat_test", name="Chat Artisan", phone="9876543230"))
+    _db.commit()
+_db.close()
+
+from backend.tests.conftest import IdempotentTestClient
+token = create_access_token("artisan_chat_test")
+client = IdempotentTestClient(app, headers={"Authorization": f"Bearer {token}"})
+
+VALID_AUDIO_BYTES = b"ID3\x03\x00\x00\x00\x00\x00\x20" + b"\x00" * 40
 
 
 def test_quick_topics():
@@ -31,6 +45,37 @@ def test_chat_faq():
     assert "reply" in data
     assert len(data["reply"]) > 20
     assert "suggested_queries" in data
+
+
+def test_chat_with_flutter_history_reaches_groq():
+    """Typed chat history must use the schema fields before invoking the LLM."""
+    from unittest.mock import AsyncMock, patch
+
+    payload = {
+        "message": "How should I price this pottery?",
+        "history": [
+            {"role": "assistant", "content": "How can I help you today?"},
+            {"role": "user", "content": "How should I price this pottery?"},
+        ],
+        "language_code": "en",
+    }
+    llm_response = {
+        "reply": "Start with your materials and labor costs, then add a fair margin.",
+        "action": None,
+        "suggested_queries": ["How do I calculate labor cost?"],
+    }
+
+    with patch("backend.routers.chat.chat_service.groq_client.is_available", return_value=True), \
+         patch("backend.routers.chat.chat_service.groq_client.chat_json", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = llm_response
+        response = client.post("/api/v1/chat/message", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["reply"] == llm_response["reply"]
+    mock_llm.assert_awaited_once()
+    messages = mock_llm.await_args.args[0]
+    assert messages[1] == payload["history"][0]
+    assert messages[2] == payload["history"][1]
 
 
 def test_chat_navigation_intent():
@@ -83,16 +128,11 @@ def test_chat_voice_query():
         status="completed",
     )
 
-    with patch("backend.routers.chat.catalog_service.transcribe_audio", new_callable=AsyncMock) as mock_stt, \
-         patch("backend.routers.chat.storage_service.save_upload", new_callable=AsyncMock) as mock_save, \
-         patch("backend.routers.chat.storage_service.get_local_path_from_url") as mock_local:
-
-        mock_save.return_value = "/uploads/chat_audio/test.m4a"
-        mock_local.return_value = "/tmp/test.m4a"
+    with patch("backend.routers.chat.catalog_service.transcribe_audio", new_callable=AsyncMock) as mock_stt:
         mock_stt.return_value = mock_transcribe
 
-        # Send fake audio file
-        files = {"audio": ("test.m4a", b"FAKE_AUDIO_BYTES", "audio/m4a")}
+        # Send valid audio file
+        files = {"audio": ("test.mp3", VALID_AUDIO_BYTES, "audio/mpeg")}
         data = {"language_code": "en", "current_screen": "catalogue"}
 
         response = client.post("/api/v1/chat/voice", files=files, data=data)
@@ -244,15 +284,10 @@ def test_voice_query_preserves_spoken_hindi():
         status="completed",
     )
 
-    with patch("backend.routers.chat.catalog_service.transcribe_audio", new_callable=AsyncMock) as mock_stt, \
-         patch("backend.routers.chat.storage_service.save_upload", new_callable=AsyncMock) as mock_save, \
-         patch("backend.routers.chat.storage_service.get_local_path_from_url") as mock_local:
-
-        mock_save.return_value = "/uploads/chat_audio/hindi_voice.m4a"
-        mock_local.return_value = "/tmp/hindi_voice.m4a"
+    with patch("backend.routers.chat.catalog_service.transcribe_audio", new_callable=AsyncMock) as mock_stt:
         mock_stt.return_value = mock_transcribe
 
-        files = {"audio": ("hindi_voice.m4a", b"FAKE_HINDI_AUDIO", "audio/m4a")}
+        files = {"audio": ("hindi_voice.mp3", VALID_AUDIO_BYTES, "audio/mpeg")}
         data = {"language_code": "en", "current_screen": "home"}
 
         response = client.post("/api/v1/chat/voice", files=files, data=data)
@@ -342,7 +377,4 @@ def test_artisan_profile_craft_overridden_when_explicitly_requested():
     reply = resp.json()["reply"].lower()
     # Must answer about brass / metalcraft, not terracotta
     assert "brass" in reply or "metal" in reply or "casting" in reply or "tarnish" in reply
-
-
-
 

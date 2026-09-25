@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
+import 'package:kalasetu/core/network/session_expired_exception.dart';
 import 'package:kalasetu/data/services/pricing_service.dart';
 
 void main() {
@@ -104,6 +105,91 @@ void main() {
       expect(suggestion.suggestedPrice, greaterThanOrEqualTo(suggestion.floorPrice));
       expect(suggestion.reasoning, isNotEmpty);
       expect(suggestion.reasoningHi, isNotEmpty);
+    });
+
+    test('sends stable Idempotency-Key header on pricing request', () async {
+      String? capturedKey;
+      final dio = Dio(BaseOptions(baseUrl: 'http://127.0.0.1:8000'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            capturedKey = options.headers['Idempotency-Key'] as String?;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'suggested_price': 500.0,
+                  'min_price': 400.0,
+                  'max_price': 600.0,
+                  'floor_price': 300.0,
+                  'confidence_score': 0.9,
+                  'market_position': 'mid-range',
+                  'reasoning': 'test',
+                  'reasoning_hi': 'परीक्षण',
+                },
+              ),
+            );
+          },
+        ),
+      );
+
+      final service = HttpPricingService(
+        baseUrl: 'http://127.0.0.1:8000',
+        dio: dio,
+      );
+
+      final suggestion = await service.suggestPrice(
+        category: 'textiles',
+        tags: ['cotton'],
+        rawMaterialCost: 100,
+        laborHours: 2,
+        hourlyWage: 100,
+      );
+
+      expect(suggestion.suggestedPrice, equals(500.0));
+      expect(capturedKey, isNotNull);
+      expect(capturedKey, startsWith('idem_price_'));
+    });
+
+    test('HTTP 401/403 maps to SessionExpiredException and NEVER falls back to mock', () async {
+      for (final statusCode in [401, 403]) {
+        final dio = Dio(BaseOptions(baseUrl: 'http://127.0.0.1:8000'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  response: Response(
+                    requestOptions: options,
+                    statusCode: statusCode,
+                    data: {'detail': 'Invalid token'},
+                  ),
+                  type: DioExceptionType.badResponse,
+                ),
+              );
+            },
+          ),
+        );
+
+        final service = HttpPricingService(
+          baseUrl: 'http://127.0.0.1:8000',
+          dio: dio,
+        );
+
+        expect(
+          () => service.suggestPrice(
+            category: 'pottery',
+            tags: ['clay'],
+            rawMaterialCost: 100,
+            laborHours: 2,
+            hourlyWage: 100,
+          ),
+          throwsA(isA<SessionExpiredException>()),
+          reason: 'HTTP $statusCode must throw SessionExpiredException without falling back to mock',
+        );
+      }
     });
   });
 }

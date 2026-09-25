@@ -3,6 +3,10 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/config/api_config.dart';
+import '../../core/network/authenticated_http_client.dart';
+import '../../core/network/request_session_context.dart';
+import '../../core/network/session_expired_exception.dart';
+import '../../core/storage/secure_token_storage.dart';
 import '../models/chat_message.dart';
 
 class VoiceChatResult {
@@ -22,6 +26,7 @@ abstract class ChatService {
     String languageCode = 'en',
     String? currentScreen,
     String? artisanCraft,
+    String? idempotencyKey,
   });
 
   Future<VoiceChatResult> sendVoiceMessage({
@@ -29,6 +34,7 @@ abstract class ChatService {
     String languageCode = 'en',
     String? currentScreen,
     String? artisanCraft,
+    String? idempotencyKey,
   });
 
   Future<List<Map<String, dynamic>>> getQuickTopics({String languageCode = 'en'});
@@ -37,15 +43,14 @@ abstract class ChatService {
 class HttpChatService implements ChatService {
   final Dio _dio;
 
-  HttpChatService({Dio? dio})
+  HttpChatService({Dio? dio, SecureTokenStorage? tokenStorage})
       : _dio = dio ??
-            Dio(
-              BaseOptions(
-                connectTimeout: const Duration(seconds: 10),
-                receiveTimeout: const Duration(seconds: 25),
-                sendTimeout: const Duration(seconds: 15),
-                headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-              ),
+            AuthenticatedHttpClient.create(
+              baseUrl: ApiConfig.baseUrl,
+              tokenStorage: tokenStorage,
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 25),
+              sendTimeout: const Duration(seconds: 15),
             );
 
   @override
@@ -55,9 +60,14 @@ class HttpChatService implements ChatService {
     String languageCode = 'en',
     String? currentScreen,
     String? artisanCraft,
+    String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final activeUrl = ApiConfig.baseUrl;
     _dio.options.baseUrl = activeUrl;
+
+    final operationKey = idempotencyKey ??
+        'idem_chat_${message.hashCode.abs()}_${languageCode.hashCode.abs()}';
 
     try {
       final historyPayload = history.take(6).map((m) {
@@ -75,14 +85,44 @@ class HttpChatService implements ChatService {
         if (artisanCraft != null && artisanCraft.isNotEmpty) 'artisan_craft': artisanCraft,
       };
 
-      debugPrint('[HttpChatService] POST $activeUrl/api/v1/chat/message');
-      final response = await _dio.post('/api/v1/chat/message', data: payload);
+      debugPrint('[HttpChatService] POST $activeUrl/api/v1/chat/message [Idempotency-Key: $operationKey]');
+      final response = await _dio.post(
+        '/api/v1/chat/message',
+        data: payload,
+        options: Options(
+          headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
+        ),
+      );
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data as Map<String, dynamic>;
         return ChatMessageModel.fromJson(data);
       }
+    } on DioException catch (e) {
+      if (e.error is SessionExpiredException ||
+          e.response?.statusCode == 401 ||
+          e.response?.statusCode == 403) {
+        throw e.error is SessionExpiredException
+            ? e.error as SessionExpiredException
+            : SessionExpiredException(
+                'Session expired (${e.response?.statusCode})',
+                e.response?.statusCode,
+              );
+      }
+      final statusCode = e.response?.statusCode;
+      if (statusCode == 409 || statusCode == 413 || statusCode == 422) {
+        final msg = e.response?.data is Map ? e.response?.data['detail']?.toString() : e.message;
+        throw DioException(
+          requestOptions: e.requestOptions,
+          response: e.response,
+          type: DioExceptionType.badResponse,
+          error: 'Validation error ($statusCode): $msg',
+        );
+      }
+      debugPrint('[HttpChatService] Backend chat failed or offline: $e. Using local rule fallback.');
     } catch (e) {
+      if (e is SessionExpiredException || e is DioException) rethrow;
       debugPrint('[HttpChatService] Backend chat failed or offline: $e. Using local rule fallback.');
     }
 
@@ -96,9 +136,14 @@ class HttpChatService implements ChatService {
     String languageCode = 'en',
     String? currentScreen,
     String? artisanCraft,
+    String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final activeUrl = ApiConfig.baseUrl;
     _dio.options.baseUrl = activeUrl;
+
+    final operationKey = idempotencyKey ??
+        'idem_vchat_${audioPath.hashCode.abs()}_${languageCode.hashCode.abs()}';
 
     try {
       final fileName = audioPath.split(Platform.pathSeparator).last;
@@ -116,8 +161,15 @@ class HttpChatService implements ChatService {
         formData.fields.add(MapEntry('artisan_craft', artisanCraft));
       }
 
-      debugPrint('[HttpChatService] POST $activeUrl/api/v1/chat/voice (lang: $languageCode, craft: $artisanCraft)');
-      final response = await _dio.post('/api/v1/chat/voice', data: formData);
+      debugPrint('[HttpChatService] POST $activeUrl/api/v1/chat/voice (lang: $languageCode, craft: $artisanCraft) [Idempotency-Key: $operationKey]');
+      final response = await _dio.post(
+        '/api/v1/chat/voice',
+        data: formData,
+        options: Options(
+          headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
+        ),
+      );
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data as Map<String, dynamic>;
@@ -128,7 +180,30 @@ class HttpChatService implements ChatService {
           assistantMessage: assistantMsg,
         );
       }
+    } on DioException catch (e) {
+      if (e.error is SessionExpiredException ||
+          e.response?.statusCode == 401 ||
+          e.response?.statusCode == 403) {
+        throw e.error is SessionExpiredException
+            ? e.error as SessionExpiredException
+            : SessionExpiredException(
+                'Session expired (${e.response?.statusCode})',
+                e.response?.statusCode,
+              );
+      }
+      final statusCode = e.response?.statusCode;
+      if (statusCode == 409 || statusCode == 413 || statusCode == 422) {
+        final msg = e.response?.data is Map ? e.response?.data['detail']?.toString() : e.message;
+        throw DioException(
+          requestOptions: e.requestOptions,
+          response: e.response,
+          type: DioExceptionType.badResponse,
+          error: 'Validation error ($statusCode): $msg',
+        );
+      }
+      debugPrint('[HttpChatService] Backend voice chat failed or offline: $e');
     } catch (e) {
+      if (e is SessionExpiredException || e is DioException) rethrow;
       debugPrint('[HttpChatService] Backend voice chat failed or offline: $e');
     }
 

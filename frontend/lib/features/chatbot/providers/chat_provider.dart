@@ -11,7 +11,8 @@ import '../../catalogue/providers/catalogue_filter_provider.dart';
 import '../../home/screens/home_shell.dart';
 
 final chatServiceProvider = Provider<ChatService>((ref) {
-  return HttpChatService();
+  final tokenStorage = ref.watch(secureTokenStorageProvider);
+  return HttpChatService(tokenStorage: tokenStorage);
 });
 
 class ChatState {
@@ -271,13 +272,18 @@ class ChatNotifier extends StateNotifier<ChatState> {
       }
 
       final previousStatus = matchedProduct.status;
+      if (statusStr == 'live' || statusStr == 'published') {
+        return reply.copyWith(
+          text: isHi
+              ? '⚠️ किसी लिस्टिंग को लाइव करने से पहले कारीगर द्वारा स्पष्ट समीक्षा और मंज़ूरी आवश्यक है। कृपया उत्पाद समीक्षा स्क्रीन पर जाएं।'
+              : '⚠️ Publishing requires explicit artisan review and approval before becoming live. Please open the product review screen to approve.',
+        );
+      }
+
       ProductStatus newStatus;
       switch (statusStr) {
         case 'sold':
           newStatus = ProductStatus.sold;
-          break;
-        case 'live':
-          newStatus = ProductStatus.live;
           break;
         case 'draft':
           newStatus = ProductStatus.draft;
@@ -315,7 +321,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   /// Reverts a direct product status update back to its previous state
-  Future<void> undoProductStatusUpdate(
+  Future<ChatActionModel?> undoProductStatusUpdate(
     String messageId,
     String productId,
     String previousStatusStr,
@@ -324,10 +330,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final repo = _ref.read(productRepositoryProvider);
       final products = await repo.getProducts();
       final prodIndex = products.indexWhere((p) => p.id == productId);
-      if (prodIndex == -1) return;
+      if (prodIndex == -1) return null;
 
       final prod = products[prodIndex];
-      ProductStatus prevStatus = ProductStatus.live;
+      ProductStatus prevStatus = ProductStatus.draft;
       for (final s in ProductStatus.values) {
         if (s.name.toLowerCase() == previousStatusStr.toLowerCase()) {
           prevStatus = s;
@@ -335,25 +341,56 @@ class ChatNotifier extends StateNotifier<ChatState> {
         }
       }
 
-      final revertedProduct = prod.copyWith(status: prevStatus);
-      await _ref.read(productListProvider.notifier).updateProduct(revertedProduct);
+      final isRestoringToLiveOrDraft = prevStatus == ProductStatus.live ||
+          prevStatus == ProductStatus.published ||
+          prevStatus == ProductStatus.draft;
+
+      ChatActionModel? resultAction;
+
+      if (isRestoringToLiveOrDraft) {
+        // Enforce product invariant: NEVER call updateProduct for live/published/draft directly.
+        // Direct publication or draft status modification via chatbot undo without artisan review
+        // violates the explicit human approval boundary. Return a typed navigation action instead.
+        resultAction = ChatActionModel(
+          type: 'navigate',
+          destination: 'review_product',
+          route: '/review-product',
+          label: 'Review "${prod.title}"',
+          params: {'product_id': prod.id},
+          updatedProductId: prod.id,
+          isUndone: true,
+        );
+      } else {
+        final revertedProduct = prod.copyWith(status: prevStatus);
+        await _ref.read(productListProvider.notifier).updateProduct(revertedProduct);
+        resultAction = ChatActionModel(
+          type: 'update_product_status',
+          destination: 'catalogue',
+          label: 'Restored to ${prevStatus.name.toUpperCase()}',
+          updatedProductId: prod.id,
+          isUndone: true,
+        );
+      }
+
+      final statusMessage = isRestoringToLiveOrDraft
+          ? 'Requires explicit artisan review before publishing or modifying draft. Tap below to review.'
+          : 'Status restored to ${prevStatus.name.toUpperCase()}.';
 
       final updatedMessages = state.messages.map((m) {
         if (m.id == messageId && m.action != null) {
           return m.copyWith(
-            text: '${m.text}\n\n↺ Undo successful: "${prod.title}" status restored to ${prevStatus.name.toUpperCase()}.',
-            action: m.action!.copyWith(
-              isUndone: true,
-              label: 'Restored to ${prevStatus.name.toUpperCase()}',
-            ),
+            text: '${m.text}\n\n↺ Undo: "${prod.title}" - $statusMessage',
+            action: resultAction,
           );
         }
         return m;
       }).toList();
 
       state = state.copyWith(messages: updatedMessages);
+      return resultAction;
     } catch (e) {
       debugPrint('[ChatNotifier] Error undoing product status: $e');
+      return null;
     }
   }
 
@@ -454,6 +491,22 @@ class ChatNotifier extends StateNotifier<ChatState> {
       return;
     }
 
+    // 2b. Direct review product action tap -> open ReviewExistingProductScreen for explicit approval
+    if (action.destination == 'review_product' || action.type == 'review_product') {
+      final productId = action.targetProduct ??
+          action.updatedProductId ??
+          action.params?['product_id']?.toString() ??
+          action.params?['target_product_id']?.toString() ??
+          '';
+      if (productId.isNotEmpty) {
+        if (Navigator.of(context, rootNavigator: true).canPop()) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+        context.push('/review-product/$productId');
+        return;
+      }
+    }
+
     // 3. Close bottom sheet if open
     if (Navigator.of(context, rootNavigator: true).canPop()) {
       Navigator.of(context, rootNavigator: true).pop();
@@ -498,6 +551,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
           break;
         case 'language_settings':
           context.push('/language-settings');
+          break;
+        case 'review_product':
+          final productId = action.targetProduct ??
+              action.updatedProductId ??
+              action.params?['product_id']?.toString() ??
+              action.params?['target_product_id']?.toString() ??
+              '';
+          if (productId.isNotEmpty) {
+            context.push('/review-product/$productId');
+          }
           break;
       }
     }

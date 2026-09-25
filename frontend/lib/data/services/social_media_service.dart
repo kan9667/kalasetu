@@ -1,6 +1,10 @@
 import 'package:dio/dio.dart';
 import 'dart:io';
 import '../../core/config/api_config.dart';
+import '../../core/network/authenticated_http_client.dart';
+import '../../core/network/request_session_context.dart';
+import '../../core/network/session_expired_exception.dart';
+import '../../core/storage/secure_token_storage.dart';
 import '../models/social_draft.dart';
 
 // ── Typed Exceptions ─────────────────────────────────────────────────────────
@@ -29,10 +33,10 @@ class SocialMediaNetworkException implements Exception {
   String toString() => 'SocialMediaNetworkException: $message';
 }
 
-// ── Abstract Contract ─────────────────────────────────────────────────────────
+// ── Abstract Service ──────────────────────────────────────────────────────────
 
 abstract class SocialMediaService {
-  /// Generate a caption + hashtag draft for a **saved** listing.
+  /// Generate a social media draft from an existing published listing.
   Future<SocialDraft> generateForListing({
     required String listingId,
     required String imageUrl,
@@ -44,9 +48,10 @@ abstract class SocialMediaService {
     String locale,
     String source,
     String channel,
+    String? idempotencyKey,
   });
 
-  /// Generate a caption + hashtag draft for an **unsaved** add-flow draft.
+  /// Generate a draft while still in the Add Product flow (before publish).
   Future<SocialDraft> generateForDraft({
     required String draftKey,
     required String imageUrl,
@@ -57,6 +62,7 @@ abstract class SocialMediaService {
     String tone,
     String locale,
     String channel,
+    String? idempotencyKey,
   });
 
   /// Persist the (possibly user-edited) draft.
@@ -65,6 +71,7 @@ abstract class SocialMediaService {
     required String caption,
     required List<String> hashtags,
     bool editedByUser,
+    String? idempotencyKey,
   });
 
   /// Reload a previously saved draft by its ID.
@@ -81,23 +88,23 @@ abstract class SocialMediaService {
   Future<void> linkDraftsToListing({
     required String draftKey,
     required String listingId,
+    String? idempotencyKey,
   });
 
-  Future<String> uploadImage(String imagePath);
+  Future<String> uploadImage(String imagePath, {String? idempotencyKey});
 }
 
 // ── HTTP Implementation ───────────────────────────────────────────────────────
 
 class HttpSocialMediaService implements SocialMediaService {
-  HttpSocialMediaService({String? baseUrl, Dio? dio})
+  HttpSocialMediaService({String? baseUrl, Dio? dio, SecureTokenStorage? tokenStorage})
       : _base = baseUrl ?? ApiConfig.baseUrl,
         _dio = dio ??
-            Dio(
-              BaseOptions(
-                connectTimeout: const Duration(seconds: 15),
-                receiveTimeout: const Duration(seconds: 60),
-                headers: {'Accept': 'application/json'},
-              ),
+            AuthenticatedHttpClient.create(
+              baseUrl: baseUrl ?? ApiConfig.baseUrl,
+              tokenStorage: tokenStorage,
+              connectTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 60),
             );
 
   final String _base;
@@ -115,6 +122,7 @@ class HttpSocialMediaService implements SocialMediaService {
     String locale = 'en-US',
     String source = 'catalogue',
     String channel = 'instagram',
+    String? idempotencyKey,
   }) async {
     final body = {
       'image_url': imageUrl,
@@ -128,7 +136,7 @@ class HttpSocialMediaService implements SocialMediaService {
       'source': source,
       'channel': channel,
     };
-    return _post('$_base/api/v1/social-drafts/generate', body);
+    return _post('$_base/api/v1/social-drafts/generate', body, idempotencyKey: idempotencyKey);
   }
 
   @override
@@ -142,6 +150,7 @@ class HttpSocialMediaService implements SocialMediaService {
     String tone = 'warm and authentic',
     String locale = 'en-US',
     String channel = 'instagram',
+    String? idempotencyKey,
   }) async {
     final body = {
       'draft_key': draftKey,
@@ -155,7 +164,7 @@ class HttpSocialMediaService implements SocialMediaService {
       'source': 'add_flow',
       'channel': channel,
     };
-    return _post('$_base/api/v1/social-drafts/generate', body);
+    return _post('$_base/api/v1/social-drafts/generate', body, idempotencyKey: idempotencyKey);
   }
 
   @override
@@ -164,16 +173,24 @@ class HttpSocialMediaService implements SocialMediaService {
     required String caption,
     required List<String> hashtags,
     bool editedByUser = true,
+    String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final body = {
       'caption': caption,
       'hashtags': hashtags,
       'edited_by_user': editedByUser,
     };
+    final operationKey = idempotencyKey ??
+        'idem_socsave_${DateTime.now().microsecondsSinceEpoch}_${draftId.hashCode.abs()}';
     try {
       final response = await _dio.put(
         '$_base/api/v1/social-drafts/$draftId',
         data: body,
+        options: Options(
+          headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
+        ),
       );
       return SocialDraft.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
@@ -219,11 +236,19 @@ class HttpSocialMediaService implements SocialMediaService {
   Future<void> linkDraftsToListing({
     required String draftKey,
     required String listingId,
+    String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
+    final operationKey = idempotencyKey ??
+        'idem_soclink_${DateTime.now().microsecondsSinceEpoch}_${listingId.hashCode.abs()}';
     try {
       await _dio.post(
         '$_base/api/v1/social-drafts/link',
         queryParameters: {'draft_key': draftKey, 'listing_id': listingId},
+        options: Options(
+          headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
+        ),
       );
     } on DioException catch (e) {
       throw _mapDioError(e);
@@ -231,7 +256,10 @@ class HttpSocialMediaService implements SocialMediaService {
   }
 
   @override
-  Future<String> uploadImage(String imagePath) async {
+  Future<String> uploadImage(String imagePath, {String? idempotencyKey}) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
+    final operationKey = idempotencyKey ??
+        'idem_socup_${DateTime.now().microsecondsSinceEpoch}_${imagePath.hashCode.abs()}';
     try {
       final file = File(imagePath);
       final response = await _dio.post(
@@ -242,6 +270,10 @@ class HttpSocialMediaService implements SocialMediaService {
             filename: file.uri.pathSegments.last,
           ),
         }),
+        options: Options(
+          headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
+        ),
       );
       final imageUrl = (response.data as Map<String, dynamic>)['image_url'] as String;
       return imageUrl.startsWith('http') ? imageUrl : '$_base$imageUrl';
@@ -252,9 +284,19 @@ class HttpSocialMediaService implements SocialMediaService {
 
   // ── Internal ────────────────────────────────────────────────────────────
 
-  Future<SocialDraft> _post(String url, Map<String, dynamic> body) async {
+  Future<SocialDraft> _post(String url, Map<String, dynamic> body, {String? idempotencyKey}) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
+    final operationKey = idempotencyKey ??
+        'idem_soc_${DateTime.now().microsecondsSinceEpoch}_${url.hashCode.abs()}';
     try {
-      final response = await _dio.post(url, data: body);
+      final response = await _dio.post(
+        url,
+        data: body,
+        options: Options(
+          headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
+        ),
+      );
       return SocialDraft.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _mapDioError(e);
@@ -263,6 +305,14 @@ class HttpSocialMediaService implements SocialMediaService {
 
   Exception _mapDioError(DioException e) {
     final status = e.response?.statusCode;
+    if (status == 401 || status == 403 || e.error is SessionExpiredException) {
+      return e.error is SessionExpiredException
+          ? e.error as SessionExpiredException
+          : SessionExpiredException(
+              status == 403 ? 'Access forbidden (403).' : 'Session expired or unauthorized (401).',
+              status,
+            );
+    }
     if (status == 429) {
       final detail = (e.response?.data is Map)
           ? (e.response!.data['detail'] as String? ?? 'Rate limit exceeded')

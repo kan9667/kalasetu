@@ -20,4 +20,5 @@ class AppRouteConstants {
   static const String myStats = 'myStats';
   static const String listingTutorial = 'listingTutorial';
   static const String assistant = 'assistant';
+  static const String reviewProduct = 'reviewProduct';
 }

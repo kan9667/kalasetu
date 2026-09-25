@@ -10,6 +10,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/language_picker.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../providers/auth_provider.dart';
 
 class SignInScreen extends ConsumerStatefulWidget {
@@ -29,11 +30,21 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     super.dispose();
   }
 
-  void _handleContinue() {
+  void _handleContinue() async {
     if (_formKey.currentState?.validate() ?? false) {
       final phone = _phoneController.text.trim();
-      ref.read(authStateProvider.notifier).signInWithPhone(phone);
-      context.pushNamed(AppRouteConstants.otp, queryParameters: {'phone': phone});
+      final result = await ref.read(authStateProvider.notifier).signInWithPhone(phone);
+      if (!mounted) return;
+      if (result is RequestOtpSuccess) {
+        context.pushNamed(AppRouteConstants.otp, queryParameters: {'phone': phone});
+      } else if (result is RequestOtpFailure) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 
@@ -41,6 +52,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   Widget build(BuildContext context) {
     Localizations.maybeLocaleOf(context);
     ref.watch(userProfileProvider);
+    final authState = ref.watch(authStateProvider);
     final width = MediaQuery.of(context).size.width;
     final screenPadding = AppSpacing.getScreenPadding(context);
     final isCompact = width < 480;
@@ -121,6 +133,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 label: 'continue_btn'.tr(),
                 icon: Icons.login,
                 onPressed: _handleContinue,
+                isLoading: authState.isLoading,
                 isCompact: isCompact,
               ),
 

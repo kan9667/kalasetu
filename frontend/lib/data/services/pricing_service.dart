@@ -2,6 +2,10 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/config/api_config.dart';
+import '../../core/network/authenticated_http_client.dart';
+import '../../core/network/request_session_context.dart';
+import '../../core/network/session_expired_exception.dart';
+import '../../core/storage/secure_token_storage.dart';
 
 /// Comparable market product retrieved via ChromaDB RAG benchmark search.
 class ComparableProduct {
@@ -42,7 +46,7 @@ class ComparableProduct {
         'category': category,
         'source_platform': sourcePlatform,
         'similarity_score': similarityScore,
-        'product_url': productUrl,
+        if (productUrl != null) 'product_url': productUrl,
       };
 }
 
@@ -57,6 +61,9 @@ class PriceSuggestion {
   final String reasoning;
   final String reasoningHi;
   final List<ComparableProduct> comparableProducts;
+  final bool isFallback;
+  final bool isDegraded;
+  final String? degradedReason;
 
   const PriceSuggestion({
     required this.minPrice,
@@ -68,6 +75,9 @@ class PriceSuggestion {
     required this.reasoning,
     required this.reasoningHi,
     this.comparableProducts = const [],
+    this.isFallback = false,
+    this.isDegraded = false,
+    this.degradedReason,
   });
 
   factory PriceSuggestion.fromJson(Map<String, dynamic> json) {
@@ -76,6 +86,10 @@ class PriceSuggestion {
             ?.map((c) => ComparableProduct.fromJson(c as Map<String, dynamic>))
             .toList() ??
         const [];
+
+    final isFallback = json['is_fallback'] as bool? ?? false;
+    final isDegraded = json['is_degraded'] as bool? ?? isFallback;
+    final degradedReason = json['degraded_reason'] as String?;
 
     return PriceSuggestion(
       suggestedPrice: (json['suggested_price'] as num?)?.toDouble() ?? 0.0,
@@ -87,6 +101,9 @@ class PriceSuggestion {
       reasoning: json['reasoning']?.toString() ?? '',
       reasoningHi: json['reasoning_hi']?.toString() ?? '',
       comparableProducts: comparables,
+      isFallback: isFallback,
+      isDegraded: isDegraded,
+      degradedReason: degradedReason,
     );
   }
 }
@@ -100,25 +117,25 @@ abstract class PricingService {
     double? rawMaterialCost,
     double? laborHours,
     double? hourlyWage,
+    String? idempotencyKey,
   });
 }
 
 /// Live HTTP implementation connecting to FastAPI `/api/v1/pricing/suggest`.
-/// Gracefully falls back to MockPricingService on timeout or offline state.
+/// Gracefully falls back to MockPricingService only on genuine network timeout/offline state.
 class HttpPricingService implements PricingService {
   final String _base;
   final Dio _dio;
   final MockPricingService _fallback;
 
-  HttpPricingService({String? baseUrl, Dio? dio})
+  HttpPricingService({String? baseUrl, Dio? dio, SecureTokenStorage? tokenStorage})
       : _base = baseUrl ?? ApiConfig.baseUrl,
         _dio = dio ??
-            Dio(
-              BaseOptions(
-                connectTimeout: const Duration(seconds: 15),
-                receiveTimeout: const Duration(seconds: 45),
-                headers: {'Accept': 'application/json'},
-              ),
+            AuthenticatedHttpClient.create(
+              baseUrl: baseUrl ?? ApiConfig.baseUrl,
+              tokenStorage: tokenStorage,
+              connectTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 45),
             ),
         _fallback = MockPricingService();
 
@@ -131,7 +148,12 @@ class HttpPricingService implements PricingService {
     double? rawMaterialCost,
     double? laborHours,
     double? hourlyWage,
+    String? idempotencyKey,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
+    final operationKey = idempotencyKey ??
+        'idem_price_${category.hashCode.abs()}_${(rawMaterialCost ?? 0).toInt()}_${(laborHours ?? 0).toInt()}';
+
     try {
       final desc = (description != null && description.trim().isNotEmpty)
           ? description.trim()
@@ -141,16 +163,21 @@ class HttpPricingService implements PricingService {
         'description': desc,
         'category': category,
         if (imageUrl != null && imageUrl.trim().isNotEmpty) 'image_url': imageUrl.trim(),
-        'raw_material_cost': ?rawMaterialCost,
-        'base_cost': ?rawMaterialCost,
-        'labor_hours': ?laborHours,
-        'hourly_wage': ?hourlyWage,
+        'raw_material_cost': rawMaterialCost,
+        'base_cost': rawMaterialCost,
+        'labor_hours': laborHours,
+        'hourly_wage': hourlyWage,
         'tags': tags,
       };
 
+      debugPrint('[HttpPricingService] POST $_base/api/v1/pricing/suggest [Idempotency-Key: $operationKey]');
       final response = await _dio.post(
         '$_base/api/v1/pricing/suggest',
         data: payload,
+        options: Options(
+          headers: {'Idempotency-Key': operationKey},
+          extra: sessionExtra,
+        ),
       );
 
       if (response.statusCode == 200 && response.data != null) {
@@ -161,7 +188,54 @@ class HttpPricingService implements PricingService {
         response: response,
         error: 'Invalid response status ${response.statusCode} from pricing server',
       );
+    } on DioException catch (e) {
+      if (e.error is SessionExpiredException ||
+          e.response?.statusCode == 401 ||
+          e.response?.statusCode == 403) {
+        throw e.error is SessionExpiredException
+            ? e.error as SessionExpiredException
+            : SessionExpiredException(
+                'Session expired (${e.response?.statusCode})',
+                e.response?.statusCode,
+              );
+      }
+      final statusCode = e.response?.statusCode;
+      if (statusCode == 409 || statusCode == 413 || statusCode == 422) {
+        final msg = e.response?.data is Map ? e.response?.data['detail']?.toString() : e.message;
+        throw DioException(
+          requestOptions: e.requestOptions,
+          response: e.response,
+          type: DioExceptionType.badResponse,
+          error: 'Validation error ($statusCode): $msg',
+        );
+      }
+      debugPrint('[HttpPricingService] API call failed: $e. Falling back to offline calculation.');
+      final fallbackResult = await _fallback.suggestPrice(
+        description: description,
+        category: category,
+        tags: tags,
+        imageUrl: imageUrl,
+        rawMaterialCost: rawMaterialCost,
+        laborHours: laborHours,
+        hourlyWage: hourlyWage,
+        idempotencyKey: operationKey,
+      );
+      return PriceSuggestion(
+        suggestedPrice: fallbackResult.suggestedPrice,
+        minPrice: fallbackResult.minPrice,
+        maxPrice: fallbackResult.maxPrice,
+        floorPrice: fallbackResult.floorPrice,
+        confidenceScore: fallbackResult.confidenceScore,
+        marketPosition: fallbackResult.marketPosition,
+        reasoning: '${fallbackResult.reasoning} [Offline Fallback: Network unreachable]',
+        reasoningHi: '${fallbackResult.reasoningHi} [ऑफ़लाइन गणना]',
+        comparableProducts: fallbackResult.comparableProducts,
+        isFallback: true,
+        isDegraded: true,
+        degradedReason: 'Network unreachable: calculated using local cost formula.',
+      );
     } catch (e) {
+      if (e is SessionExpiredException) rethrow;
       debugPrint('[HttpPricingService] API call failed: $e. Falling back to offline calculation.');
       return _fallback.suggestPrice(
         description: description,
@@ -171,6 +245,7 @@ class HttpPricingService implements PricingService {
         rawMaterialCost: rawMaterialCost,
         laborHours: laborHours,
         hourlyWage: hourlyWage,
+        idempotencyKey: operationKey,
       );
     }
   }
@@ -187,6 +262,7 @@ class MockPricingService implements PricingService {
     double? rawMaterialCost,
     double? laborHours,
     double? hourlyWage,
+    String? idempotencyKey,
   }) async {
     await Future.delayed(const Duration(milliseconds: 700));
 

@@ -5,7 +5,8 @@ Uses SQLite with SQLAlchemy 2.0. Creates tables on startup.
 """
 
 from typing import Generator
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 from .config import get_settings
@@ -19,8 +20,19 @@ engine = create_engine(
     echo=settings.debug,
 )
 
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """Enforce SQLite foreign key constraints."""
+    if "sqlite" in settings.database_url:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -33,12 +45,11 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    """Create all tables (ArtisanDB + ProductDB) and ensure demo artisan exists."""
-    # Import models so SQLAlchemy registers them with Base.metadata
-    from .models.db_models import ArtisanDB, ProductDB, SocialDraftDB  # noqa: F401
-    from datetime import datetime
-
+    """Ensure baseline seed data (demo artisan) exists for local development and testing."""
+    from .models import db_models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+    from .models.db_models import ArtisanDB
+    from datetime import datetime
 
     # Ensure demo artisan exists so demo login and FK constraints always succeed
     db = SessionLocal()

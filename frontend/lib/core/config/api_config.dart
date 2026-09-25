@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import '../storage/private_media_cache.dart';
 
 /// Centralized API configuration that dynamically resolves the working backend URL.
 /// Works seamlessly across physical Android phones on Wi-Fi (e.g., SM-M346B),
@@ -8,8 +9,12 @@ import 'package:flutter/foundation.dart';
 class ApiConfig {
   static String? _cachedBaseUrl;
 
-  /// Default fallback Wi-Fi IP of the host machine
-  static const String hostLanIp = '192.168.1.5';
+  /// Current Wi-Fi IP of the host machine
+  static const String hostLanIp = '192.168.1.6';
+
+  /// Deployed production Railway backend
+  static const String deployedBackendUrl =
+      'https://kalasetu-production.up.railway.app';
 
   static String get baseUrl {
     if (_cachedBaseUrl != null) return _cachedBaseUrl!;
@@ -19,6 +24,12 @@ class ApiConfig {
   static void setBaseUrl(String url) {
     _cachedBaseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
     debugPrint('[ApiConfig] Base URL manually set to: $_cachedBaseUrl');
+    try {
+      PrivateMediaCache.instance.updateSession(
+        accountId: PrivateMediaCache.instance.activeAccountId,
+        backendUrl: _cachedBaseUrl,
+      );
+    } catch (_) {}
   }
 
   static String _resolveInitialBaseUrl() {
@@ -44,10 +55,11 @@ class ApiConfig {
     }
 
     final candidates = <String>[
-      'http://$hostLanIp:8000',
-      if (Platform.isAndroid) 'http://10.0.2.2:8000',
-      'http://127.0.0.1:8000',
+      'http://127.0.0.1:8000', // Responds immediately with adb reverse
       'http://localhost:8000',
+      'http://$hostLanIp:8000', // Physical Android device over Wi-Fi
+      if (Platform.isAndroid) 'http://10.0.2.2:8000', // Android emulator
+      deployedBackendUrl, // Deployed Railway production backend
     ];
 
     for (final candidate in candidates) {

@@ -4,6 +4,8 @@ import 'dart:math';
 
 import 'package:dio/dio.dart';
 import '../../config/api_config.dart';
+import '../../network/authenticated_http_client.dart';
+import '../../network/request_session_context.dart';
 import '../../../../data/services/speech_service.dart';
 import '../models/queue_item.dart';
 
@@ -164,12 +166,12 @@ class MockUploadApi implements UploadApi {
 class RealUploadApi implements UploadApi {
   RealUploadApi({required this.baseUrl, Dio? dio})
       : _dio = dio ??
-            Dio(BaseOptions(
+            AuthenticatedHttpClient.create(
               baseUrl: baseUrl,
               connectTimeout: const Duration(seconds: 15),
               sendTimeout: const Duration(minutes: 2), // large images on slow uplinks
               receiveTimeout: const Duration(minutes: 3),
-            ));
+            );
 
   final String baseUrl;
   final Dio _dio;
@@ -180,6 +182,7 @@ class RealUploadApi implements UploadApi {
     required String idempotencyKey,
     required String productDraftId,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final activeUrl = baseUrl.isNotEmpty ? baseUrl : ApiConfig.baseUrl;
     _dio.options.baseUrl = activeUrl;
 
@@ -189,7 +192,14 @@ class RealUploadApi implements UploadApi {
       'product_draft_id': productDraftId,
     });
 
-    final response = await _dio.post('/api/v1/catalog/enhance-image', data: formData);
+    final response = await _dio.post(
+      '/api/v1/catalog/enhance-image',
+      data: formData,
+      options: Options(
+        headers: {'Idempotency-Key': idempotencyKey},
+        extra: sessionExtra,
+      ),
+    );
     final data = response.data as Map<String, dynamic>;
     final enhancedUrl = data['enhanced_url'] as String? ?? data['enhanced_image_url'] as String?;
 
@@ -204,6 +214,12 @@ class RealUploadApi implements UploadApi {
       resultPayload: {
         'enhancedImageUrl': resolvedUrl,
         'originalImageUrl': data['original_url'],
+        'mediaId': data['media_id'],
+        'originalMediaId': data['original_media_id'],
+        'sha256Checksum': data['sha256_checksum'] ?? data['sha256Checksum'],
+        'sha256_checksum': data['sha256_checksum'] ?? data['sha256Checksum'],
+        'isDegraded': data['is_degraded'] ?? false,
+        'degradedReason': data['degraded_reason'],
       },
     );
   }
@@ -214,6 +230,7 @@ class RealUploadApi implements UploadApi {
     required String idempotencyKey,
     required String productDraftId,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final activeUrl = baseUrl.isNotEmpty ? baseUrl : ApiConfig.baseUrl;
     _dio.options.baseUrl = activeUrl;
 
@@ -227,7 +244,14 @@ class RealUploadApi implements UploadApi {
     });
 
     try {
-      final response = await _dio.post('/api/v1/voice/transcribe', data: formData);
+      final response = await _dio.post(
+        '/api/v1/voice/transcribe',
+        data: formData,
+        options: Options(
+          headers: {'Idempotency-Key': idempotencyKey},
+          extra: sessionExtra,
+        ),
+      );
       final data = response.data as Map<String, dynamic>;
 
       final rawTranscript = (data['transcript'] as String? ?? '').trim();
@@ -247,7 +271,14 @@ class RealUploadApi implements UploadApi {
     } catch (e) {
       // Fallback to /api/v1/voice/process if transcribe endpoint differs
       try {
-        final fallbackResponse = await _dio.post('/api/v1/voice/process', data: formData);
+        final fallbackResponse = await _dio.post(
+          '/api/v1/voice/process',
+          data: formData,
+          options: Options(
+            headers: {'Idempotency-Key': idempotencyKey},
+            extra: sessionExtra,
+          ),
+        );
         final data = fallbackResponse.data as Map<String, dynamic>;
         return UploadResult(
           jobId: idempotencyKey,

@@ -15,6 +15,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/language_picker.dart';
 import '../../../data/models/user_profile.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../providers/auth_provider.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -131,7 +132,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     });
   }
 
-  void _handleRegister() {
+  void _handleRegister() async {
     if (_formKey.currentState?.validate() ?? false) {
       final phone = _phoneController.text.trim();
       final profile = UserProfile(
@@ -150,20 +151,33 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         preferredLanguage: EasyLocalization.of(context)?.locale.languageCode ?? 'en',
       );
 
-      ref.read(authStateProvider.notifier).registerWithDetails(profile);
-      context.pushNamed(
-        AppRouteConstants.otp,
-        queryParameters: {
-          'phone': phone,
-          'isNewUser': 'true',
-        },
-      );
+      // Await registration and OTP challenge creation
+      final result = await ref.read(authStateProvider.notifier).registerWithDetails(profile);
+      if (!mounted) return;
+
+      if (result is RequestOtpSuccess) {
+        context.pushNamed(
+          AppRouteConstants.otp,
+          queryParameters: {
+            'phone': phone,
+            'isNewUser': 'true',
+          },
+        );
+      } else if (result is RequestOtpFailure) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final _ = EasyLocalization.of(context)?.locale;
+    final authState = ref.watch(authStateProvider);
     final screenPadding = AppSpacing.getScreenPadding(context);
     final width = MediaQuery.of(context).size.width;
     final isCompact = width < 480;
@@ -913,6 +927,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   label: 'create_account_btn'.tr(),
                   icon: Icons.how_to_reg,
                   onPressed: _handleRegister,
+                  isLoading: authState.isLoading,
                   isCompact: isCompact,
                 ),
 

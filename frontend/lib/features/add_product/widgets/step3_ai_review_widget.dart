@@ -453,6 +453,8 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
               ),
               const SizedBox(height: 16),
 
+              _buildListingStatusBanner(context, draft),
+
               TextField(
                 controller: _titleController,
                 style: AppTextStyles.bodyMedium.copyWith(color: AppColors.ink),
@@ -703,6 +705,182 @@ class _Step3AiReviewWidgetState extends ConsumerState<Step3AiReviewWidget> {
           ),
       ],
     );
+  }
+
+  Widget _buildListingStatusBanner(BuildContext context, AddProductDraft draft) {
+    final status = draft.listingStatus;
+    if (status == 'pending') {
+      return Container(
+        key: const Key('listing_pending_banner'),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.parchmentDeep,
+          borderRadius: BorderRadius.circular(AppRadii.card),
+          border: Border.all(color: AppColors.terracotta.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.terracotta,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'generating_listing'.tr(),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.terracottaDark,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (status == 'needs_clarification') {
+      return Container(
+        key: const Key('listing_needs_clarification_banner'),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50,
+          borderRadius: BorderRadius.circular(AppRadii.card),
+          border: Border.all(color: Colors.amber.shade400),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, color: Colors.amber.shade800, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'listing_status_needs_clarification_title'.tr(),
+                    style: AppTextStyles.labelMedium.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.amber.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'listing_status_needs_clarification_desc'.tr(),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: Colors.amber.shade900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (status == 'fallback') {
+      return Container(
+        key: const Key('listing_fallback_banner'),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(AppRadii.card),
+          border: Border.all(color: Colors.orange.shade300),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'listing_status_fallback_title'.tr(),
+                    style: AppTextStyles.labelMedium.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    draft.listingDegradedReason != null && draft.listingDegradedReason!.isNotEmpty
+                        ? draft.listingDegradedReason!
+                        : 'listing_status_fallback_desc'.tr(),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: Colors.orange.shade900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (status == 'failed') {
+      final isHindi = (Localizations.maybeLocaleOf(context)?.languageCode ??
+              EasyLocalization.of(context)?.locale.languageCode) ==
+          'hi';
+      final localeCode = isHindi ? 'hi' : 'en';
+
+      return Container(
+        key: const Key('listing_failed_banner'),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(AppRadii.card),
+          border: Border.all(color: Colors.red.shade300),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'listing_status_failed_title'.tr(),
+                    style: AppTextStyles.labelMedium.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'listing_status_failed_desc'.tr(),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: Colors.red.shade900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const Key('listing_retry_button'),
+              onPressed: () {
+                ref
+                    .read(addProductFlowProvider.notifier)
+                    .retryListingGeneration(languageCode: localeCode);
+              },
+              child: Text(
+                'retry'.tr().isNotEmpty && 'retry'.tr() != 'retry' ? 'retry'.tr() : 'Retry',
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.terracotta),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
 

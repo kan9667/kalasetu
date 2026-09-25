@@ -160,7 +160,13 @@
   "filter_paintings": "Paintings",
   "status_live": "Live",
   "status_pending_sync": "Pending Sync",
-  "status_draft": "Draft",
+  "status_pending_approval_sync": "ஒத்திசைவுக்கான ஒப்புதல் வரிசையில் உள்ளது",
+  "status_pending_unpublish_sync": "நீக்குதல் ஒத்திசைவு வரிசையில் உள்ளது",
+  "removal_queued_notice": "நீக்குதல் வரிசையில் உள்ளது. ஒத்திசைவு முடியும் வரை இந்த பட்டியல் பொதுவில் இருக்கலாம்.",
+  "approval_queued_offline": "ஒப்புதல் ஆஃப்லைனில் சேமிக்கப்பட்டது. ஆன்லைனில் வந்தவுடன் வெளியிடப்படும்.",
+  "product_published_successfully": "பட்டியல் வெற்றிகரமாக வெளியிடப்பட்டது.",
+  "review_listing": "பட்டியலை மதிப்பாய்வு செய்",
+  "status_draft": "வரைவு",
   "no_products_title": "No products in your catalogue",
   "no_products_desc": "Start showcasing your creations. Add your first craft product in 5 simple guided steps.",
   "add_first_product": "Add Your First Product",
@@ -352,5 +358,6 @@
   "artisan_analytics_tooltip": "செயல்திறன் மற்றும் பகுப்பாய்வு",
   "listing_online_desc": "உங்கள் கைவினைப் பட்டியல் ONDC இல் நேரலையாக உள்ளது.",
   "listing_offline_desc": "தயாரிப்பு உள்ளூரில் சேமிக்கப்பட்டது. இணையம் திரும்பியதும் தானாகவே பதிவேற்றப்படும்.",
+  "saved_offline_awaiting_sync": "ஆஃப்லைனில் சேமிக்கப்பட்டது — ஒத்திசைவு மற்றும் ஒப்புதலுக்காக காத்திருக்கிறது",
   "listing_actions": "பட்டியல் செயல்கள்"
 }

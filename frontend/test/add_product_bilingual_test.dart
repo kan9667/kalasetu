@@ -15,14 +15,14 @@ class _FakeAddProductFlowNotifier extends StateNotifier<AddProductDraft>
   _FakeAddProductFlowNotifier(super.state);
 
   @override
-  void updateListingDetails({
+  Future<void> updateListingDetails({
     String? titleEn,
     String? titleHi,
     String? descriptionEn,
     String? descriptionHi,
     String? category,
     List<String>? tags,
-  }) {
+  }) async {
     state = state.copyWith(
       titleEn: titleEn ?? state.titleEn,
       titleHi: titleHi ?? state.titleHi,

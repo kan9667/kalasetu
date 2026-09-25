@@ -20,6 +20,8 @@ htmlcov/
 .ipynb_checkpoints/
 *.log
 *.pid
+output/
+tmp/
 
 # Environment & Secrets
 .env
