@@ -44,24 +44,43 @@ settings = get_settings()
 
 
 def check_schema_readiness():
-    """Verify that database has completed required Alembic migrations."""
+    """Verify that database has completed required Alembic migrations, running them if needed."""
     from sqlalchemy import text
     from .database import engine
+
     with engine.connect() as conn:
         try:
             result = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        except Exception:
+            result = None
+
+    if result != "0004_sms_dispatch_logs":
+        alembic_ini_path = Path(__file__).resolve().parent / "alembic.ini"
+        if not alembic_ini_path.exists():
+            alembic_ini_path = Path("backend/alembic.ini")
+        if alembic_ini_path.exists():
+            try:
+                from alembic.config import Config
+                from alembic import command
+                cfg = Config(str(alembic_ini_path))
+                cfg.set_main_option("sqlalchemy.url", settings.database_url)
+                command.upgrade(cfg, "head")
+            except Exception as migrate_err:
+                warnings.warn(f"Automatic Alembic migration failed: {migrate_err}")
+
+        with engine.connect() as conn:
+            try:
+                result = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to verify database schema version: {e}. "
+                    f"Ensure database exists and 'alembic upgrade head' has been executed."
+                )
             if result != "0004_sms_dispatch_logs":
                 raise RuntimeError(
                     f"Database schema is out of date (current: {result}, required: 0004_sms_dispatch_logs). "
                     f"Run 'PYTHONPATH=. alembic -c backend/alembic.ini upgrade head' before starting the application."
                 )
-        except Exception as e:
-            if isinstance(e, RuntimeError):
-                raise
-            raise RuntimeError(
-                f"Failed to verify database schema version: {e}. "
-                f"Ensure database exists and 'alembic upgrade head' has been executed."
-            )
 
 
 @asynccontextmanager
