@@ -7,7 +7,7 @@ centralized application settings.
 
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import Any, List, Literal, Optional, Union
 from pydantic_settings import BaseSettings
 from pydantic import Field, model_validator
 
