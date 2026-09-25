@@ -12,6 +12,10 @@ class ApiConfig {
   /// Current Wi-Fi IP of the host machine
   static const String hostLanIp = '192.168.1.6';
 
+  /// Deployed production Railway backend
+  static const String deployedBackendUrl =
+      'https://kalasetu-production.up.railway.app';
+
   static String get baseUrl {
     if (_cachedBaseUrl != null) return _cachedBaseUrl!;
     return _resolveInitialBaseUrl();
@@ -55,6 +59,7 @@ class ApiConfig {
       'http://localhost:8000',
       'http://$hostLanIp:8000', // Physical Android device over Wi-Fi
       if (Platform.isAndroid) 'http://10.0.2.2:8000', // Android emulator
+      deployedBackendUrl, // Deployed Railway production backend
     ];
 
     for (final candidate in candidates) {
