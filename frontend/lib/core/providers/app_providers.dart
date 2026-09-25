@@ -978,11 +978,14 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     final imageQueuePending = state.imageQueueItemId != null &&
         state.imageQueueItemId!.isNotEmpty &&
         state.imageQueueStatus != QueueStatus.completed &&
-        state.imageQueueStatus != QueueStatus.failed;
+        state.imageQueueStatus != QueueStatus.failed &&
+        !state.isEnhanced &&
+        !state.isDegraded;
     final voiceQueuePending = state.voiceQueueItemId != null &&
         state.voiceQueueItemId!.isNotEmpty &&
         state.voiceQueueStatus != QueueStatus.completed &&
-        state.voiceQueueStatus != QueueStatus.failed;
+        state.voiceQueueStatus != QueueStatus.failed &&
+        state.voiceTranscript.trim().isEmpty;
     final stillProcessing = _imageEnhancementInFlight ||
         _listingGenerationInFlight ||
         _isVoiceTranscriptionInFlight ||
@@ -3567,6 +3570,13 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   }
 
   Future<void> setManualDescription(String desc) async {
+    // Step 2 shows the server transcript in its text field. Tapping Next with
+    // that unchanged text must not supersede the listing already generating
+    // from the same recording.
+    if (desc == state.manualDescription ||
+        (state.manualDescription.isEmpty && desc == state.voiceTranscript)) {
+      return;
+    }
     final newListingGen = state.listingInputGeneration + 1;
     final newPricingGen = state.pricingInputGeneration + 1;
     state = state.copyWith(
@@ -3641,6 +3651,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     final newPricingGen = state.pricingInputGeneration + 1;
     state = state.copyWith(
       recordedAudioPath: audioPath,
+      voiceTranscript: '',
+      manualDescription: '',
       voiceQueueItemId: null,
       voiceInputGeneration: newVoiceGen,
       voiceFingerprint: null,
@@ -3675,6 +3687,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     final newPricingGen = state.pricingInputGeneration + 1;
     state = state.copyWith(
       recordedAudioPath: audioFile.path,
+      voiceTranscript: '',
+      manualDescription: '',
       voiceQueueStatus: QueueStatus.pending,
       voiceInputGeneration: newVoiceGen,
       voiceFingerprint: null,
@@ -4494,6 +4508,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     state = state.copyWith(
       recordedAudioPath: newAudio.path,
       voiceTranscript: '',
+      manualDescription: '',
       isVoiceDegraded: false,
       voiceDegradedCode: VoiceDegradedCode.none,
       voiceDegradedReason: null,
@@ -4587,10 +4602,8 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
     String languageCode, {
     bool isExplicitUserRegeneration = false,
   }) async {
-    String transcript = state.voiceTranscript.trim();
-    if (transcript.isEmpty) {
-      transcript = state.manualDescription.trim();
-    }
+    String transcript = state.manualDescription.trim();
+    if (transcript.isEmpty) transcript = state.voiceTranscript.trim();
     if (transcript.isEmpty) {
       transcript = state.descriptionEn.trim();
     }
@@ -5138,4 +5151,3 @@ final notificationsProvider =
 final unreadNotificationCountProvider = Provider<int>((ref) {
   return ref.watch(notificationsProvider).where((n) => !n.isRead).length;
 });
-

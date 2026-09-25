@@ -253,7 +253,8 @@ class TwoFactorSmsProvider(SmsProvider):
             return SmsDispatchOutcome(success=False, error_detail="Missing API key configuration")
 
         # Endpoint structure:
-        # GET https://2factor.in/API/V1/{api_key}/SMS/{phone}/{otp}/{template_name}
+        # POST https://2factor.in/API/V1/{api_key}/SMS/{phone}/{otp}/{template_name}
+        # 2Factor's custom SMS OTP API documents POST for this endpoint.
         # All logs, URLs, bodies, and exceptions MUST redact the API key, OTP, and full phone.
         if self.template_name:
             target_url = f"{self.base_url}/{self.api_key}/SMS/{clean_phone}/{otp}/{self.template_name}"
@@ -264,7 +265,7 @@ class TwoFactorSmsProvider(SmsProvider):
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(target_url)
+                resp = await client.post(target_url)
 
                 if resp.status_code != 200:
                     safe_body = resp.text.replace(self.api_key, "***REDACTED***").replace(otp, "***REDACTED***").replace(clean_phone, masked_phone)

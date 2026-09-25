@@ -11,6 +11,7 @@ import 'package:kalasetu/core/config/api_config.dart';
 import 'package:kalasetu/core/network/request_session_context.dart';
 import 'package:kalasetu/core/network/active_session_manager.dart';
 import 'package:kalasetu/core/providers/app_providers.dart';
+import 'package:kalasetu/core/offline_sync/models/queue_item.dart';
 import 'package:kalasetu/data/models/product.dart';
 import 'package:kalasetu/data/models/user_profile.dart';
 import 'package:kalasetu/data/services/pricing_service.dart';
@@ -55,6 +56,7 @@ class FakeAuthNotifier extends StateNotifier<AuthState> implements AuthNotifier 
 class ControllableSpeechService implements SpeechService {
   int transcribeAudioCallCount = 0;
   int generateListingCallCount = 0;
+  final List<String> listingTranscripts = [];
   final List<String?> transcribeIdempotencyKeys = [];
   final List<String?> listingIdempotencyKeys = [];
   Completer<void>? transcribeDelayCompleter;
@@ -105,6 +107,7 @@ class ControllableSpeechService implements SpeechService {
     RequestSessionContext? sessionContext,
   }) async {
     generateListingCallCount++;
+    listingTranscripts.add(transcript);
     listingIdempotencyKeys.add(idempotencyKey);
     capturedListingSessionContexts.add(sessionContext);
 
@@ -259,6 +262,61 @@ void main() {
   });
 
   group('Voice Transcription Flow & Single-Flight Retry Tests', () {
+    test('Next with unchanged transcript does not supersede listing generation', () async {
+      final flow = container.read(addProductFlowProvider.notifier);
+      await flow.loadSavedDraftState(
+        draftId: 'unchanged_transcript', originalImagePath: '',
+        enhancedImagePath: '', transcript: 'Handmade clay cup',
+        listingInputGeneration: 2,
+      );
+      await flow.setManualDescription('Handmade clay cup');
+      final draft = container.read(addProductFlowProvider);
+      expect(draft.listingInputGeneration, 2);
+      expect(draft.manualDescription, isEmpty);
+    });
+
+    test('edited transcript is the source for the next listing', () async {
+      final flow = container.read(addProductFlowProvider.notifier);
+      await flow.loadSavedDraftState(
+        draftId: 'edited_transcript', originalImagePath: '',
+        enhancedImagePath: '', transcript: 'Clay cup',
+        listingInputGeneration: 2,
+      );
+      await flow.setManualDescription('Handmade terracotta tea cup');
+      await flow.generateAiListing('en');
+      expect(speechService.listingTranscripts, ['Handmade terracotta tea cup']);
+      expect(container.read(addProductFlowProvider).listingStatus, 'success');
+    });
+
+    test('new recording discards the prior edited transcript', () async {
+      final flow = container.read(addProductFlowProvider.notifier);
+      await flow.loadSavedDraftState(
+        draftId: 'new_voice_source', originalImagePath: '',
+        enhancedImagePath: '', transcript: 'Old clay cup',
+        manualDescription: 'Edited old clay cup',
+      );
+      await flow.processVoiceRecording(
+        audioPath: sampleAudioFile.path, languageCode: 'auto',
+      );
+      final draft = container.read(addProductFlowProvider);
+      expect(draft.voiceTranscript, isEmpty);
+      expect(draft.manualDescription, isEmpty);
+    });
+
+    test('completed AI result is not blocked by duplicate pending queue entries', () async {
+      final flow = container.read(addProductFlowProvider.notifier);
+      await flow.loadSavedDraftState(
+        draftId: 'queue_spinner', originalImagePath: 'raw.jpg',
+        enhancedImagePath: 'enhanced.jpg', transcript: 'Handmade clay cup',
+        imageQueueItemId: 'pending_image', voiceQueueItemId: 'pending_voice',
+        imageQueueStatus: QueueStatus.pending,
+        voiceQueueStatus: QueueStatus.pending,
+      );
+      await flow.generateAiListing('en');
+      expect(container.read(addProductFlowProvider).isAiProcessing, isFalse);
+      expect(container.read(addProductFlowProvider).listingStatus, 'success');
+    });
+
     test('REVIEW busy state clears after successful voice flow', () async {
       final flow = container.read(addProductFlowProvider.notifier);
       await flow.loadSavedDraftState(draftId: 'review_busy', originalImagePath: '', enhancedImagePath: '', transcript: '');

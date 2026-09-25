@@ -47,6 +47,37 @@ def test_chat_faq():
     assert "suggested_queries" in data
 
 
+def test_chat_with_flutter_history_reaches_groq():
+    """Typed chat history must use the schema fields before invoking the LLM."""
+    from unittest.mock import AsyncMock, patch
+
+    payload = {
+        "message": "How should I price this pottery?",
+        "history": [
+            {"role": "assistant", "content": "How can I help you today?"},
+            {"role": "user", "content": "How should I price this pottery?"},
+        ],
+        "language_code": "en",
+    }
+    llm_response = {
+        "reply": "Start with your materials and labor costs, then add a fair margin.",
+        "action": None,
+        "suggested_queries": ["How do I calculate labor cost?"],
+    }
+
+    with patch("backend.routers.chat.chat_service.groq_client.is_available", return_value=True), \
+         patch("backend.routers.chat.chat_service.groq_client.chat_json", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = llm_response
+        response = client.post("/api/v1/chat/message", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["reply"] == llm_response["reply"]
+    mock_llm.assert_awaited_once()
+    messages = mock_llm.await_args.args[0]
+    assert messages[1] == payload["history"][0]
+    assert messages[2] == payload["history"][1]
+
+
 def test_chat_navigation_intent():
     """Verify user asking to visit a screen gets a structured navigation action."""
     payload = {"message": "Take me to add product"}
@@ -346,7 +377,4 @@ def test_artisan_profile_craft_overridden_when_explicitly_requested():
     reply = resp.json()["reply"].lower()
     # Must answer about brass / metalcraft, not terracotta
     assert "brass" in reply or "metal" in reply or "casting" in reply or "tarnish" in reply
-
-
-
 

@@ -191,19 +191,27 @@ class _Step2DescribeWidgetState extends ConsumerState<Step2DescribeWidget>
 
   Future<void> _onNext() async {
     final text = _textController.text.trim();
-    if (text.isNotEmpty) {
-      ref.read(addProductFlowProvider.notifier).setManualDescription(text);
+    final draft = ref.read(addProductFlowProvider);
+    final flow = ref.read(addProductFlowProvider.notifier);
+    final editedTranscript = text.isNotEmpty && text != draft.voiceTranscript.trim();
+    if (editedTranscript && text != draft.manualDescription.trim()) {
+      await flow.setManualDescription(text);
     }
+    if (!mounted) return;
     final isOnline = ref.read(connectivityProvider).value ?? true;
     String localeCode = 'en';
     try {
       localeCode = context.locale.languageCode;
     } catch (_) {}
 
-    ref.read(addProductFlowProvider.notifier).proceedFromStep2(
+    unawaited(flow.proceedFromStep2(
       isOnline: isOnline,
       languageCode: localeCode,
-    );
+    ));
+    if (isOnline && text.isNotEmpty &&
+        (editedTranscript || draft.titleEn.isEmpty)) {
+      unawaited(flow.generateAiListing(localeCode));
+    }
   }
 
   @override

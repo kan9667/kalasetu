@@ -197,6 +197,39 @@ async def test_2_catalog_generate_listing_fingerprint(setup_ai_artisan):
 
 
 @pytest.mark.anyio
+async def test_listing_internal_failure_logs_safe_location_and_allows_same_key_retry(setup_ai_artisan, caplog):
+    token = setup_ai_artisan["token"]
+    key = f"listing_retry_{uuid.uuid4().hex[:8]}"
+    headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": key}
+    payload = {"transcript": "Handmade clay cup", "language_code": "en"}
+    response = ListingGenerateResponse(
+        title_en="Clay Cup", title_hi="मिट्टी का कप",
+        description_en="Handmade cup", description_hi="हाथ से बना कप",
+        category="Pottery", tags=["clay", "cup"],
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch(
+            "backend.services.catalog_service.CatalogService.generate_listing",
+            side_effect=RuntimeError("private artisan transcript"),
+        ):
+            failed = await client.post(
+                "/api/v1/catalog/generate-listing", json=payload, headers=headers,
+            )
+        assert failed.status_code == 500
+        assert "exception=RuntimeError location=" in caplog.text
+        assert "private artisan transcript" not in caplog.text
+        with patch(
+            "backend.services.catalog_service.CatalogService.generate_listing",
+            return_value=response,
+        ):
+            retried = await client.post(
+                "/api/v1/catalog/generate-listing", json=payload, headers=headers,
+            )
+        assert retried.status_code == 200
+        assert retried.json()["title_en"] == "Clay Cup"
+
+
+@pytest.mark.anyio
 async def test_3_catalog_voice_to_listing_fingerprint(setup_ai_artisan):
     """3. /catalog/voice-to-listing: 409 when category_hint or audio changes."""
     transport = ASGITransport(app=app)

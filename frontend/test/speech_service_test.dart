@@ -160,6 +160,27 @@ void main() {
       }
     });
 
+    test('generateListingFromTranscript preserves HTTP 500 as a retryable failure', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'http://127.0.0.1:8000'));
+      dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
+        handler.reject(DioException(
+          requestOptions: options,
+          response: Response(requestOptions: options, statusCode: 500),
+          type: DioExceptionType.badResponse,
+        ));
+      }));
+      final service = HttpSpeechService(dio: dio);
+      await expectLater(
+        service.generateListingFromTranscript(
+          transcript: 'Handmade clay cup', languageCode: 'en',
+          idempotencyKey: 'listing_retry_same_key',
+        ),
+        throwsA(isA<DioException>().having(
+          (e) => e.response?.statusCode, 'statusCode', 500,
+        )),
+      );
+    });
+
     test('transcribeAudio returns noSpeech on status="no_speech"', () async {
       final dio = Dio(BaseOptions(baseUrl: 'http://127.0.0.1:8000'));
       dio.interceptors.add(

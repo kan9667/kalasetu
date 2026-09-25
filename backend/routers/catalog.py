@@ -14,6 +14,8 @@ Enforces:
 
 import asyncio
 import hashlib
+import logging
+import traceback
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -55,6 +57,7 @@ from ..utils.idempotency import (
 )
 
 router = APIRouter(prefix="/api/v1/catalog", tags=["Cataloger AI"])
+logger = logging.getLogger(__name__)
 catalog_service = CatalogService()
 settings = get_settings()
 _image_semaphore = asyncio.Semaphore(1)
@@ -455,6 +458,13 @@ async def generate_bilingual_listing(
         db.commit()
         return res
     except Exception as e:
+        last_frame = traceback.extract_tb(e.__traceback__)[-1]
+        logger.error(
+            "[Catalog] generate-listing failed: exception=%s location=%s:%s",
+            type(e).__name__,
+            Path(last_frame.filename).name,
+            last_frame.lineno,
+        )
         db.rollback()
         release_idempotency_claim(db, artisan.id, endpoint, idempotency_key)
         if isinstance(e, HTTPException):

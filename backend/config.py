@@ -7,7 +7,7 @@ centralized application settings.
 
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union
 from pydantic_settings import BaseSettings
 from pydantic import Field, model_validator
 
@@ -74,9 +74,13 @@ class Settings(BaseSettings):
         default="openai/gpt-oss-120b",
         description="Groq model identifier for chat, cataloging, and assistance.",
     )
-    llm_provider: str = Field(
+    llm_provider: Literal["groq", "gemini"] = Field(
         default="groq",
-        description="Primary LLM provider: groq or gemini.",
+        description="Primary catalog LLM provider: groq or gemini.",
+    )
+    catalog_gemini_fallback_enabled: bool = Field(
+        default=True,
+        description="Allow Gemini fallback when the primary catalog provider is Groq.",
     )
 
     def get_active_groq_key(self) -> str:

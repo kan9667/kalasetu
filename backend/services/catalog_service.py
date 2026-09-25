@@ -98,7 +98,21 @@ class CatalogService:
     def __init__(self):
         self.settings = get_settings()
         self.groq_client = GroqClient()
-        self.client = genai.Client(api_key=self.settings.gemini_api_key) if self.settings.gemini_api_key else None
+        self.client = (
+            genai.Client(api_key=self.settings.gemini_api_key)
+            if self.settings.gemini_api_key and (
+                self.settings.llm_provider == "gemini"
+                or self.settings.catalog_gemini_fallback_enabled
+            )
+            else None
+        )
+        logger.info(
+            "[CatalogService] Selected provider=%s model=%s credentials_present=%s gemini_fallback_enabled=%s",
+            self.settings.llm_provider,
+            self.settings.groq_chat_model if self.settings.llm_provider == "groq" else self.settings.llm_model,
+            self.groq_client.is_available() if self.settings.llm_provider == "groq" else bool(self.client),
+            self.settings.catalog_gemini_fallback_enabled,
+        )
         self.voice_processor = ArtisanVoiceProcessor()
         self._pricing_service = None
 
@@ -363,7 +377,7 @@ class CatalogService:
         category_hint: Optional[str],
         effective_category: Optional[str],
     ) -> Optional[tuple[str, str, str, str, str, List[str]]]:
-        # 1. Try Groq Cloud if configured
+        # Groq is primary; Gemini fallback is explicitly configurable.
         if self.groq_client.is_available() and self.settings.llm_provider == "groq":
             try:
                 groq_messages = [
@@ -378,20 +392,31 @@ class CatalogService:
                     },
                     {"role": "user", "content": user_prompt},
                 ]
-                data = await self.groq_client.chat_json(groq_messages)
+                # GPT-OSS spends part of this budget on reasoning. The previous
+                # 800-token default truncated bilingual JSON and Groq returned
+                # json_validate_failed (HTTP 400) for realistic listing prompts.
+                data = await self.groq_client.chat_json(groq_messages, max_tokens=2400)
                 return (
                     self._sanitize_customer_facing_text(data.get("title_en", "Handcrafted Artisan Product")),
                     self._sanitize_customer_facing_text(data.get("title_hi", "हस्तनिर्मित उत्पाद")),
                     self._sanitize_customer_facing_text(data.get("description_en", "")),
                     self._sanitize_customer_facing_text(data.get("description_hi", "")),
-                    data.get("category", category_hint or effective_category or "General"),
+                    data.get("category") if isinstance(data.get("category"), str) and data["category"].strip()
+                    else category_hint or effective_category or "General",
                     self._sanitize_tags(data.get("tags", ["handmade", "handicraft", "artisan"])),
                 )
             except Exception as e:
-                logger.warning("[CatalogService] Groq listing generation failed: %s", e)
+                logger.warning("[CatalogService] Groq listing generation failed (%s); checking configured fallback", type(e).__name__)
 
-        # 2. Try Google Gemini if available
-        if self.client:
+        if self.settings.llm_provider == "groq":
+            if not self.groq_client.is_available():
+                logger.warning("[CatalogService] Groq unavailable: configure GROQ_API_KEY and restart the backend")
+            if not self.settings.catalog_gemini_fallback_enabled:
+                return None
+
+        if self.client and (self.settings.llm_provider == "gemini" or self.settings.catalog_gemini_fallback_enabled):
+            if self.settings.llm_provider == "groq":
+                logger.warning("[CatalogService] Listing provider fallback: Groq -> Gemini")
             try:
                 response = await run_in_threadpool(
                     self.client.models.generate_content,
@@ -431,11 +456,12 @@ class CatalogService:
                     self._sanitize_customer_facing_text(data.get("title_hi", "हस्तनिर्मित उत्पाद")),
                     self._sanitize_customer_facing_text(data.get("description_en", "")),
                     self._sanitize_customer_facing_text(data.get("description_hi", "")),
-                    data.get("category", category_hint or effective_category or "General"),
+                    data.get("category") if isinstance(data.get("category"), str) and data["category"].strip()
+                    else category_hint or effective_category or "General",
                     self._sanitize_tags(data.get("tags", ["handmade", "handicraft", "artisan"])),
                 )
             except Exception as e:
-                logger.error("[CatalogService] Gemini listing generation failed: %s", e)
+                logger.warning("[CatalogService] Gemini listing generation failed (%s); using labeled local fallback", type(e).__name__)
 
         return None
 
@@ -626,7 +652,11 @@ Please generate the structured bilingual catalog listing, strictly observing the
             cost_inputs=extracted_costs,
             status="fallback",
             is_degraded=True,
-            degraded_reason="AI listing generation provider unavailable; generated editable draft template.",
+            degraded_reason=(
+                "Groq is not configured. Set GROQ_API_KEY and restart the backend; using an editable draft template."
+                if self.settings.llm_provider == "groq" and not self.groq_client.is_available()
+                else "Configured AI listing providers unavailable; generated editable draft template."
+            ),
         )
 
     # ── Voice Cost Cue Extractor ────────────────────────────────────────────
@@ -635,7 +665,7 @@ Please generate the structured bilingual catalog listing, strictly observing the
         """
         Extract cost cues (raw materials / base making cost, labor hours, wages)
         spoken or written by the artisan in their natural description.
-        Chains: Deterministic Regex baseline -> Groq LLM -> Gemini LLM -> Regex fallback.
+        Regex baseline -> primary LLM -> optional Gemini fallback -> regex fallback.
         """
         if not transcript:
             return CostInputsSchema(
@@ -690,10 +720,12 @@ Return ONLY a valid JSON object matching keys: materials, labor_hours, hourly_ra
                     overhead=float(data.get("overhead", 0.0) or 0.0),
                 )
             except Exception as e:
-                logger.warning("[CatalogService] Groq cost extraction failed, falling back: %s", e)
+                logger.warning("[CatalogService] Groq cost extraction failed (%s); checking configured fallback", type(e).__name__)
 
-        # 3. Try Google Gemini if available
-        if self.client:
+        if self.settings.llm_provider == "groq" and not self.settings.catalog_gemini_fallback_enabled:
+            return base_costs
+
+        if self.client and (self.settings.llm_provider == "gemini" or self.settings.catalog_gemini_fallback_enabled):
             try:
                 response = await run_in_threadpool(
                     self.client.models.generate_content,
@@ -729,7 +761,7 @@ Return ONLY a valid JSON object matching keys: materials, labor_hours, hourly_ra
                     overhead=float(data.get("overhead", 0.0) or 0.0),
                 )
             except Exception as e:
-                logger.warning("[CatalogService] Gemini cost extraction failed: %s", e)
+                logger.warning("[CatalogService] Gemini cost extraction failed (%s); using regex fallback", type(e).__name__)
 
         # 4. Fall back to deterministic regex extraction
         return base_costs

@@ -549,6 +549,10 @@ class HttpSpeechService implements SpeechService {
           error: 'Validation error ($statusCode): $msg',
         );
       }
+      if (statusCode != null && statusCode >= 500) {
+        debugPrint('[HttpSpeechService] Listing backend failed: HTTP $statusCode; retry is available');
+        rethrow;
+      }
       debugPrint('[HttpSpeechService] Listing generation failed: status=$statusCode, type=${e.type}');
     } catch (e) {
       if (e is SessionExpiredException || e is DioException) rethrow;

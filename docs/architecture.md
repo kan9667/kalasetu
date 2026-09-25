@@ -1314,6 +1314,29 @@ All variables are loaded from the root `.env` file by `backend/config.py` (`Sett
 
 *At least one of `GROQ_API_KEY` or `WHISPER_API_KEY` must be set. `config.py` resolves the active Groq key via `get_active_groq_key()` returning whichever is non-empty.
 
+Catalog listing generation and cost extraction use `LLM_PROVIDER` as primary
+(`groq` by default, or explicitly `gemini`). With
+`CATALOG_GEMINI_FALLBACK_ENABLED=true` (default), Groq failure or missing credentials
+invokes Gemini if its key is configured. Set this flag to false for Groq-only
+catalog requests. If all configured providers fail, listing generation returns a
+labeled degraded template and cost extraction uses its regex baseline. Select
+Groq with `LLM_PROVIDER=groq`, `GROQ_API_KEY`, `GROQ_BASE_URL`, and
+`GROQ_CHAT_MODEL` in the root `.env`; restart FastAPI to reload cached settings.
+The bilingual catalog prompt uses a 2,400-token Groq completion budget because
+GPT-OSS spends completion tokens on reasoning before emitting JSON; the former
+800-token budget produced Groq `json_validate_failed` errors for realistic listings.
+Startup logs identify the catalog provider, model, and credential availability
+without logging credentials. Transcription (`WHISPER_*`) and other services such
+as pricing embeddings retain their separate configuration. Do not remove Gemini
+credentials needed by those services merely to select Groq for cataloging.
+Unexpected `/catalog/generate-listing` failures return HTTP 500, release the
+idempotency claim for a same-key retry, and log only exception type plus code
+location. Flutter keeps that response as a retryable failure and does not label
+the transcript as generated AI copy. The Step 2 transcript field preserves the
+current listing generation when submitted unchanged; duplicate pending media
+queue records do not hold the full-screen spinner once image/transcript results
+are already available.
+
 ### 24.2 Internal Config Constants (set in `backend/config.py`)
 
 | Setting | Value | Purpose |

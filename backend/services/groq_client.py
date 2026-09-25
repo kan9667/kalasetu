@@ -123,14 +123,26 @@ class GroqClient:
                             return self.clean_response_text(raw_content)
                         raise RuntimeError("Groq returned empty choices list.")
 
-                    error_data = resp.text
+                    # Never log provider bodies: they can echo prompts or credentials.
+                    category = {
+                        400: "invalid_request", 401: "authentication", 403: "permission",
+                        404: "model_or_endpoint_not_found", 429: "rate_limit_or_quota",
+                    }.get(resp.status_code, "provider_error")
+                    if resp.status_code == 400:
+                        try:
+                            if (resp.json().get("error") or {}).get("code") == "json_validate_failed":
+                                category = "output_json_validation"
+                        except (ValueError, AttributeError):
+                            pass
                     logger.warning(
-                        "[GroqClient] Model '%s' returned status %s: %s",
+                        "[GroqClient] Model '%s' HTTP %s category=%s",
                         attempt_model,
                         resp.status_code,
-                        error_data,
+                        category,
                     )
-                    last_error = RuntimeError(f"Groq API error ({resp.status_code}): {error_data}")
+                    last_error = RuntimeError(f"Groq HTTP {resp.status_code}: {category}")
+                    if resp.status_code in (401, 403):
+                        break
                     
                     # If model not found or forbidden, try next fallback model
                     if resp.status_code in (404, 400):
@@ -140,7 +152,7 @@ class GroqClient:
                         continue
 
                 except Exception as e:
-                    logger.warning("[GroqClient] Request to '%s' failed: %s", attempt_model, e)
+                    logger.warning("[GroqClient] Request to '%s' failed: %s", attempt_model, type(e).__name__)
                     last_error = e
 
             raise last_error or RuntimeError("All Groq model attempts failed.")
@@ -165,8 +177,8 @@ class GroqClient:
         try:
             return self.extract_json_payload(raw_text)
         except Exception as e:
-            logger.error("[GroqClient] Failed to parse JSON from text: %r (error: %s)", raw_text, e)
-            raise RuntimeError(f"Failed to parse structured JSON from Groq output: {e}") from e
+            logger.error("[GroqClient] Invalid structured response: %s", type(e).__name__)
+            raise RuntimeError("Failed to parse structured JSON from Groq output") from e
 
     def chat_completion_sync(
         self,

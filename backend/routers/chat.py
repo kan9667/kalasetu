@@ -73,7 +73,7 @@ async def send_chat_message(
     endpoint = "/api/v1/chat/message"
 
     history_serialized = [
-        {"sender": h.sender, "text": h.text} for h in (request.history or [])
+        {"role": h.role, "content": h.content} for h in request.history
     ]
     fingerprint_dict = {
         "message": request.message,
@@ -348,4 +348,3 @@ async def send_voice_chat_message(
         )
     finally:
         staged.cleanup()
-

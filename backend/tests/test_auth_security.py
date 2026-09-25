@@ -428,12 +428,12 @@ async def test_2factor_provider_custom_otp_contract(monkeypatch):
 
     captured_url = None
 
-    async def mock_get(self, url, **kwargs):
+    async def mock_post(self, url, **kwargs):
         nonlocal captured_url
         captured_url = str(url)
         return httpx.Response(200, json={"Status": "Success", "Details": "2f_session_abc123"})
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
 
     provider = TwoFactorSmsProvider(
         api_key="test_2factor_secret_key",
@@ -453,18 +453,18 @@ async def test_2factor_provider_rejection_and_error_handling(monkeypatch):
     import httpx
 
     # Error JSON response
-    async def mock_get_error(self, url, **kwargs):
+    async def mock_post_error(self, url, **kwargs):
         return httpx.Response(200, json={"Status": "Error", "Details": "Invalid mobile number"})
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", mock_get_error)
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post_error)
     provider = TwoFactorSmsProvider(api_key="token", enable_real_sms=True)
     assert await provider.send_otp("9876543210", "123456") is False
 
     # HTTP 500 error
-    async def mock_get_500(self, url, **kwargs):
+    async def mock_post_500(self, url, **kwargs):
         return httpx.Response(500, text="Internal Server Error")
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", mock_get_500)
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post_500)
     assert await provider.send_otp("9876543210", "123456") is False
 
 
@@ -487,10 +487,10 @@ async def test_2factor_redaction_in_logs_and_exceptions(monkeypatch, caplog):
     from backend.services.otp_service import TwoFactorSmsProvider
     import httpx
 
-    async def mock_get_throw(self, url, **kwargs):
+    async def mock_post_throw(self, url, **kwargs):
         raise RuntimeError(f"Connection failure to {url}")
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", mock_get_throw)
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post_throw)
 
     secret_key = "TOP_SECRET_API_KEY_VAL"
     secret_otp = "876543"
