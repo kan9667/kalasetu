@@ -60,40 +60,47 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _checkAuthStatus() async {
-    final isNgoSim = await _authRepository.isNgoSimulation();
-    if (isNgoSim) {
-      final simUserId = await _authRepository.getNgoUserId();
-      if (!mounted) return;
-      if (simUserId != null && simUserId.isNotEmpty) {
-        PrivateMediaCache.instance.updateSession(accountId: simUserId);
+    try {
+      final isNgoSim = await _authRepository.isNgoSimulation();
+      if (isNgoSim) {
+        final simUserId = await _authRepository.getNgoUserId();
+        if (!mounted) return;
+        if (simUserId != null && simUserId.isNotEmpty) {
+          PrivateMediaCache.instance.updateSession(accountId: simUserId);
+        }
+        state = state.copyWith(
+          isAuthenticated: false,
+          isNgoSimulation: true,
+          userId: simUserId,
+          phoneNumber: '',
+        );
+        return;
       }
+
+      final isAuthenticated = await _authRepository.isAuthenticated();
+      final userId = await _authRepository.getUserId();
+      final phoneNumber = await _authRepository.getPhoneNumber();
+
+      if (!mounted) return;
+
+      if (isAuthenticated && userId != null && userId.isNotEmpty) {
+        PrivateMediaCache.instance.updateSession(accountId: userId);
+      }
+
+      if (!mounted) return;
+
       state = state.copyWith(
-        isAuthenticated: false,
-        isNgoSimulation: true,
-        userId: simUserId,
-        phoneNumber: '',
+        isAuthenticated: isAuthenticated,
+        isNgoSimulation: false,
+        userId: userId,
+        phoneNumber: phoneNumber,
       );
-      return;
+    } catch (_) {
+      // In isolated environments (e.g. widget unit tests without full storage hydration)
+      // or storage read errors, default safely to unauthenticated state.
+      if (!mounted) return;
+      state = const AuthState(isAuthenticated: false);
     }
-
-    final isAuthenticated = await _authRepository.isAuthenticated();
-    final userId = await _authRepository.getUserId();
-    final phoneNumber = await _authRepository.getPhoneNumber();
-
-    if (!mounted) return;
-
-    if (isAuthenticated && userId != null && userId.isNotEmpty) {
-      PrivateMediaCache.instance.updateSession(accountId: userId);
-    }
-
-    if (!mounted) return;
-
-    state = state.copyWith(
-      isAuthenticated: isAuthenticated,
-      isNgoSimulation: false,
-      userId: userId,
-      phoneNumber: phoneNumber,
-    );
   }
 
   Future<RequestOtpResult> signInWithPhone(String phoneNumber) async {

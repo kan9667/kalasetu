@@ -195,28 +195,79 @@ class ProductRepository {
     return false;
   }
 
-  /// Get all products - Hive is the instant source of truth.
+  /// Get all products belonging to the currently authenticated artisan.
+  /// Hive is the instant source of truth; remote is fetched on forceRefresh or empty cache.
   Future<List<Product>> getProducts({bool forceRefresh = false, bool isOnline = true}) async {
     await initialize();
+
+    // Capture session identity BEFORE first await (AGENTS.md invariant: deterministic identity)
+    final activeUserId = ActiveSessionManager.getCurrentUserIdSync();
     final box = _getProductsBox();
 
-    // If box is empty and online, populate with remote products
     if ((box.isEmpty || forceRefresh) && isOnline) {
-      try {
-        final remote = await _apiService.getProducts();
-        for (var p in remote) {
-          // Safeguard: Never overwrite items that have pending local offline changes
-          if (!hasPendingOperationsFor(p.id)) {
-            await box.put(p.id, p);
+      if (activeUserId == null || activeUserId.isEmpty) {
+        // No authenticated session — skip remote fetch without aborting local cache read.
+        debugPrint('ProductRepository.getProducts: No active user session; skipping remote fetch.');
+      } else {
+        try {
+          // Bind the API call to the active session (Task 2 ensures this is enforced at the interceptor)
+          final remote = await _apiService.getProducts(artisanId: activeUserId);
+
+          // PRUNE PHASE: On a successful remote fetch, remove any locally-cached records
+          // that belong to a DIFFERENT artisan. This cleans up pollution from prior sessions
+          // or the legacy v1.0.0 APK build.
+          if (forceRefresh) {
+            final keysToDelete = <dynamic>[];
+            for (final entry in box.toMap().entries) {
+              final p = entry.value;
+              final owner = p.artisanId;
+              // Remove if owner is explicitly a different artisan.
+              // Records with null artisanId (migrated from old builds) are pruned too.
+              // BUT: never prune products with pending outbox operations.
+              if (owner == null || owner != activeUserId) {
+                final productId = entry.key as String;
+                if (!hasPendingOperationsFor(productId)) {
+                  keysToDelete.add(entry.key);
+                }
+              }
+            }
+            if (keysToDelete.isNotEmpty) {
+              await box.deleteAll(keysToDelete);
+              debugPrint(
+                'ProductRepository.getProducts: Pruned ${keysToDelete.length} foreign/unknown-owner '
+                'records from products_box for session $activeUserId.',
+              );
+            }
           }
+
+          // Write fresh remote data, stamping artisanId on each record.
+          for (final p in remote) {
+            if (!hasPendingOperationsFor(p.id)) {
+              // Stamp the active user ID if the model field is absent (defensive)
+              final stamped = (p.artisanId == null || p.artisanId!.isEmpty)
+                  ? p.copyWith(artisanId: activeUserId)
+                  : p;
+              await box.put(stamped.id, stamped);
+            }
+          }
+        } catch (e) {
+          debugPrint('ProductRepository: Remote fetch failed, using local cache: $e');
         }
-      } catch (e) {
-        debugPrint('ProductRepository: Remote fetch failed, using local cache: $e');
       }
     }
 
-    // Return all local products sorted by creation time (newest first)
-    final list = box.values.toList();
+    // FILTER PHASE: Filter by active user at read boundary, preserving unassigned/legacy items.
+    // Records owned by a different artisan are strictly excluded.
+    final list = box.values
+        .where((p) {
+          if (p.artisanId == null) {
+            // Legacy record without ownership stamp: only keep if it has a
+            // pending outbox operation (local draft not yet synced).
+            return hasPendingOperationsFor(p.id);
+          }
+          return p.artisanId == activeUserId;
+        })
+        .toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
   }
@@ -257,6 +308,7 @@ class ProductRepository {
       final draftProduct = product.copyWith(
         id: id,
         status: ProductStatus.draft,
+        artisanId: initiatingUserId,
       );
 
       final idempotencyKey = 'idem_create_${draftProduct.id}';
@@ -270,7 +322,10 @@ class ProductRepository {
             idempotencyKey: idempotencyKey,
           );
           if (isSessionValid()) {
-            await productsBox.put(created.id, created);
+            final stampedCreated = (created.artisanId == null || created.artisanId!.isEmpty)
+                ? created.copyWith(artisanId: initiatingUserId)
+                : created;
+            await productsBox.put(stampedCreated.id, stampedCreated);
           } else {
             debugPrint('ProductRepository: Session changed while createProduct in-flight; skipping local cache mutation to prevent cross-account contamination.');
           }
@@ -358,7 +413,10 @@ class ProductRepository {
             idempotencyKey: effectiveIdempotencyKey,
           );
           if (isSessionValid()) {
-            await productsBox.put(updated.id, updated);
+            final stampedUpdated = (updated.artisanId == null || updated.artisanId!.isEmpty)
+                ? updated.copyWith(artisanId: initiatingUserId)
+                : updated;
+            await productsBox.put(stampedUpdated.id, stampedUpdated);
           } else {
             debugPrint('ProductRepository: Session changed while updateProduct in-flight; skipping local cache mutation to prevent cross-account contamination.');
           }
@@ -372,6 +430,7 @@ class ProductRepository {
 
     final localProduct = product.copyWith(
       status: product.status,
+      artisanId: product.artisanId ?? initiatingUserId,
     );
     if (isSessionValid()) {
       await productsBox.put(localProduct.id, localProduct);
@@ -435,7 +494,11 @@ class ProductRepository {
           try {
             product = await _apiService.getProduct(id);
             if (isSessionValid()) {
-              await productsBox.put(id, product);
+              final stamped = (product.artisanId == null || product.artisanId!.isEmpty)
+                  ? product.copyWith(artisanId: initiatingUserId)
+                  : product;
+              await productsBox.put(id, stamped);
+              product = stamped;
             }
           } catch (_) {}
         }
@@ -535,10 +598,13 @@ class ProductRepository {
               expectedRevision: product.revision,
               idempotencyKey: attachKey,
             );
+            final stampedAttached = (attached.artisanId == null || attached.artisanId!.isEmpty)
+                ? attached.copyWith(artisanId: product.artisanId ?? initiatingUserId)
+                : attached;
             if (isSessionValid()) {
-              await productsBox.put(attached.id, attached);
+              await productsBox.put(stampedAttached.id, stampedAttached);
             }
-            product = attached;
+            product = stampedAttached;
           }
 
           if (!isSessionValid()) {
@@ -554,7 +620,10 @@ class ProductRepository {
             idempotencyKey: effectiveIdempotencyKey,
           );
           if (isSessionValid()) {
-            await productsBox.put(published.id, published);
+            final stampedPublished = (published.artisanId == null || published.artisanId!.isEmpty)
+                ? published.copyWith(artisanId: product.artisanId ?? initiatingUserId)
+                : published;
+            await productsBox.put(stampedPublished.id, stampedPublished);
           } else {
             debugPrint('ProductRepository: Session changed while approveAndPublishProduct in-flight; skipping local cache mutation.');
           }
@@ -579,6 +648,7 @@ class ProductRepository {
       approvedAt: null,
       publishedAt: null,
       reviewedMediaChecksum: effectiveReviewedChecksum,
+      artisanId: product.artisanId ?? initiatingUserId,
     );
     if (isSessionValid()) {
       await productsBox.put(queuedLocal.id, queuedLocal);
@@ -812,8 +882,11 @@ class ProductRepository {
         try {
           final authoritative = await _apiService.getProduct(productId);
           if (isSessionValid()) {
-            await productsBox.put(productId, authoritative);
-            activeLocal = authoritative;
+            final stamped = (authoritative.artisanId == null || authoritative.artisanId!.isEmpty)
+                ? authoritative.copyWith(artisanId: activeLocal.artisanId ?? initiatingUserId)
+                : authoritative;
+            await productsBox.put(productId, stamped);
+            activeLocal = stamped;
             hasValidContentHash = activeLocal.contentHash != null &&
                 sha256Pattern.hasMatch(activeLocal.contentHash!.toLowerCase());
           }
@@ -901,15 +974,21 @@ class ProductRepository {
           if (!isSessionValid()) {
             throw _SessionChangedInternalException();
           }
-          await productsBox.put(serverProduct.id, serverProduct);
-          return serverProduct;
+          final stamped = (serverProduct.artisanId == null || serverProduct.artisanId!.isEmpty)
+              ? serverProduct.copyWith(artisanId: activeLocal.artisanId ?? initiatingUserId)
+              : serverProduct;
+          await productsBox.put(stamped.id, stamped);
+          return stamped;
         } on StaleRevisionException catch (e) {
           debugPrint('ProductRepository: Stale revision on unpublish: $e');
           if (isSessionValid()) {
             try {
               final authoritative = await _apiService.getProduct(productId);
               if (isSessionValid()) {
-                await productsBox.put(productId, authoritative);
+                final stamped = (authoritative.artisanId == null || authoritative.artisanId!.isEmpty)
+                    ? authoritative.copyWith(artisanId: activeLocal.artisanId ?? initiatingUserId)
+                    : authoritative;
+                await productsBox.put(productId, stamped);
               }
             } catch (fetchErr) {
               debugPrint(
@@ -917,7 +996,10 @@ class ProductRepository {
               if (isSessionValid()) {
                 await productsBox.put(
                     productId,
-                    activeLocal.copyWith(status: ProductStatus.pendingUnpublishSync));
+                    activeLocal.copyWith(
+                      status: ProductStatus.pendingUnpublishSync,
+                      artisanId: activeLocal.artisanId ?? initiatingUserId,
+                    ));
               }
             }
           }
@@ -934,6 +1016,7 @@ class ProductRepository {
       // and do NOT clear last-confirmed approval/publication metadata.
       final pendingUnpubLocal = activeLocal.copyWith(
         status: ProductStatus.pendingUnpublishSync,
+        artisanId: activeLocal.artisanId ?? initiatingUserId,
       );
       if (isSessionValid()) {
         await productsBox.put(productId, pendingUnpubLocal);
@@ -1141,7 +1224,10 @@ class ProductRepository {
 
                   final existingLocal = productsBox.get(created.id);
                   if (existingLocal == null || existingLocal.revision <= created.revision) {
-                    await productsBox.put(created.id, created);
+                    final stampedCreated = (created.artisanId == null || created.artisanId!.isEmpty)
+                        ? created.copyWith(artisanId: op.owner)
+                        : created;
+                    await productsBox.put(stampedCreated.id, stampedCreated);
                   }
                   final updatedOp = op.copyWith(
                     status: OfflineOperation.statusCompleted,
@@ -1279,7 +1365,10 @@ class ProductRepository {
                     return;
                   }
 
-                  await productsBox.put(updated.id, updated);
+                  final stampedUpdated = (updated.artisanId == null || updated.artisanId!.isEmpty)
+                      ? updated.copyWith(artisanId: op.owner)
+                      : updated;
+                  await productsBox.put(stampedUpdated.id, stampedUpdated);
                   final updatedOp = op.copyWith(
                     status: OfflineOperation.statusCompleted,
                     clearLeaseExpiresAt: true,
@@ -1343,7 +1432,10 @@ class ProductRepository {
 
                   final existingLocal = productsBox.get(updated.id);
                   if (existingLocal == null || existingLocal.revision <= updated.revision) {
-                    await productsBox.put(updated.id, updated);
+                    final stampedUpdated = (updated.artisanId == null || updated.artisanId!.isEmpty)
+                        ? updated.copyWith(artisanId: op.owner)
+                        : updated;
+                    await productsBox.put(stampedUpdated.id, stampedUpdated);
                   }
                   final updatedOp = op.copyWith(
                     status: OfflineOperation.statusCompleted,
@@ -1399,7 +1491,10 @@ class ProductRepository {
                     return;
                   }
 
-                  await productsBox.put(published.id, published);
+                  final stampedPublished = (published.artisanId == null || published.artisanId!.isEmpty)
+                      ? published.copyWith(artisanId: op.owner)
+                      : published;
+                  await productsBox.put(stampedPublished.id, stampedPublished);
                   final updatedOp = op.copyWith(
                     status: OfflineOperation.statusCompleted,
                     clearLeaseExpiresAt: true,
@@ -1495,7 +1590,10 @@ class ProductRepository {
                   return;
                 }
 
-                await productsBox.put(unpublished.id, unpublished);
+                final stampedUnpublished = (unpublished.artisanId == null || unpublished.artisanId!.isEmpty)
+                    ? unpublished.copyWith(artisanId: op.owner)
+                    : unpublished;
+                await productsBox.put(stampedUnpublished.id, stampedUnpublished);
                 final updatedOp = op.copyWith(
                   status: OfflineOperation.statusCompleted,
                   clearLeaseExpiresAt: true,

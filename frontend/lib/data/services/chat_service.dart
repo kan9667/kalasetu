@@ -221,6 +221,7 @@ class HttpChatService implements ChatService {
 
   @override
   Future<List<Map<String, dynamic>>> getQuickTopics({String languageCode = 'en'}) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     final activeUrl = ApiConfig.baseUrl;
     _dio.options.baseUrl = activeUrl;
 
@@ -230,6 +231,7 @@ class HttpChatService implements ChatService {
         options: Options(
           sendTimeout: const Duration(seconds: 4),
           receiveTimeout: const Duration(seconds: 4),
+          extra: sessionExtra,
         ),
       );
       if (response.statusCode == 200 && response.data != null) {

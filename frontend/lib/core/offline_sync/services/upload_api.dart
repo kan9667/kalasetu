@@ -293,7 +293,11 @@ class RealUploadApi implements UploadApi {
 
   @override
   Future<JobStatusResult> checkStatus(String jobId) async {
-    final response = await _dio.get('/v1/jobs/$jobId');
+    final sessionExtra = RequestSessionContext.capture().toExtra();
+    final response = await _dio.get(
+      '/v1/jobs/$jobId',
+      options: Options(extra: sessionExtra),
+    );
     final data = response.data as Map<String, dynamic>;
     final status = data['status'] as String;
 

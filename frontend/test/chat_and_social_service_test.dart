@@ -102,9 +102,65 @@ void main() {
         );
       }
     });
+    test('getQuickTopics attaches session context in options.extra', () async {
+      Map<String, dynamic>? capturedExtra;
+      final dio = Dio(BaseOptions(baseUrl: 'http://127.0.0.1:8000'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            capturedExtra = options.extra;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'topics': [
+                    {'title': 'Pricing', 'prompt': 'Help with pricing'}
+                  ],
+                },
+              ),
+            );
+          },
+        ),
+      );
+
+      final service = HttpChatService(dio: dio);
+      final topics = await service.getQuickTopics();
+      expect(topics.length, 1);
+      expect(capturedExtra, isNotNull);
+      expect(capturedExtra!.containsKey('expected_session_gen'), isTrue);
+    });
   });
 
   group('HttpSocialMediaService Tests', () {
+    test('loadDraft attaches session context in options.extra', () async {
+      Map<String, dynamic>? capturedExtra;
+      final dio = Dio(BaseOptions(baseUrl: 'http://127.0.0.1:8000'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            capturedExtra = options.extra;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'draft_id': 'draft_soc_3',
+                  'caption': 'Caption test',
+                  'hashtags': ['#art'],
+                },
+              ),
+            );
+          },
+        ),
+      );
+
+      final service = HttpSocialMediaService(dio: dio);
+      final draft = await service.loadDraft('draft_soc_3');
+      expect(draft.draftId, equals('draft_soc_3'));
+      expect(capturedExtra, isNotNull);
+      expect(capturedExtra!.containsKey('expected_session_gen'), isTrue);
+    });
     test('generateForListing sends stable Idempotency-Key', () async {
       String? capturedKey;
       final dio = Dio(BaseOptions(baseUrl: 'http://127.0.0.1:8000'));

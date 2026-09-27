@@ -105,6 +105,7 @@ void main() {
       status: ProductStatus.live,
       createdAt: DateTime.now(),
       tags: ['saree', 'chanderi', 'silk'],
+      artisanId: 'test_artisan_chat',
     );
     await box.put(testProduct.id, testProduct);
   });

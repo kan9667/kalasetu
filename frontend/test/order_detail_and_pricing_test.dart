@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:kalasetu/features/orders/models/order.dart';
 import 'package:kalasetu/features/orders/screens/order_detail_screen.dart';
 import 'package:kalasetu/features/orders/widgets/packaging_suggestions_sheet.dart';
@@ -9,6 +11,24 @@ import 'package:kalasetu/features/add_product/widgets/step4_pricing_widget.dart'
 import 'package:kalasetu/core/providers/app_providers.dart';
 
 void main() {
+  late Directory tempDir;
+
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    tempDir = await Directory.systemTemp.createTemp('hive_order_detail_test');
+    Hive.init(tempDir.path);
+    if (!Hive.isBoxOpen('auth_box')) {
+      await Hive.openBox('auth_box');
+    }
+  });
+
+  tearDownAll(() async {
+    await Hive.close();
+    try {
+      await tempDir.delete(recursive: true);
+    } catch (_) {}
+  });
+
   final testOrder = Order(
     id: 'ORD-TEST-1234',
     productTitle: 'Handcrafted Terracotta Pot',

@@ -155,5 +155,72 @@ void main() {
       final stored = productsBox.get('prod_offline_unpub')!;
       expect(stored.status, ProductStatus.draft);
     });
+
+    test('getProducts excludes null-artisanId legacy records without pending ops, but keeps null-artisanId with pending ops', () async {
+      final productsBox = await Hive.openBox<Product>('products_box');
+      final pendingBox = await Hive.openBox<String>('pending_sync_box');
+      await productsBox.clear();
+      await pendingBox.clear();
+
+      // Legacy product without artisanId and without pending ops (should be excluded)
+      final legacyForeign = Product(
+        id: 'prod_legacy_foreign',
+        title: 'Legacy Foreign Item',
+        description: 'No owner stamp',
+        price: 500,
+        photoPath: 'legacy.jpg',
+        category: 'Pottery',
+        status: ProductStatus.draft,
+        artisanId: null,
+      );
+      await productsBox.put(legacyForeign.id, legacyForeign);
+
+      // Local draft without artisanId BUT with a pending outbox op (should be included)
+      final localDraft = Product(
+        id: 'prod_local_draft',
+        title: 'Local Offline Draft',
+        description: 'Pending upload',
+        price: 700,
+        photoPath: 'draft.jpg',
+        category: 'Pottery',
+        status: ProductStatus.draft,
+        artisanId: null,
+      );
+      await productsBox.put(localDraft.id, localDraft);
+      final op = OfflineOperation(
+        id: 'op_create_local_draft',
+        action: OfflineOperation.actionCreate,
+        productId: 'prod_local_draft',
+        payloadSnapshot: localDraft.toJson(),
+        idempotencyKey: 'idem_test_local_draft_123',
+        createdAt: DateTime.now(),
+        owner: 'artisan_client_status',
+      );
+      await pendingBox.put(op.id, op.toPendingString());
+
+      // Authenticated artisan product (should be included)
+      final ownedProduct = Product(
+        id: 'prod_owned',
+        title: 'My Stamped Item',
+        description: 'Owned by me',
+        price: 1200,
+        photoPath: 'owned.jpg',
+        category: 'Pottery',
+        status: ProductStatus.draft,
+        artisanId: 'artisan_client_status',
+      );
+      await productsBox.put(ownedProduct.id, ownedProduct);
+
+      final repo = ProductRepository(apiService: TestMockApiService());
+      final visible = await repo.getProducts(isOnline: false);
+
+      final visibleIds = visible.map((p) => p.id).toList();
+      expect(visibleIds.contains('prod_legacy_foreign'), isFalse,
+          reason: 'Legacy foreign items without pending ops must be excluded at read boundary');
+      expect(visibleIds.contains('prod_local_draft'), isTrue,
+          reason: 'Local drafts with pending ops must be preserved');
+      expect(visibleIds.contains('prod_owned'), isTrue,
+          reason: 'Artisan owned items must be returned');
+    });
   });
 }

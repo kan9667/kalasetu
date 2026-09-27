@@ -200,8 +200,12 @@ class HttpSocialMediaService implements SocialMediaService {
 
   @override
   Future<SocialDraft> loadDraft(String draftId) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     try {
-      final response = await _dio.get('$_base/api/v1/social-drafts/$draftId');
+      final response = await _dio.get(
+        '$_base/api/v1/social-drafts/$draftId',
+        options: Options(extra: sessionExtra),
+      );
       return SocialDraft.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _mapDioError(e);
@@ -215,6 +219,7 @@ class HttpSocialMediaService implements SocialMediaService {
     required String imageUrl,
     String? channel,
   }) async {
+    final sessionExtra = RequestSessionContext.capture().toExtra();
     try {
       final response = await _dio.get(
         '$_base/api/v1/social-drafts/lookup',
@@ -224,6 +229,7 @@ class HttpSocialMediaService implements SocialMediaService {
           'draft_key': ?draftKey,
           'channel': ?channel,
         },
+        options: Options(extra: sessionExtra),
       );
       return SocialDraft.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {

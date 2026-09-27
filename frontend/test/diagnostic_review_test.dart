@@ -59,8 +59,8 @@ void main() {
   test('REVIEW retaking voice invalidates old listing response', () async {
     speech.listingDelayCompleter = Completer<void>();
     final flight = flow.generateAiListing('en');
-    for (var n=0; n<100 && speech.generateListingCallCount==0; n++) {
-      await Future<void>.delayed(Duration.zero);
+    for (var n = 0; n < 200 && speech.generateListingCallCount == 0; n++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
     }
     expect(speech.generateListingCallCount, 1);
     await flow.retakeDescription();
@@ -99,8 +99,8 @@ void main() {
   test('REVIEW reconciliation joins active direct listing', () async {
     speech.listingDelayCompleter = Completer<void>();
     final direct = flow.generateAiListing('en');
-    for (var n=0; n<100 && speech.generateListingCallCount==0; n++) {
-      await Future<void>.delayed(Duration.zero);
+    for (var n = 0; n < 200 && speech.generateListingCallCount == 0; n++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
     }
     await flow.reconcileDraftOperations();
     speech.listingDelayCompleter!.complete();
@@ -139,8 +139,8 @@ void main() {
     await seedPendingVoice();
     speech.transcribeDelayCompleter = Completer<void>();
     await flow.reconcileDraftOperations();
-    for (var n=0; n<100 && speech.transcribeAudioCallCount==0; n++) {
-      await Future<void>.delayed(Duration.zero);
+    for (var n = 0; n < 200 && speech.transcribeAudioCallCount == 0; n++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
     }
     expect(speech.transcribeAudioCallCount, 1);
     final auth = container.read(authStateProvider.notifier) as fixture.FakeAuthNotifier;

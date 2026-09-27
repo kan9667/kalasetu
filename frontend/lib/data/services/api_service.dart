@@ -95,21 +95,31 @@ class HttpApiService implements ApiService {
 
     final effectiveUser = inheritedZoneUser ?? overrideUserId ?? ActiveSessionManager.getCurrentUserIdSync();
     final effectiveGen = zoneGen ?? ActiveSessionManager.sessionGeneration;
-    final effectiveBackend = inheritedZoneBackend ?? explicitBase ?? ApiConfig.baseUrl;
+    final effectiveBackend = inheritedZoneBackend ??
+        ((explicitBase == null ||
+                PrivateMediaCache.normalizeBackendOrigin(explicitBase) ==
+                    PrivateMediaCache.normalizeBackendOrigin(ApiConfig.baseUrl))
+            ? ApiConfig.baseUrl
+            : null);
 
     return {
       if (effectiveUser != null && effectiveUser.isNotEmpty) 'expected_user_id': effectiveUser,
       'expected_session_gen': effectiveGen,
-      'expected_backend_origin': effectiveBackend,
+      if (effectiveBackend != null && effectiveBackend.isNotEmpty)
+        'expected_backend_origin': effectiveBackend,
     };
   }
 
   @override
   Future<List<Product>> getProducts({String? artisanId, String? category}) async {
     _syncBaseUrl();
+    // Capture session context BEFORE the first await — same pattern as uploadMediaFile
+    final effectiveUserId = artisanId ?? ActiveSessionManager.getCurrentUserIdSync();
+    final extra = _sessionExtra(overrideUserId: effectiveUserId);
     try {
       final queryParams = <String, dynamic>{
-        if (artisanId != null && artisanId.isNotEmpty) 'artisan_id': artisanId,
+        if (effectiveUserId != null && effectiveUserId.isNotEmpty)
+          'artisan_id': effectiveUserId,
         if (category != null && category.isNotEmpty) 'category': category,
         'limit': 100,
       };
@@ -118,6 +128,7 @@ class HttpApiService implements ApiService {
       final response = await _dio.get(
         '/api/v1/products',
         queryParameters: queryParams.isNotEmpty ? queryParams : null,
+        options: Options(extra: extra),
       );
 
       if (response.statusCode == 200 && response.data != null) {
@@ -136,9 +147,13 @@ class HttpApiService implements ApiService {
   @override
   Future<Product> getProduct(String productId) async {
     _syncBaseUrl();
+    final extra = _sessionExtra(); // bind to active artisan session
     try {
       debugPrint('[HttpApiService] GET ${_dio.options.baseUrl}/api/v1/products/$productId');
-      final response = await _dio.get('/api/v1/products/$productId');
+      final response = await _dio.get(
+        '/api/v1/products/$productId',
+        options: Options(extra: extra),
+      );
       if (response.statusCode == 200 && response.data != null) {
         return Product.fromJson(Map<String, dynamic>.from(response.data as Map));
       }

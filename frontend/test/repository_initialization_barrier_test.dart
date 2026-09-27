@@ -153,6 +153,7 @@ void main() {
         status: ProductStatus.draft,
         revision: 1,
         contentHash: testHash,
+        artisanId: 'artisan_barrier_test',
       );
       await productsBox.put(product.id, product);
 

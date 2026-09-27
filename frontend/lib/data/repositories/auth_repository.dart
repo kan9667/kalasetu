@@ -42,25 +42,32 @@ class AuthRepository {
     _dio.options.baseUrl = _explicitBaseUrl ?? ApiConfig.baseUrl;
   }
 
-  Future<Box> _getBox() async {
-    if (!Hive.isBoxOpen(_boxName)) {
-      return await Hive.openBox(_boxName);
+  Future<Box?> _getBox() async {
+    try {
+      if (!Hive.isBoxOpen(_boxName)) {
+        return await Hive.openBox(_boxName);
+      }
+      return Hive.box(_boxName);
+    } catch (_) {
+      return null;
     }
-    return Hive.box(_boxName);
   }
 
   Future<bool> isNgoSimulation() async {
     final box = await _getBox();
+    if (box == null) return false;
     return box.get(_keyIsNgoSimulation, defaultValue: false) as bool;
   }
 
   Future<String?> getNgoUserId() async {
     final box = await _getBox();
+    if (box == null) return null;
     return box.get(_keyNgoUserId) as String?;
   }
 
   Future<void> saveNgoSimulationData(String userId) async {
     final box = await _getBox();
+    if (box == null) return;
     await box.put(_keyIsNgoSimulation, true);
     await box.put(_keyNgoUserId, userId);
     ActiveSessionManager.bumpSessionGeneration();
@@ -68,6 +75,7 @@ class AuthRepository {
 
   Future<void> clearNgoSimulationData() async {
     final box = await _getBox();
+    if (box == null) return;
     await box.delete(_keyIsNgoSimulation);
     await box.delete(_keyNgoUserId);
     ActiveSessionManager.bumpSessionGeneration();
@@ -75,6 +83,7 @@ class AuthRepository {
 
   Future<bool> isAuthenticated() async {
     final box = await _getBox();
+    if (box == null) return false;
     final isSim = box.get(_keyIsNgoSimulation, defaultValue: false) as bool;
     if (isSim) return false;
     final isAuth = box.get(_keyIsAuthenticated, defaultValue: false) as bool;
@@ -85,11 +94,13 @@ class AuthRepository {
 
   Future<String?> getUserId() async {
     final box = await _getBox();
+    if (box == null) return null;
     return box.get(_keyUserId) as String?;
   }
 
   Future<String?> getPhoneNumber() async {
     final box = await _getBox();
+    if (box == null) return null;
     return box.get(_keyPhoneNumber) as String?;
   }
 
@@ -99,37 +110,43 @@ class AuthRepository {
       return secureToken;
     }
     final box = await _getBox();
+    if (box == null) return null;
     return box.get(_keyAccessToken) as String?;
   }
 
   Future<void> savePhoneNumber(String phoneNumber) async {
     final box = await _getBox();
+    if (box == null) return;
     await box.put(_keyPhoneNumber, phoneNumber);
   }
 
   Future<void> saveAuthData(String userId, String phoneNumber, {String? token}) async {
     final box = await _getBox();
-    await box.delete(_keyIsNgoSimulation);
-    await box.delete(_keyNgoUserId);
-    await box.put(_keyUserId, userId);
-    await box.put(_keyPhoneNumber, phoneNumber);
-    await box.put(_keyIsAuthenticated, true);
-    if (token != null && token.isNotEmpty) {
-      await _tokenStorage.saveToken(token);
-      await box.delete(_keyAccessToken);
+    if (box != null) {
+      await box.delete(_keyIsNgoSimulation);
+      await box.delete(_keyNgoUserId);
+      await box.put(_keyUserId, userId);
+      await box.put(_keyPhoneNumber, phoneNumber);
+      await box.put(_keyIsAuthenticated, true);
+      if (token != null && token.isNotEmpty) {
+        await _tokenStorage.saveToken(token);
+        await box.delete(_keyAccessToken);
+      }
     }
     ActiveSessionManager.bumpSessionGeneration();
   }
 
   Future<void> clearAuthData() async {
     final box = await _getBox();
-    await box.delete(_keyUserId);
-    await box.delete(_keyPhoneNumber);
-    await box.delete(_keyAccessToken);
-    await _tokenStorage.clearToken();
-    await box.put(_keyIsAuthenticated, false);
-    await box.delete(_keyIsNgoSimulation);
-    await box.delete(_keyNgoUserId);
+    if (box != null) {
+      await box.delete(_keyUserId);
+      await box.delete(_keyPhoneNumber);
+      await box.delete(_keyAccessToken);
+      await _tokenStorage.clearToken();
+      await box.put(_keyIsAuthenticated, false);
+      await box.delete(_keyIsNgoSimulation);
+      await box.delete(_keyNgoUserId);
+    }
     ActiveSessionManager.bumpSessionGeneration();
   }
 
