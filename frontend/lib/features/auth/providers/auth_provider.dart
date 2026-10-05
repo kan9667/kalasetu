@@ -213,12 +213,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final profile = result.profile;
       final token = result.token;
 
-      // Save to auth repository
-      await _authRepository.saveAuthData(
-        profile.id,
-        effectivePhone,
-        token: token,
-      );
+      // Save to auth repository (fail closed if persistence fails)
+      try {
+        await _authRepository.saveAuthData(
+          profile.id,
+          effectivePhone,
+          token: token,
+        );
+      } catch (e) {
+        state = state.copyWith(
+          isLoading: false,
+          authError: e.toString(),
+        );
+        return false;
+      }
 
       // Persist to user_profile_box
       if (Hive.isBoxOpen('user_profile_box')) {

@@ -42,13 +42,25 @@ class AuthRepository {
     _dio.options.baseUrl = _explicitBaseUrl ?? ApiConfig.baseUrl;
   }
 
+  static bool _forceBoxFailureForTesting = false;
+
+  @visibleForTesting
+  static void setForceBoxFailureForTesting(bool fail) {
+    _forceBoxFailureForTesting = fail;
+  }
+
   Future<Box?> _getBox() async {
+    if (_forceBoxFailureForTesting) {
+      debugPrint('[AuthRepository] Simulated auth_box failure for testing.');
+      return null;
+    }
     try {
       if (!Hive.isBoxOpen(_boxName)) {
         return await Hive.openBox(_boxName);
       }
       return Hive.box(_boxName);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[AuthRepository] Failed to open auth_box: $e');
       return null;
     }
   }
@@ -122,30 +134,40 @@ class AuthRepository {
 
   Future<void> saveAuthData(String userId, String phoneNumber, {String? token}) async {
     final box = await _getBox();
-    if (box != null) {
-      await box.delete(_keyIsNgoSimulation);
-      await box.delete(_keyNgoUserId);
-      await box.put(_keyUserId, userId);
-      await box.put(_keyPhoneNumber, phoneNumber);
-      await box.put(_keyIsAuthenticated, true);
-      if (token != null && token.isNotEmpty) {
-        await _tokenStorage.saveToken(token);
-        await box.delete(_keyAccessToken);
-      }
+    if (box == null) {
+      // FAIL CLOSED: cannot persist identity — do NOT proceed to mark authenticated.
+      throw StateError('[AuthRepository] auth_box unavailable; cannot persist artisan identity. Login aborted.');
+    }
+    await box.delete(_keyIsNgoSimulation);
+    await box.delete(_keyNgoUserId);
+    await box.put(_keyUserId, userId);
+    await box.put(_keyPhoneNumber, phoneNumber);
+    await box.put(_keyIsAuthenticated, true);
+    if (token != null && token.isNotEmpty) {
+      await _tokenStorage.saveToken(token);
+      await box.delete(_keyAccessToken);
     }
     ActiveSessionManager.bumpSessionGeneration();
   }
 
   Future<void> clearAuthData() async {
+    // Always clear secure token storage — independent of Hive availability.
+    try {
+      await _tokenStorage.clearToken();
+    } catch (e) {
+      debugPrint('[AuthRepository] Failed to clear secure token: $e');
+    }
+
     final box = await _getBox();
     if (box != null) {
       await box.delete(_keyUserId);
       await box.delete(_keyPhoneNumber);
       await box.delete(_keyAccessToken);
-      await _tokenStorage.clearToken();
       await box.put(_keyIsAuthenticated, false);
       await box.delete(_keyIsNgoSimulation);
       await box.delete(_keyNgoUserId);
+    } else {
+      debugPrint('[AuthRepository] auth_box unavailable during logout; secure token cleared, Hive keys not removed.');
     }
     ActiveSessionManager.bumpSessionGeneration();
   }

@@ -115,11 +115,19 @@ class HttpApiService implements ApiService {
     _syncBaseUrl();
     // Capture session context BEFORE the first await — same pattern as uploadMediaFile
     final effectiveUserId = artisanId ?? ActiveSessionManager.getCurrentUserIdSync();
+
+    // Fail-closed: do NOT dispatch if there is no authenticated artisan session.
+    if (effectiveUserId == null || effectiveUserId.isEmpty) {
+      throw StateError(
+        '[HttpApiService] getProducts() rejected: no authenticated artisan session present. '
+        'Unscoped catalogue reads are not permitted (issue #54).',
+      );
+    }
+
     final extra = _sessionExtra(overrideUserId: effectiveUserId);
     try {
       final queryParams = <String, dynamic>{
-        if (effectiveUserId != null && effectiveUserId.isNotEmpty)
-          'artisan_id': effectiveUserId,
+        'artisan_id': effectiveUserId,
         if (category != null && category.isNotEmpty) 'category': category,
         'limit': 100,
       };
