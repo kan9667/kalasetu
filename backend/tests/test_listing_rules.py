@@ -15,10 +15,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import pytest
+from pydantic import ValidationError
 from fastapi.testclient import TestClient
 from backend.main import app
 from backend.database import SessionLocal, init_db
 from backend.models.db_models import ArtisanDB
+from backend.models.schemas import ListingGenerateRequest
 from backend.services.catalog_service import CatalogService
 from backend.utils.auth import create_access_token
 
@@ -32,6 +34,20 @@ _db.close()
 from backend.tests.conftest import IdempotentTestClient
 token = create_access_token("artisan_rules_test")
 client = IdempotentTestClient(app, headers={"Authorization": f"Bearer {token}"})
+
+
+def test_listing_transcript_has_bounded_length():
+    with pytest.raises(ValidationError):
+        ListingGenerateRequest(transcript="x" * 5001)
+
+
+def test_sanitizer_handles_large_whitespace_without_regex_backtracking():
+    text = "Handcrafted vase" + (" " * 100_000) + ", ready for display."
+
+    sanitized = CatalogService._sanitize_customer_facing_text(text)
+
+    assert " " * 100_000 not in sanitized
+    assert "vase," in sanitized
 
 
 def test_sanitize_customer_facing_text_english():
@@ -205,4 +221,3 @@ def test_generate_listing_api_offline_fallback_quarantines_cost(monkeypatch):
     assert cost_inputs["materials"] == 450.0
     assert cost_inputs["labor_hours"] == 6.0
     assert cost_inputs["hourly_rate"] == 50.0
-

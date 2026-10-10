@@ -313,7 +313,10 @@ class AudioTranscribeResponse(BaseModel):
 
 
 class ListingGenerateRequest(BaseModel):
-    transcript: str
+    # Keeps untrusted listing input bounded before it reaches text processing or
+    # external AI providers. Five thousand characters comfortably covers a
+    # detailed voice-note transcript while preventing resource exhaustion.
+    transcript: str = Field(..., min_length=1, max_length=5000)
     language_code: str = "hi"
     category_hint: Optional[str] = None
     image_url: Optional[str] = None
@@ -459,4 +462,3 @@ class VoiceChatResponseSchema(BaseModel):
     reply: str = Field(..., description="Empathetic, clear answer to the user's query")
     action: Optional[ChatActionSchema] = Field(default=None, description="Navigation action if navigation intent was detected")
     suggested_queries: List[str] = Field(default_factory=list, description="Follow-up quick question chips")
-

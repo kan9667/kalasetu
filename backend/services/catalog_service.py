@@ -337,7 +337,7 @@ class CatalogService:
                 continue
             # If the sentence contains a cost/production cue, check if it can be split or dropped
             if cost_trigger.search(s_clean):
-                sub_clauses = re.split(r"(?<=;)\s+|(?<=[,])\s+(?=[A-Z\u0900-\u097F])", s_clean)
+                sub_clauses = CatalogService._split_cost_clauses(s_clean)
                 surviving = [c.strip() for c in sub_clauses if not cost_trigger.search(c) and len(c.strip()) > 5]
                 if surviving:
                     cleaned_sentences.append("; ".join(surviving))
@@ -348,11 +348,83 @@ class CatalogService:
         # Final sweep for any standalone price/currency mentions
         result = re.sub(r"(?i)(?:₹|rs\.?|inr)\s*\d+(?:,\d+)*(?:\.\d+)?", "", result)
         result = re.sub(r"(?i)\b\d+(?:,\d+)*(?:\.\d+)?\s*(?:rupees|rs\.?|inr|रुपये|रुपया|रु)\b", "", result)
-        result = re.sub(r"\s+([,.;:?!।])", r"\1", result)
+        result = CatalogService._remove_space_before_punctuation(result)
         result = re.sub(r"[,;]\s*[,;]+", ", ", result)
         result = re.sub(r"\.\s*\.+", ". ", result)
         result = re.sub(r"\s{2,}", " ", result)
         return result.strip(" ,.-;")
+
+    @staticmethod
+    def _split_cost_clauses(text: str) -> List[str]:
+        """Split cost-related clauses without backtracking regular expressions.
+
+        A semicolon followed by whitespace always begins a new clause. A comma
+        does so only when the following non-whitespace character begins an
+        English or Devanagari sentence, matching the former regex behavior.
+        """
+        clauses: List[str] = []
+        start = 0
+        index = 0
+
+        while index < len(text):
+            delimiter = text[index]
+            if delimiter not in ";,":
+                index += 1
+                continue
+
+            next_index = index + 1
+            while next_index < len(text) and text[next_index].isspace():
+                next_index += 1
+
+            # The original expression required at least one whitespace
+            # character after the delimiter.
+            if next_index == index + 1:
+                index += 1
+                continue
+
+            next_char = text[next_index] if next_index < len(text) else ""
+            is_sentence_start = (
+                delimiter == ";"
+                or ("A" <= next_char <= "Z")
+                or ("\u0900" <= next_char <= "\u097F")
+            )
+            if not is_sentence_start:
+                index += 1
+                continue
+
+            clauses.append(text[start : index + 1])
+            start = next_index
+            index = next_index
+
+        clauses.append(text[start:])
+        return clauses
+
+    @staticmethod
+    def _remove_space_before_punctuation(text: str) -> str:
+        """Remove whitespace before punctuation in linear time.
+
+        This replaces a regex whose repeated whitespace match was flagged by
+        CodeQL as polynomial on adversarial input.
+        """
+        result: List[str] = []
+        pending_whitespace: List[str] = []
+        punctuation = {",", ".", ";", ":", "?", "!", "।"}
+
+        for character in text:
+            if character.isspace():
+                pending_whitespace.append(character)
+            elif character in punctuation:
+                pending_whitespace.clear()
+                result.append(character)
+            else:
+                if pending_whitespace:
+                    result.extend(pending_whitespace)
+                    pending_whitespace.clear()
+                result.append(character)
+
+        if pending_whitespace:
+            result.extend(pending_whitespace)
+        return "".join(result)
 
     @staticmethod
     def _sanitize_tags(tags: List[str]) -> List[str]:
