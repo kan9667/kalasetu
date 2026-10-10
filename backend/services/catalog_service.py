@@ -154,6 +154,20 @@ class CatalogService:
                 )
                 if enhanced_path and Path(enhanced_path).is_file():
                     return (str(enhanced_path), False, None)
+            except MemoryError as e:
+                degraded_reason = (
+                    "Image enhancement failed: out of memory on cloud instance. "
+                    "Returning original photo."
+                )
+                logger.error("[CatalogService] OOM during image enhancement: %s", e)
+            except RuntimeError as e:
+                msg = str(e)
+                if "out of memory" in msg.lower() or "onnx" in msg.lower() or "rembg" in msg.lower():
+                    degraded_reason = f"Image enhancement memory/model failure: {msg}"
+                    logger.error("[CatalogService] %s, falling back to input image", degraded_reason)
+                else:
+                    degraded_reason = f"Image enhancement execution failed: {e}"
+                    logger.error("[CatalogService] %s, falling back to input image", degraded_reason)
             except Exception as e:
                 degraded_reason = f"Image enhancement execution failed: {e}"
                 logger.error("[CatalogService] %s, falling back to input image", degraded_reason)

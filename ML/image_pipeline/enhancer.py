@@ -16,17 +16,22 @@ import sys
 import time
 from pathlib import Path
 
-# Ensure image_pipeline directory is in sys.path
-_PIPELINE_DIR = Path(__file__).resolve().parent
-if str(_PIPELINE_DIR) not in sys.path:
-    sys.path.insert(0, str(_PIPELINE_DIR))
+# Ensure repository root is in sys.path for standalone execution
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-from processors.input_validation import validate_input, ImageValidationError
-from processors.background_removal import remove_background
-from processors.cropping import auto_crop
-from processors.background_canvas import place_on_clean_background, place_on_ecommerce_canvas
-from processors.lighting import improve_lighting, correct_white_balance, sharpen_image
-from processors.image_output import resize_image, save_image
+# Remove _PIPELINE_DIR if present to eliminate alternate 'processors.*' runtime identity
+_PIPELINE_DIR = Path(__file__).resolve().parent
+while str(_PIPELINE_DIR) in sys.path:
+    sys.path.remove(str(_PIPELINE_DIR))
+
+from ML.image_pipeline.processors.input_validation import validate_input, ImageValidationError
+from ML.image_pipeline.processors.background_removal import remove_background
+from ML.image_pipeline.processors.cropping import auto_crop
+from ML.image_pipeline.processors.background_canvas import place_on_clean_background, place_on_ecommerce_canvas
+from ML.image_pipeline.processors.lighting import improve_lighting, correct_white_balance, sharpen_image
+from ML.image_pipeline.processors.image_output import resize_image, save_image
 
 
 def enhance_image(input_path, output_path=None, **options):

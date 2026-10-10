@@ -95,12 +95,25 @@ async def lifespan(app: FastAPI):
     # 3. Seed baseline development data
     init_db()
 
-    # 4. Pre-warm ML models only in non-test runtime environments
+    # 4. Pre-warm ML models only in non-test runtime environments.
+    #    The warmup runs in a background daemon thread.  get_rembg_session()
+    #    is protected by _session_lock, so if a real request arrives while
+    #    warm-up is still running, only ONE ONNX session will ever be created.
     if settings.environment != "test":
         def _warmup_models():
             try:
                 from ML.image_pipeline.processors.background_removal import get_rembg_session
                 get_rembg_session()
+            except RuntimeError as e:
+                # get_rembg_session() wraps MemoryError and model-load failures
+                # as RuntimeError.  Log a warning — the process stays alive and
+                # enhancement degrades gracefully on the first real request.
+                import warnings
+                warnings.warn(
+                    f"[startup] rembg warm-up failed: {e} — "
+                    "image enhancement will degrade gracefully on first request.",
+                    RuntimeWarning,
+                )
             except Exception:
                 pass
 

@@ -17,11 +17,16 @@ from pathlib import Path
 
 # Add project root to sys.path
 PROJECT_DIR = Path(__file__).resolve().parent
-if str(PROJECT_DIR) not in sys.path:
-    sys.path.insert(0, str(PROJECT_DIR))
+REPO_ROOT = PROJECT_DIR.parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-from enhancer import enhance_image
-from processors.input_validation import ImageValidationError
+# Remove PROJECT_DIR if present to eliminate alternate 'processors.*' runtime identity
+while str(PROJECT_DIR) in sys.path:
+    sys.path.remove(str(PROJECT_DIR))
+
+from ML.image_pipeline.enhancer import enhance_image
+from ML.image_pipeline.processors.input_validation import ImageValidationError
 
 
 def print_banner():

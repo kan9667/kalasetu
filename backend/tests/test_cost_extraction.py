@@ -36,6 +36,40 @@ from backend.tests.conftest import IdempotentTestClient
 token = create_access_token("artisan_cost_test")
 client = IdempotentTestClient(app, headers={"Authorization": f"Bearer {token}"})
 
+from unittest.mock import patch
+from ML.pricing.models import PricingResult
+
+
+def _mock_process_upload(self, image_path, description, cost_inputs=None, category=None):
+    costs = cost_inputs or {}
+    materials = float(costs.get("materials", 0.0))
+    hours = float(costs.get("labor_hours", 0.0))
+    rate = float(costs.get("hourly_rate") or DEFAULT_HOURLY_RATE)
+    transport = float(costs.get("transport", 0.0))
+    overhead = float(costs.get("overhead", 0.0))
+    floor = materials + (hours * rate) + transport + overhead
+    suggested = max(floor * 1.5, 500.0)
+    return PricingResult(
+        suggested_price=round(suggested, 0),
+        price_range_low=round(floor, 0),
+        price_range_high=round(suggested * 1.4, 0),
+        cost_floor=floor,
+        confidence_score=0.9,
+        reasoning=f"Calculated from floor ₹{floor:.0f}.",
+        comparable_products=[],
+        market_position="Fair Trade",
+    )
+
+
+@pytest.fixture(autouse=True)
+def mock_pricing_processor():
+    """Ensure pricing suggestions are fast and deterministic with no live LLM network calls."""
+    with patch(
+        "ML.pricing.artisan.processor.ArtisanProductProcessor.process_upload",
+        new=_mock_process_upload,
+    ):
+        yield
+
 
 def test_regex_cost_phrasing_variants():
     """Stress-test shared regex utility across real-world vernacular phrasing."""

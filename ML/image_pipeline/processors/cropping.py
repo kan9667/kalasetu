@@ -8,7 +8,10 @@
 import numpy as np
 from PIL import Image
 
-from config import CROP_PADDING, ALPHA_THRESHOLD, MIN_CONTOUR_AREA
+try:
+    from ML.image_pipeline.config import CROP_PADDING, ALPHA_THRESHOLD, MIN_CONTOUR_AREA
+except ImportError:
+    from config import CROP_PADDING, ALPHA_THRESHOLD, MIN_CONTOUR_AREA
 
 
 def detect_product_bounds(rgba_image):

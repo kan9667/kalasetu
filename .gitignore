@@ -87,6 +87,7 @@ Thumbs.db
 *.iml
 *.ipr
 *.iws
+AGENTS.md
 
 # Flutter & Dart
 pubspec.lock

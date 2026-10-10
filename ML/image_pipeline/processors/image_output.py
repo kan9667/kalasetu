@@ -8,7 +8,10 @@
 import os
 from PIL import Image
 
-from config import OUTPUT_WIDTH, OUTPUT_HEIGHT, JPEG_QUALITY, MAX_UPSCALE_FACTOR
+try:
+    from ML.image_pipeline.config import OUTPUT_WIDTH, OUTPUT_HEIGHT, JPEG_QUALITY, MAX_UPSCALE_FACTOR
+except ImportError:
+    from config import OUTPUT_WIDTH, OUTPUT_HEIGHT, JPEG_QUALITY, MAX_UPSCALE_FACTOR
 
 
 def resize_image(image, max_width=None, max_height=None):
@@ -124,7 +127,10 @@ def save_image(image, output_path, output_format=None, quality=None):
     # JPEG doesn't support transparency — convert RGBA to RGB
     if output_format == "JPEG" and image.mode == "RGBA":
         # Composite over white background before saving as JPEG
-        from config import BACKGROUND_COLOR
+        try:
+            from ML.image_pipeline.config import BACKGROUND_COLOR
+        except ImportError:
+            from config import BACKGROUND_COLOR
         background = Image.new("RGB", image.size, BACKGROUND_COLOR)
         background.paste(image, (0, 0), image)
         image = background
