@@ -104,10 +104,14 @@ async def lifespan(app: FastAPI):
             try:
                 from ML.image_pipeline.processors.background_removal import get_rembg_session
                 get_rembg_session()
-            except MemoryError:
+            except RuntimeError as e:
+                # get_rembg_session() wraps MemoryError and model-load failures
+                # as RuntimeError.  Log a warning — the process stays alive and
+                # enhancement degrades gracefully on the first real request.
                 import warnings
                 warnings.warn(
-                    "[startup] rembg warm-up hit MemoryError — enhancement will degrade gracefully on first request.",
+                    f"[startup] rembg warm-up failed: {e} — "
+                    "image enhancement will degrade gracefully on first request.",
                     RuntimeWarning,
                 )
             except Exception:

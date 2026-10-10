@@ -8,7 +8,10 @@
 import os
 from PIL import Image
 
-from config import SUPPORTED_FORMATS, MAX_INPUT_SIZE_MB, MIN_DIMENSION, MAX_DIMENSION
+try:
+    from ML.image_pipeline.config import SUPPORTED_FORMATS, MAX_INPUT_SIZE_MB, MIN_DIMENSION, MAX_DIMENSION
+except ImportError:
+    from config import SUPPORTED_FORMATS, MAX_INPUT_SIZE_MB, MIN_DIMENSION, MAX_DIMENSION
 
 
 class ImageValidationError(Exception):

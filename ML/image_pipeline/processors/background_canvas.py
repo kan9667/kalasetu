@@ -7,7 +7,10 @@
 
 from PIL import Image
 
-from config import BACKGROUND_COLOR, OUTPUT_WIDTH, OUTPUT_HEIGHT
+try:
+    from ML.image_pipeline.config import BACKGROUND_COLOR, OUTPUT_WIDTH, OUTPUT_HEIGHT
+except ImportError:
+    from config import BACKGROUND_COLOR, OUTPUT_WIDTH, OUTPUT_HEIGHT
 
 
 def place_on_clean_background(rgba_image, bg_color=None):
@@ -94,7 +97,10 @@ def place_on_ecommerce_canvas(rgb_image, canvas_width=None, canvas_height=None,
     # Don't upscale if the product already fits
     if scale > 1.0:
         # Only upscale a little to avoid quality loss
-        from config import MAX_UPSCALE_FACTOR
+        try:
+            from ML.image_pipeline.config import MAX_UPSCALE_FACTOR
+        except ImportError:
+            from config import MAX_UPSCALE_FACTOR
         scale = min(scale, MAX_UPSCALE_FACTOR)
     
     # Calculate the new product size

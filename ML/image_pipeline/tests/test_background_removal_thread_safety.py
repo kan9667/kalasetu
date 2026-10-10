@@ -1,16 +1,21 @@
 # ============================================================
 # test_background_removal_thread_safety.py
 # ============================================================
-# Proves three concurrency guarantees for the rembg session:
+# Proves concurrency and correctness guarantees for background_removal:
 #
-#   1. Concurrent callers initialize exactly ONE session.
-#   2. Enhancement calls through remove_background() are serialized
-#      by the lock (no duplicate ONNX loads during inference).
-#   3. A startup warm-up thread and a simultaneous enhancement
-#      request cannot create two sessions concurrently.
-#   4. MemoryError surfaces as RuntimeError, not a process crash.
+#   1. Canonical imports guarantee exactly ONE session across startup warm-up
+#      and real enhancement-pipeline execution paths.
+#   2. Concurrent get_rembg_session() calls create exactly ONE session.
+#   3. Concurrent remove_background() calls are strictly serialized so
+#      max_active_inferences == 1, and no deadlock occurs after failure.
+#   4. MemoryError is surfaced as RuntimeError, not a process crash.
+#   5. sess_opts= (not session_options=) is passed to new_session().
+#   6. providers=["CPUExecutionProvider"] is always passed.
+#   7. ONNX configuration fails closed: if safe SessionOptions cannot
+#      be created, RuntimeError is raised without calling rembg with defaults.
+#   8. No fallback to u2net after any failure (OOM, config error, or general exception).
 #
-# All tests mock rembg.new_session so no ML model is downloaded.
+# All tests mock rembg.new_session / rembg.remove — no model download required.
 # ============================================================
 
 import sys
@@ -22,19 +27,26 @@ from unittest.mock import MagicMock
 from PIL import Image
 import pytest
 
-# Ensure the processors package is importable
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure repository root is in sys.path
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 
 def _fresh_module():
     """
     Return a freshly imported copy of background_removal with its module-level
-    state (_session, _session_lock) reset, so tests cannot bleed into each other.
+    state (_session, _session_lock, _inference_lock) reset so tests cannot bleed into each other.
+    Standardized on canonical module path ML.image_pipeline.processors.background_removal.
     """
-    mod_name = "processors.background_removal"
-    if mod_name in sys.modules:
-        del sys.modules[mod_name]
-    import processors.background_removal as br
+    for mod_name in [
+        "ML.image_pipeline.processors.background_removal",
+        "processors.background_removal",
+    ]:
+        if mod_name in sys.modules:
+            del sys.modules[mod_name]
+    import ML.image_pipeline.processors.background_removal as br
+    br._session = None
     return br
 
 
@@ -42,12 +54,78 @@ def _rembg_stub(new_session_fn, remove_fn=None):
     """Build a minimal rembg module stub."""
     stub = types.ModuleType("rembg")
     stub.new_session = new_session_fn
-    stub.remove = remove_fn or (lambda img, session=None: Image.new("RGBA", (10, 10)))
+    stub.remove = remove_fn or (
+        lambda img, session=None: Image.new(
+            "RGBA", img.size if hasattr(img, "size") else (100, 100), (200, 100, 50, 255)
+        )
+    )
     return stub
 
 
 # ─────────────────────────────────────────────────────────────
-# 1. Concurrent get_rembg_session() creates exactly one session
+# 1. Canonical module imports guarantee single session
+# ─────────────────────────────────────────────────────────────
+
+class TestCanonicalImportSingleSession:
+    """
+    Verifies that the startup warm-up import path (ML.image_pipeline.processors.background_removal)
+    and the real enhancement-pipeline import path (via ML.image_pipeline.enhancer)
+    resolve to the same canonical module identity and create exactly ONE session.
+    """
+
+    def test_startup_and_enhancer_import_paths_share_one_session(self, monkeypatch, tmp_path):
+        br = _fresh_module()
+        call_count = {"n": 0}
+        sentinel = MagicMock(name="shared_session")
+
+        def _slow_new(model, **kwargs):
+            call_count["n"] += 1
+            time.sleep(0.05)  # race window
+            return sentinel
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_slow_new))
+
+        warmup_session = []
+
+        def _warmup_target():
+            # Real startup import path from backend/main.py:
+            from ML.image_pipeline.processors.background_removal import get_rembg_session
+            warmup_session.append(get_rembg_session())
+
+        enhancer_result = []
+        input_img_path = tmp_path / "test_pot.jpg"
+        output_img_path = tmp_path / "test_out.jpg"
+        img = Image.new("RGB", (100, 100), (150, 120, 100))
+        img.save(input_img_path, "JPEG")
+
+        def _enhancer_target():
+            # Real enhancement pipeline import path:
+            from ML.image_pipeline.enhancer import enhance_image
+            res = enhance_image(str(input_img_path), str(output_img_path))
+            enhancer_result.append(res)
+
+        t_warmup = threading.Thread(target=_warmup_target, name="startup-warmup-thread")
+        t_enhancer = threading.Thread(target=_enhancer_target, name="enhancer-pipeline-thread")
+
+        t_warmup.start()
+        t_enhancer.start()
+        t_warmup.join(timeout=5.0)
+        t_enhancer.join(timeout=5.0)
+
+        assert not t_warmup.is_alive()
+        assert not t_enhancer.is_alive()
+        assert len(warmup_session) == 1
+        assert len(enhancer_result) == 1
+        assert warmup_session[0] is sentinel
+        assert call_count["n"] == 1, (
+            f"new_session() called {call_count['n']} times! "
+            "Duplicate module import caused multiple ONNX sessions to load."
+        )
+        assert br._session is sentinel
+
+
+# ─────────────────────────────────────────────────────────────
+# 2. Concurrent get_rembg_session() creates exactly one session
 # ─────────────────────────────────────────────────────────────
 
 class TestSingleSessionUnderConcurrency:
@@ -122,45 +200,167 @@ class TestSingleSessionUnderConcurrency:
 
 
 # ─────────────────────────────────────────────────────────────
-# 2. Concurrent remove_background() calls share a single session
+# 3. Inference serialization: max_active_inferences == 1 and no deadlock
 # ─────────────────────────────────────────────────────────────
 
-class TestEnhancementSerialization:
+class TestInferenceSerialization:
+    """
+    Proves that rembg.remove calls are strictly serialized across concurrent threads
+    so max_active_inferences == 1 at all times, and proves no deadlock occurs
+    after an inference failure.
+    """
 
-    def test_concurrent_calls_trigger_one_session(self, monkeypatch):
+    def test_concurrent_inferences_strictly_serialized(self, monkeypatch):
         br = _fresh_module()
-        call_count = {"n": 0}
-        sentinel = MagicMock(name="session")
+        active_inferences = 0
+        max_active_inferences = 0
+        lock = threading.Lock()
+        sentinel_session = MagicMock(name="session")
 
-        def _slow_new(model, **kwargs):
-            call_count["n"] += 1
-            time.sleep(0.03)
-            return sentinel
+        def _new(model, **kwargs):
+            return sentinel_session
 
-        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_slow_new))
-        errors, results = [], []
+        def _blocking_remove(img, session=None):
+            nonlocal active_inferences, max_active_inferences
+            with lock:
+                active_inferences += 1
+                if active_inferences > max_active_inferences:
+                    max_active_inferences = active_inferences
+                current = active_inferences
 
-        def _enhance():
+            assert current == 1, f"Multiple active inferences running concurrently: {current}"
+            time.sleep(0.04)  # Hold inside inference to force concurrency contention
+
+            with lock:
+                active_inferences -= 1
+
+            return Image.new("RGBA", (10, 10))
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_new, _blocking_remove))
+
+        threads = []
+        errors = []
+
+        def _worker():
             try:
                 img = Image.new("RGB", (50, 50))
-                results.append(br.remove_background(img))
+                br.remove_background(img)
             except Exception as e:
                 errors.append(e)
 
-        t1 = threading.Thread(target=_enhance)
-        t2 = threading.Thread(target=_enhance)
-        t1.start(); t2.start()
-        t1.join(); t2.join()
+        for _ in range(5):
+            t = threading.Thread(target=_worker)
+            threads.append(t)
+            t.start()
 
-        assert not errors, f"remove_background() raised: {errors}"
-        assert len(results) == 2
-        assert call_count["n"] == 1, (
-            f"Expected 1 session during concurrent remove_background, got {call_count['n']}"
+        for t in threads:
+            t.join(timeout=5.0)
+            assert not t.is_alive(), "Worker thread hung/deadlocked during inference"
+
+        assert not errors, f"Inference worker failed: {errors}"
+        assert max_active_inferences == 1, (
+            f"Expected max_active_inferences == 1, got {max_active_inferences}"
         )
+
+    def test_no_deadlock_after_inference_failure(self, monkeypatch):
+        br = _fresh_module()
+        sentinel_session = MagicMock(name="session")
+
+        def _new(model, **kwargs):
+            return sentinel_session
+
+        def _flaky_remove(img, session=None):
+            if threading.current_thread().name == "failing-thread":
+                raise MemoryError("simulated OOM in failing thread")
+            return Image.new("RGBA", (10, 10))
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_new, _flaky_remove))
+
+        t1_error = []
+        t2_result = []
+
+        def _failing_worker():
+            try:
+                img = Image.new("RGB", (50, 50))
+                br.remove_background(img)
+            except Exception as e:
+                t1_error.append(e)
+
+        def _succeeding_worker():
+            try:
+                img = Image.new("RGB", (50, 50))
+                res = br.remove_background(img)
+                t2_result.append(res)
+            except Exception:
+                pass
+
+        t1 = threading.Thread(target=_failing_worker, name="failing-thread")
+        t2 = threading.Thread(target=_succeeding_worker, name="succeeding-thread")
+
+        t1.start()
+        t1.join(timeout=2.0)
+        assert not t1.is_alive(), "Failing thread deadlocked"
+        assert len(t1_error) == 1
+        assert isinstance(t1_error[0], RuntimeError)  # MemoryError wrapped as RuntimeError
+
+        # Now start thread 2 after failure to prove no deadlock on _inference_lock
+        t2.start()
+        t2.join(timeout=2.0)
+        assert not t2.is_alive(), "Succeeding thread deadlocked on lock after previous inference failure!"
+        assert len(t2_result) == 1, "Thread 2 should have succeeded without deadlock"
+
+    def test_concurrent_race_with_failure_no_deadlock(self, monkeypatch):
+        br = _fresh_module()
+        sentinel_session = MagicMock(name="session")
+        active_inferences = 0
+        max_active_inferences = 0
+        lock = threading.Lock()
+
+        def _new(model, **kwargs):
+            return sentinel_session
+
+        def _race_remove(img, session=None):
+            nonlocal active_inferences, max_active_inferences
+            with lock:
+                active_inferences += 1
+                if active_inferences > max_active_inferences:
+                    max_active_inferences = active_inferences
+                current = active_inferences
+
+            assert current == 1, f"Multiple active inferences running concurrently: {current}"
+            time.sleep(0.03)
+
+            try:
+                if threading.current_thread().name == "fail-thread":
+                    raise MemoryError("simulated OOM")
+                return Image.new("RGBA", (10, 10))
+            finally:
+                with lock:
+                    active_inferences -= 1
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_new, _race_remove))
+
+        t_fail = threading.Thread(
+            target=lambda: (pytest.raises(RuntimeError, br.remove_background, Image.new("RGB", (10, 10)))),
+            name="fail-thread"
+        )
+        t_ok = threading.Thread(
+            target=lambda: br.remove_background(Image.new("RGB", (10, 10))),
+            name="ok-thread"
+        )
+
+        t_fail.start()
+        t_ok.start()
+        t_fail.join(timeout=3.0)
+        t_ok.join(timeout=3.0)
+
+        assert not t_fail.is_alive()
+        assert not t_ok.is_alive()
+        assert max_active_inferences == 1
 
 
 # ─────────────────────────────────────────────────────────────
-# 3. Startup warm-up thread + simultaneous request = one session
+# 4. Startup warm-up thread + simultaneous request = one session
 # ─────────────────────────────────────────────────────────────
 
 class TestWarmupRaceWithRequest:
@@ -169,7 +369,7 @@ class TestWarmupRaceWithRequest:
         """
         Simulates the exact Railway crash: the lifespan warmup daemon starts
         loading the ONNX model; before it finishes, the first real enhancement
-        request arrives.  Only one ONNX session must be created.
+        request arrives. Only one ONNX session must be created.
         """
         br = _fresh_module()
         call_count = {"n": 0}
@@ -184,15 +384,13 @@ class TestWarmupRaceWithRequest:
         errors = []
 
         def _warmup():
-            """Mirrors backend/main.py lifespan warmup thread."""
             try:
                 br.get_rembg_session()
             except Exception as e:
                 errors.append(("warmup", e))
 
         def _api_request():
-            """Arrives 10 ms after warmup starts, mid-init."""
-            time.sleep(0.01)
+            time.sleep(0.01)  # arrives mid-init
             try:
                 img = Image.new("RGB", (40, 40))
                 br.remove_background(img)
@@ -226,7 +424,6 @@ class TestWarmupRaceWithRequest:
 
         with pytest.raises(RuntimeError, match="[Oo]ut of memory"):
             br.get_rembg_session()
-        # Reaching here proves the process did not exit.
 
     def test_inference_oom_raises_runtime_error(self, monkeypatch):
         """
@@ -247,3 +444,248 @@ class TestWarmupRaceWithRequest:
         img = Image.new("RGB", (100, 100))
         with pytest.raises(RuntimeError, match="[Oo]ut of memory"):
             br.remove_background(img)
+
+
+# ─────────────────────────────────────────────────────────────
+# 5. Correct rembg API: sess_opts= keyword
+# ─────────────────────────────────────────────────────────────
+
+class TestCorrectRembgApiKeyword:
+
+    def test_sess_opts_keyword_is_used(self, monkeypatch):
+        """
+        new_session() must be called with sess_opts= (not session_options=).
+        Verifies the exact keyword used in the call.
+        """
+        br = _fresh_module()
+        captured_kwargs = {}
+
+        def _capture_new(model, *args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return MagicMock(name="session")
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_capture_new))
+
+        br.get_rembg_session()
+
+        assert "sess_opts" in captured_kwargs, (
+            f"Expected sess_opts= keyword, got kwargs: {list(captured_kwargs.keys())}. "
+            "rembg.new_session does not accept session_options=."
+        )
+        assert "session_options" not in captured_kwargs, (
+            "session_options= was passed — this keyword does not exist in rembg."
+        )
+
+    def test_sess_opts_value_is_onnx_session_options(self, monkeypatch):
+        """
+        The value passed as sess_opts= must be an onnxruntime.SessionOptions
+        instance with the correct conservative settings applied.
+        """
+        br = _fresh_module()
+        captured_kwargs = {}
+
+        def _capture_new(model, *args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return MagicMock(name="session")
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_capture_new))
+        br.get_rembg_session()
+
+        opts = captured_kwargs.get("sess_opts")
+        assert opts is not None, "sess_opts= was not passed to new_session()"
+
+        import onnxruntime as ort
+        assert isinstance(opts, ort.SessionOptions), (
+            f"sess_opts value is {type(opts)}, expected onnxruntime.SessionOptions"
+        )
+        assert opts.intra_op_num_threads == 1, (
+            f"intra_op_num_threads={opts.intra_op_num_threads}, expected 1"
+        )
+        assert opts.inter_op_num_threads == 1, (
+            f"inter_op_num_threads={opts.inter_op_num_threads}, expected 1"
+        )
+        assert opts.enable_cpu_mem_arena is False, (
+            f"enable_cpu_mem_arena={opts.enable_cpu_mem_arena}, expected False"
+        )
+
+
+# ─────────────────────────────────────────────────────────────
+# 6. CPU execution provider is always passed
+# ─────────────────────────────────────────────────────────────
+
+class TestCpuExecutionProvider:
+
+    def test_cpu_provider_passed_to_new_session(self, monkeypatch):
+        """
+        new_session() must always receive providers=["CPUExecutionProvider"]
+        to prevent any GPU memory allocation on Railway.
+        """
+        br = _fresh_module()
+        captured_kwargs = {}
+
+        def _capture_new(model, *args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return MagicMock(name="session")
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_capture_new))
+        br.get_rembg_session()
+
+        providers = captured_kwargs.get("providers")
+        assert providers is not None, "providers= was not passed to new_session()"
+        assert "CPUExecutionProvider" in providers, (
+            f"CPUExecutionProvider missing from providers: {providers}"
+        )
+
+
+# ─────────────────────────────────────────────────────────────
+# 7. Fail-closed ONNX Configuration
+# ─────────────────────────────────────────────────────────────
+
+class TestFailClosedOnnxConfiguration:
+    """
+    Verifies that ONNX configuration fails closed:
+    - If safe SessionOptions cannot be created, get_rembg_session() raises RuntimeError.
+    - rembg.new_session is NEVER called with unconstrained defaults.
+    - Calling remove_background fails closed with RuntimeError so catalog service returns degraded.
+    - Narrow unsupported settings (like enable_cpu_mem_arena AttributeError) are handled gracefully.
+    """
+
+    def test_config_failure_raises_runtime_error_and_does_not_call_new_session(self, monkeypatch):
+        br = _fresh_module()
+        new_session_calls = []
+
+        def _capture_new(model, *args, **kwargs):
+            new_session_calls.append((model, kwargs))
+            return MagicMock(name="session")
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_capture_new))
+        monkeypatch.setattr(br, "_make_onnx_session_options", MagicMock(side_effect=RuntimeError("onnxruntime init error")))
+
+        with pytest.raises(RuntimeError, match="Safe ONNX configuration cannot be created"):
+            br.get_rembg_session()
+
+        assert len(new_session_calls) == 0, (
+            "new_session was called despite ONNX options failure! "
+            "Unconstrained defaults must never be used."
+        )
+
+    def test_config_returning_none_raises_runtime_error(self, monkeypatch):
+        br = _fresh_module()
+        new_session_calls = []
+
+        def _capture_new(model, *args, **kwargs):
+            new_session_calls.append((model, kwargs))
+            return MagicMock(name="session")
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_capture_new))
+        monkeypatch.setattr(br, "_make_onnx_session_options", lambda: None)
+
+        with pytest.raises(RuntimeError, match="Safe ONNX configuration cannot be created"):
+            br.get_rembg_session()
+
+        assert len(new_session_calls) == 0, (
+            "new_session was called with None options! Unconstrained defaults must not be used."
+        )
+
+    def test_remove_background_fails_closed_when_onnx_config_fails(self, monkeypatch):
+        br = _fresh_module()
+        monkeypatch.setattr(br, "_make_onnx_session_options", MagicMock(side_effect=RuntimeError("onnx config error")))
+
+        img = Image.new("RGB", (50, 50))
+        with pytest.raises(RuntimeError, match="Safe ONNX configuration cannot be created"):
+            br.remove_background(img)
+
+    def test_narrow_attribute_error_on_arena_is_handled(self, monkeypatch):
+        """
+        If enable_cpu_mem_arena raises AttributeError (older onnxruntime),
+        the options should still be returned with ORT_SEQUENTIAL and 1 thread.
+        """
+        br = _fresh_module()
+        import onnxruntime as ort
+
+        real_session_options = ort.SessionOptions
+        class MockOptions(real_session_options):
+            @property
+            def enable_cpu_mem_arena(self):
+                raise AttributeError("Attribute not supported on older onnxruntime")
+
+            @enable_cpu_mem_arena.setter
+            def enable_cpu_mem_arena(self, val):
+                raise AttributeError("Attribute not supported on older onnxruntime")
+
+        monkeypatch.setattr(ort, "SessionOptions", MockOptions)
+
+        opts = br._make_onnx_session_options()
+        assert opts is not None
+        assert opts.intra_op_num_threads == 1
+        assert opts.inter_op_num_threads == 1
+        assert opts.execution_mode == ort.ExecutionMode.ORT_SEQUENTIAL
+
+
+# ─────────────────────────────────────────────────────────────
+# 8. No fallback to heavier u2net after any failure
+# ─────────────────────────────────────────────────────────────
+
+class TestNoHeavyModelFallback:
+
+    def test_oom_does_not_fall_back_to_u2net(self, monkeypatch):
+        """
+        MemoryError during u2netp init must raise RuntimeError immediately.
+        new_session() must NOT be called again with u2net.
+        """
+        br = _fresh_module()
+        calls = []
+
+        def _track_new(model, *args, **kwargs):
+            calls.append(model)
+            raise MemoryError("simulated OOM")
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_track_new))
+
+        with pytest.raises(RuntimeError, match="[Oo]ut of memory"):
+            br.get_rembg_session()
+
+        assert calls == ["u2netp"], (
+            f"Expected only u2netp attempt, got: {calls}. "
+            "u2net fallback after OOM would worsen memory pressure."
+        )
+
+    def test_general_exception_does_not_fall_back_to_u2net(self, monkeypatch):
+        """
+        Any non-OOM model-load failure must also raise RuntimeError immediately
+        without attempting u2net, since u2net is larger than u2netp.
+        """
+        br = _fresh_module()
+        calls = []
+
+        def _track_new(model, *args, **kwargs):
+            calls.append(model)
+            raise RuntimeError("simulated corrupt model file")
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_track_new))
+
+        with pytest.raises(RuntimeError):
+            br.get_rembg_session()
+
+        assert calls == ["u2netp"], (
+            f"Expected only u2netp attempt after general exception, got: {calls}."
+        )
+
+    def test_onnx_config_failure_does_not_fall_back_to_u2net(self, monkeypatch):
+        """
+        If safe ONNX configuration fails, new_session must not be called with u2net.
+        """
+        br = _fresh_module()
+        calls = []
+
+        def _track_new(model, *args, **kwargs):
+            calls.append(model)
+            return MagicMock(name="session")
+
+        monkeypatch.setitem(sys.modules, "rembg", _rembg_stub(_track_new))
+        monkeypatch.setattr(br, "_make_onnx_session_options", MagicMock(side_effect=RuntimeError("onnx config error")))
+
+        with pytest.raises(RuntimeError, match="Safe ONNX configuration cannot be created"):
+            br.get_rembg_session()
+
+        assert calls == [], f"Expected no new_session calls, got: {calls}"

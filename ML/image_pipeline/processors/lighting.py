@@ -10,12 +10,20 @@ import cv2
 import numpy as np
 from PIL import Image, ImageFilter
 
-from config import (
-    CLAHE_CLIP_LIMIT, CLAHE_TILE_SIZE,
-    TARGET_BRIGHTNESS, GAMMA_MIN, GAMMA_MAX,
-    WHITE_BALANCE_STRENGTH,
-    SHARPEN_ENABLED, SHARPEN_RADIUS, SHARPEN_PERCENT, SHARPEN_THRESHOLD,
-)
+try:
+    from ML.image_pipeline.config import (
+        CLAHE_CLIP_LIMIT, CLAHE_TILE_SIZE,
+        TARGET_BRIGHTNESS, GAMMA_MIN, GAMMA_MAX,
+        WHITE_BALANCE_STRENGTH,
+        SHARPEN_ENABLED, SHARPEN_RADIUS, SHARPEN_PERCENT, SHARPEN_THRESHOLD,
+    )
+except ImportError:
+    from config import (
+        CLAHE_CLIP_LIMIT, CLAHE_TILE_SIZE,
+        TARGET_BRIGHTNESS, GAMMA_MIN, GAMMA_MAX,
+        WHITE_BALANCE_STRENGTH,
+        SHARPEN_ENABLED, SHARPEN_RADIUS, SHARPEN_PERCENT, SHARPEN_THRESHOLD,
+    )
 
 
 # ---- Helper: Convert between PIL and OpenCV ----
