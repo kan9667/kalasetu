@@ -31,6 +31,8 @@
   "phone_invalid": "Please enter a valid 10-digit phone number",
   "continue_btn": "தொடரவும்",
   "get_otp_call_btn": "அழைப்பு மூலம் OTP பெறவும்",
+  "artisan_not_registered": "இந்தக் கைவினைஞர் பதிவு செய்யப்படவில்லை. முதலில் பதிவு செய்யவும்.",
+  "register_action": "பதிவு செய்க",
   "ngo_assist_btn": "Sign in with NGO Assist",
   "ngo_assist_dialog_title": "NGO / Coordinator Assist",
   "ngo_assist_dialog_desc": "Visit your local cluster coordinator or NGO kiosk for assisted onboarding.",

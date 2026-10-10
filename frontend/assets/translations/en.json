@@ -33,6 +33,8 @@
   "phone_hint": "Enter your 10-digit mobile number",
   "phone_required": "Please enter your phone number",
   "phone_invalid": "Please enter a valid 10-digit phone number",
+  "artisan_not_registered": "Artisan not registered. Please register first.",
+  "register_action": "Register",
   "continue_btn": "Continue",
   "get_otp_call_btn": "Get OTP via Call",
   "ngo_assist_btn": "Sign in with NGO Assist",

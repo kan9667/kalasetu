@@ -33,15 +33,29 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   void _handleContinue() async {
     if (_formKey.currentState?.validate() ?? false) {
       final phone = _phoneController.text.trim();
-      final result = await ref.read(authStateProvider.notifier).signInWithPhone(phone);
+      final result = await ref
+          .read(authStateProvider.notifier)
+          .signInWithPhone(phone);
       if (!mounted) return;
       if (result is RequestOtpSuccess) {
-        context.pushNamed(AppRouteConstants.otp, queryParameters: {'phone': phone});
+        context.pushNamed(
+          AppRouteConstants.otp,
+          queryParameters: {'phone': phone},
+        );
       } else if (result is RequestOtpFailure) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.message),
+            content: Text(
+              result.notFound ? 'artisan_not_registered'.tr() : result.message,
+            ),
             backgroundColor: AppColors.error,
+            action: result.notFound
+                ? SnackBarAction(
+                    label: 'register_action'.tr(),
+                    onPressed: () =>
+                        context.pushNamed(AppRouteConstants.register),
+                  )
+                : null,
           ),
         );
       }
@@ -69,7 +83,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
               Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                    vertical: AppSpacing.md,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.cardSurface,
                     borderRadius: BorderRadius.circular(AppRadii.lg),
@@ -93,7 +110,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
               Text(
                 'sign_in_subtitle'.tr(),
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
                 textAlign: TextAlign.center,
               ),
 
@@ -144,7 +163,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 children: [
                   const Expanded(child: Divider(color: AppColors.border)),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                    ),
                     child: Text(
                       'new_artisan_prompt'.tr(),
                       style: AppTextStyles.bodySmall.copyWith(

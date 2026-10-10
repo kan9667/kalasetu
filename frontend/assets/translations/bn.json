@@ -31,6 +31,8 @@
   "phone_invalid": "Please enter a valid 10-digit phone number",
   "continue_btn": "এগিয়ে যান",
   "get_otp_call_btn": "কলের মাধ্যমে ওটিপি পান",
+  "artisan_not_registered": "এই কারিগর নিবন্ধিত নন। অনুগ্রহ করে আগে নিবন্ধন করুন।",
+  "register_action": "নিবন্ধন করুন",
   "ngo_assist_btn": "Sign in with NGO Assist",
   "ngo_assist_dialog_title": "NGO / Coordinator Assist",
   "ngo_assist_dialog_desc": "Visit your local cluster coordinator or NGO kiosk for assisted onboarding.",
