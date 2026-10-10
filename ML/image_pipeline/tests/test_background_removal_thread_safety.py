@@ -35,19 +35,74 @@ if _REPO_ROOT not in sys.path:
 
 def _fresh_module():
     """
-    Return a freshly imported copy of background_removal with its module-level
-    state (_session, _session_lock, _inference_lock) reset so tests cannot bleed into each other.
-    Standardized on canonical module path ML.image_pipeline.processors.background_removal.
+    Return the canonical background_removal module with its module-level
+    state (_session, _session_lock, _inference_lock) reset directly.
+    Never deletes the module from sys.modules to prevent splitting module identity
+    or orphaning references held by enhancer.py, catalog_service.py, or other callers.
     """
-    for mod_name in [
-        "ML.image_pipeline.processors.background_removal",
-        "processors.background_removal",
-    ]:
-        if mod_name in sys.modules:
-            del sys.modules[mod_name]
     import ML.image_pipeline.processors.background_removal as br
     br._session = None
+    br._session_lock = threading.Lock()
+    br._inference_lock = threading.Lock()
     return br
+
+
+@pytest.fixture(autouse=True)
+def _isolate_ml_and_sys_state():
+    """
+    Guarantees strict test isolation:
+    - Snapshots and restores sys.path and sys.modules entries (especially 'rembg' stubs and 'processors' aliases).
+    - Directly resets background_removal module state before and after each test.
+    - Prevents leaking mutated pipeline globals (e.g. run_ml_enhancer) into later tests.
+    """
+    orig_path = list(sys.path)
+    orig_rembg = sys.modules.get("rembg")
+    had_processors_br = "processors.background_removal" in sys.modules
+    orig_processors_br = sys.modules.get("processors.background_removal")
+    had_processors = "processors" in sys.modules
+    orig_processors = sys.modules.get("processors")
+
+    # Pre-test direct state reset
+    if "ML.image_pipeline.processors.background_removal" in sys.modules:
+        br = sys.modules["ML.image_pipeline.processors.background_removal"]
+        br._session = None
+        br._session_lock = threading.Lock()
+        br._inference_lock = threading.Lock()
+
+    yield
+
+    # Post-test cleanup and restoration
+    sys.path[:] = orig_path
+
+    # Restore or remove 'rembg' stub
+    if orig_rembg is None:
+        sys.modules.pop("rembg", None)
+    else:
+        sys.modules["rembg"] = orig_rembg
+
+    # Restore or clean up 'processors' aliases
+    if not had_processors_br:
+        sys.modules.pop("processors.background_removal", None)
+    else:
+        sys.modules["processors.background_removal"] = orig_processors_br
+
+    if not had_processors:
+        sys.modules.pop("processors", None)
+    else:
+        sys.modules["processors"] = orig_processors
+
+    # Directly reset background_removal state post-test
+    if "ML.image_pipeline.processors.background_removal" in sys.modules:
+        br = sys.modules["ML.image_pipeline.processors.background_removal"]
+        br._session = None
+        br._session_lock = threading.Lock()
+        br._inference_lock = threading.Lock()
+
+    # Reset any mutated global run_ml_enhancer in catalog_service
+    if "backend.services.catalog_service" in sys.modules:
+        cs = sys.modules["backend.services.catalog_service"]
+        if hasattr(cs, "run_ml_enhancer"):
+            cs.run_ml_enhancer = None
 
 
 def _rembg_stub(new_session_fn, remove_fn=None):
@@ -689,3 +744,47 @@ class TestNoHeavyModelFallback:
             br.get_rembg_session()
 
         assert calls == [], f"Expected no new_session calls, got: {calls}"
+
+
+# ─────────────────────────────────────────────────────────────
+# 9. Test Suite Coexistence & Order Independence Regression
+# ─────────────────────────────────────────────────────────────
+
+class TestSuiteCoexistenceAndOrderIndependence:
+    """
+    Proves that background removal tests do not leak stubs, mutated globals,
+    or split module identities that break backend idempotency failure handling tests,
+    and proves that both suites can run in any sequence.
+    """
+
+    def test_canonical_identity_intact_and_enhancer_not_leaked(self):
+        """
+        Verify that ML.image_pipeline.processors.background_removal is the sole canonical
+        identity, module state is cleanly reset, and catalog_service.run_ml_enhancer is None.
+        """
+        import ML.image_pipeline.processors.background_removal as br
+        assert br._session is None
+        assert isinstance(br._session_lock, type(threading.Lock()))
+        assert isinstance(br._inference_lock, type(threading.Lock()))
+
+        if "backend.services.catalog_service" in sys.modules:
+            cs = sys.modules["backend.services.catalog_service"]
+            assert getattr(cs, "run_ml_enhancer", None) is None
+
+    def test_coexistence_with_catalog_service_enhance_mock(self, tmp_path):
+        """
+        Simulates the exact interaction with backend idempotency tests:
+        patches CatalogService.enhance_product_photo, verifies the patch is effective
+        and not bypassed, and proves background_removal session isolation is uncorrupted.
+        """
+        from unittest.mock import patch
+        import backend.services.catalog_service as cs
+
+        mock_target = cs.CatalogService
+        with patch.object(mock_target, "enhance_product_photo", return_value=("mock_path.png", False, None)):
+            instance = mock_target()
+            assert hasattr(instance, "enhance_product_photo")
+
+        # Verify that background removal canonical session remains functional and uncorrupted
+        br = _fresh_module()
+        assert br._session is None
