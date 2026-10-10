@@ -195,28 +195,137 @@ class ProductRepository {
     return false;
   }
 
-  /// Get all products - Hive is the instant source of truth.
+  /// Returns true only if there is a non-completed pending operation for [productId]
+  /// that is owned by [owner] AND targeted to the current backend.
+  bool _hasPendingOperationsForOwner(String productId, String owner) {
+    final pendingBox = _getPendingBox();
+    final currentBackend = PrivateMediaCache.normalizeBackendOrigin(ApiConfig.baseUrl);
+    for (final raw in pendingBox.values) {
+      final op = OfflineOperation.fromPendingString(raw, '');
+      if (op.productId != productId) continue;
+      if (op.status == OfflineOperation.statusCompleted) continue;
+      if (op.owner != owner) continue;
+      if (op.backend != null && op.backend!.isNotEmpty) {
+        final opBackend = PrivateMediaCache.normalizeBackendOrigin(op.backend!);
+        if (opBackend != currentBackend) continue;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /// Get all products belonging to the currently authenticated artisan.
+  /// Hive is the instant source of truth; remote is fetched on forceRefresh or empty cache.
   Future<List<Product>> getProducts({bool forceRefresh = false, bool isOnline = true}) async {
     await initialize();
+
+    // ① Capture session identity synchronously BEFORE first await (AGENTS.md invariant: deterministic identity)
+    final capturedUserId = ActiveSessionManager.getCurrentUserIdSync();
+    final capturedSessionGen = ActiveSessionManager.sessionGeneration;
+    final capturedBackend = ApiConfig.baseUrl;
+
+    bool isCapturedSessionStillValid() {
+      return ActiveSessionManager.validateArtisanSession(
+        expectedUserId: capturedUserId,
+        expectedGeneration: capturedSessionGen,
+        expectedBackendOrigin: capturedBackend,
+      );
+    }
+
     final box = _getProductsBox();
 
-    // If box is empty and online, populate with remote products
     if ((box.isEmpty || forceRefresh) && isOnline) {
-      try {
-        final remote = await _apiService.getProducts();
-        for (var p in remote) {
-          // Safeguard: Never overwrite items that have pending local offline changes
-          if (!hasPendingOperationsFor(p.id)) {
-            await box.put(p.id, p);
+      if (capturedUserId == null || capturedUserId.isEmpty) {
+        // No authenticated session — skip remote fetch without aborting local cache read.
+        debugPrint('ProductRepository.getProducts: No active user session; skipping remote fetch.');
+      } else {
+        try {
+          // Bind the API call to the active session (Task 2 ensures this is enforced at the interceptor)
+          final remote = await _apiService.getProducts(artisanId: capturedUserId);
+
+          // ② Revalidate BEFORE every cache mutation
+          if (!isCapturedSessionStillValid()) {
+            debugPrint('ProductRepository.getProducts: Session changed after remote fetch; discarding response.');
+          } else {
+            // PRUNE PHASE: Non-destructive prune.
+            // Never prune records owned by a different, known artisan.
+            // Only prune records that are TRULY ownerless (null or empty artisanId) AND
+            // have no pending outbox operations.
+            if (forceRefresh) {
+              final keysToDelete = <dynamic>[];
+              for (final entry in box.toMap().entries) {
+                final p = entry.value;
+                final owner = p.artisanId;
+                if (owner != null && owner.isNotEmpty && owner != capturedUserId) {
+                  // Different artisan — leave untouched (filtered from view by read boundary).
+                  continue;
+                }
+                if (owner == null || owner.isEmpty) {
+                  final productId = entry.key as String;
+                  // Use owner-scoped check: only preserve if THIS session's artisan
+                  // has a pending op, not any artisan on the device.
+                  if (!_hasPendingOperationsForOwner(productId, capturedUserId)) {
+                    keysToDelete.add(entry.key);
+                  }
+                }
+              }
+              if (keysToDelete.isNotEmpty) {
+                await box.deleteAll(keysToDelete);
+                debugPrint(
+                  'ProductRepository.getProducts: Pruned ${keysToDelete.length} unowned orphan '
+                  'records without pending ops from products_box.',
+                );
+              }
+            }
+
+            // REMOTE WRITE LOOP:
+            // Accept only server responses whose artisan_id matches captured session.
+            // Reject/quarantine ownerless or mismatched items; never stamp local session identity.
+            for (final p in remote) {
+              if (p.artisanId == null || p.artisanId!.isEmpty) {
+                debugPrint(
+                  '[ProductRepository] CONTRACT VIOLATION: server returned product '
+                  '${p.id} without artisan_id; quarantining and skipping cache write.',
+                );
+                continue;
+              }
+              if (p.artisanId != capturedUserId) {
+                debugPrint(
+                  '[ProductRepository] CONTRACT VIOLATION: server returned product '
+                  '${p.id} owned by ${p.artisanId} for session $capturedUserId; rejecting.',
+                );
+                continue;
+              }
+              if (!hasPendingOperationsFor(p.id)) {
+                await box.put(p.id, p);
+              }
+            }
           }
+        } catch (e) {
+          debugPrint('ProductRepository: Remote fetch failed, using local cache: $e');
         }
-      } catch (e) {
-        debugPrint('ProductRepository: Remote fetch failed, using local cache: $e');
       }
     }
 
-    // Return all local products sorted by creation time (newest first)
-    final list = box.values.toList();
+    // ③ Re-resolve current user at read boundary — discard if session changed
+    final readUserId = ActiveSessionManager.getCurrentUserIdSync();
+    if (capturedUserId != readUserId) {
+      // Session changed between start and read; return empty to avoid leaking data.
+      return [];
+    }
+
+    // FILTER PHASE: Filter by active user at read boundary, requiring verified owner before showing pending record.
+    // Records owned by a different artisan are strictly excluded.
+    final list = box.values
+        .where((p) {
+          if (p.artisanId == null) {
+            // Only show to the authenticated owning artisan whose op is in the outbox.
+            if (readUserId == null || readUserId.isEmpty) return false;
+            return _hasPendingOperationsForOwner(p.id, readUserId);
+          }
+          return p.artisanId == readUserId;
+        })
+        .toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
   }
@@ -257,6 +366,7 @@ class ProductRepository {
       final draftProduct = product.copyWith(
         id: id,
         status: ProductStatus.draft,
+        artisanId: initiatingUserId,
       );
 
       final idempotencyKey = 'idem_create_${draftProduct.id}';
@@ -270,7 +380,10 @@ class ProductRepository {
             idempotencyKey: idempotencyKey,
           );
           if (isSessionValid()) {
-            await productsBox.put(created.id, created);
+            final stampedCreated = (created.artisanId == null || created.artisanId!.isEmpty)
+                ? created.copyWith(artisanId: initiatingUserId)
+                : created;
+            await productsBox.put(stampedCreated.id, stampedCreated);
           } else {
             debugPrint('ProductRepository: Session changed while createProduct in-flight; skipping local cache mutation to prevent cross-account contamination.');
           }
@@ -358,7 +471,10 @@ class ProductRepository {
             idempotencyKey: effectiveIdempotencyKey,
           );
           if (isSessionValid()) {
-            await productsBox.put(updated.id, updated);
+            final stampedUpdated = (updated.artisanId == null || updated.artisanId!.isEmpty)
+                ? updated.copyWith(artisanId: initiatingUserId)
+                : updated;
+            await productsBox.put(stampedUpdated.id, stampedUpdated);
           } else {
             debugPrint('ProductRepository: Session changed while updateProduct in-flight; skipping local cache mutation to prevent cross-account contamination.');
           }
@@ -372,6 +488,7 @@ class ProductRepository {
 
     final localProduct = product.copyWith(
       status: product.status,
+      artisanId: product.artisanId ?? initiatingUserId,
     );
     if (isSessionValid()) {
       await productsBox.put(localProduct.id, localProduct);
@@ -435,7 +552,11 @@ class ProductRepository {
           try {
             product = await _apiService.getProduct(id);
             if (isSessionValid()) {
-              await productsBox.put(id, product);
+              final stamped = (product.artisanId == null || product.artisanId!.isEmpty)
+                  ? product.copyWith(artisanId: initiatingUserId)
+                  : product;
+              await productsBox.put(id, stamped);
+              product = stamped;
             }
           } catch (_) {}
         }
@@ -535,10 +656,13 @@ class ProductRepository {
               expectedRevision: product.revision,
               idempotencyKey: attachKey,
             );
+            final stampedAttached = (attached.artisanId == null || attached.artisanId!.isEmpty)
+                ? attached.copyWith(artisanId: product.artisanId ?? initiatingUserId)
+                : attached;
             if (isSessionValid()) {
-              await productsBox.put(attached.id, attached);
+              await productsBox.put(stampedAttached.id, stampedAttached);
             }
-            product = attached;
+            product = stampedAttached;
           }
 
           if (!isSessionValid()) {
@@ -554,7 +678,19 @@ class ProductRepository {
             idempotencyKey: effectiveIdempotencyKey,
           );
           if (isSessionValid()) {
-            await productsBox.put(published.id, published);
+            if (published.artisanId == null || published.artisanId!.isEmpty) {
+              debugPrint(
+                '[ProductRepository] CONTRACT VIOLATION: server returned product '
+                '${published.id} without artisan_id on approveAndPublish; skipping cache write.',
+              );
+            } else if (published.artisanId != (product.artisanId ?? initiatingUserId)) {
+              debugPrint(
+                '[ProductRepository] CONTRACT VIOLATION: server returned product '
+                '${published.id} owned by ${published.artisanId} for session $initiatingUserId; rejecting.',
+              );
+            } else {
+              await productsBox.put(published.id, published);
+            }
           } else {
             debugPrint('ProductRepository: Session changed while approveAndPublishProduct in-flight; skipping local cache mutation.');
           }
@@ -579,6 +715,7 @@ class ProductRepository {
       approvedAt: null,
       publishedAt: null,
       reviewedMediaChecksum: effectiveReviewedChecksum,
+      artisanId: product.artisanId ?? initiatingUserId,
     );
     if (isSessionValid()) {
       await productsBox.put(queuedLocal.id, queuedLocal);
@@ -812,10 +949,22 @@ class ProductRepository {
         try {
           final authoritative = await _apiService.getProduct(productId);
           if (isSessionValid()) {
-            await productsBox.put(productId, authoritative);
-            activeLocal = authoritative;
-            hasValidContentHash = activeLocal.contentHash != null &&
-                sha256Pattern.hasMatch(activeLocal.contentHash!.toLowerCase());
+            if (authoritative.artisanId == null || authoritative.artisanId!.isEmpty) {
+              debugPrint(
+                '[ProductRepository] CONTRACT VIOLATION: server returned authoritative product '
+                '${authoritative.id} without artisan_id; skipping cache write.',
+              );
+            } else if (authoritative.artisanId != (activeLocal.artisanId ?? initiatingUserId)) {
+              debugPrint(
+                '[ProductRepository] CONTRACT VIOLATION: server returned authoritative product '
+                '${authoritative.id} owned by ${authoritative.artisanId} for session $initiatingUserId; rejecting.',
+              );
+            } else {
+              await productsBox.put(productId, authoritative);
+              activeLocal = authoritative;
+              hasValidContentHash = activeLocal.contentHash != null &&
+                  sha256Pattern.hasMatch(activeLocal.contentHash!.toLowerCase());
+            }
           }
         } catch (e) {
           debugPrint(
@@ -901,7 +1050,19 @@ class ProductRepository {
           if (!isSessionValid()) {
             throw _SessionChangedInternalException();
           }
-          await productsBox.put(serverProduct.id, serverProduct);
+          if (serverProduct.artisanId == null || serverProduct.artisanId!.isEmpty) {
+            debugPrint(
+              '[ProductRepository] CONTRACT VIOLATION: server returned unpublished product '
+              '${serverProduct.id} without artisan_id; skipping cache write.',
+            );
+          } else if (serverProduct.artisanId != (activeLocal.artisanId ?? initiatingUserId)) {
+            debugPrint(
+              '[ProductRepository] CONTRACT VIOLATION: server returned unpublished product '
+              '${serverProduct.id} owned by ${serverProduct.artisanId} for session $initiatingUserId; rejecting.',
+            );
+          } else {
+            await productsBox.put(serverProduct.id, serverProduct);
+          }
           return serverProduct;
         } on StaleRevisionException catch (e) {
           debugPrint('ProductRepository: Stale revision on unpublish: $e');
@@ -909,7 +1070,19 @@ class ProductRepository {
             try {
               final authoritative = await _apiService.getProduct(productId);
               if (isSessionValid()) {
-                await productsBox.put(productId, authoritative);
+                if (authoritative.artisanId == null || authoritative.artisanId!.isEmpty) {
+                  debugPrint(
+                    '[ProductRepository] CONTRACT VIOLATION: server returned authoritative product '
+                    '${authoritative.id} without artisan_id on stale unpublish; skipping cache write.',
+                  );
+                } else if (authoritative.artisanId != (activeLocal.artisanId ?? initiatingUserId)) {
+                  debugPrint(
+                    '[ProductRepository] CONTRACT VIOLATION: server returned authoritative product '
+                    '${authoritative.id} owned by ${authoritative.artisanId} for session $initiatingUserId; rejecting.',
+                  );
+                } else {
+                  await productsBox.put(productId, authoritative);
+                }
               }
             } catch (fetchErr) {
               debugPrint(
@@ -917,7 +1090,10 @@ class ProductRepository {
               if (isSessionValid()) {
                 await productsBox.put(
                     productId,
-                    activeLocal.copyWith(status: ProductStatus.pendingUnpublishSync));
+                    activeLocal.copyWith(
+                      status: ProductStatus.pendingUnpublishSync,
+                      artisanId: activeLocal.artisanId ?? initiatingUserId,
+                    ));
               }
             }
           }
@@ -934,6 +1110,7 @@ class ProductRepository {
       // and do NOT clear last-confirmed approval/publication metadata.
       final pendingUnpubLocal = activeLocal.copyWith(
         status: ProductStatus.pendingUnpublishSync,
+        artisanId: activeLocal.artisanId ?? initiatingUserId,
       );
       if (isSessionValid()) {
         await productsBox.put(productId, pendingUnpubLocal);
@@ -1141,7 +1318,10 @@ class ProductRepository {
 
                   final existingLocal = productsBox.get(created.id);
                   if (existingLocal == null || existingLocal.revision <= created.revision) {
-                    await productsBox.put(created.id, created);
+                    final stampedCreated = (created.artisanId == null || created.artisanId!.isEmpty)
+                        ? created.copyWith(artisanId: op.owner)
+                        : created;
+                    await productsBox.put(stampedCreated.id, stampedCreated);
                   }
                   final updatedOp = op.copyWith(
                     status: OfflineOperation.statusCompleted,
@@ -1279,7 +1459,10 @@ class ProductRepository {
                     return;
                   }
 
-                  await productsBox.put(updated.id, updated);
+                  final stampedUpdated = (updated.artisanId == null || updated.artisanId!.isEmpty)
+                      ? updated.copyWith(artisanId: op.owner)
+                      : updated;
+                  await productsBox.put(stampedUpdated.id, stampedUpdated);
                   final updatedOp = op.copyWith(
                     status: OfflineOperation.statusCompleted,
                     clearLeaseExpiresAt: true,
@@ -1343,7 +1526,10 @@ class ProductRepository {
 
                   final existingLocal = productsBox.get(updated.id);
                   if (existingLocal == null || existingLocal.revision <= updated.revision) {
-                    await productsBox.put(updated.id, updated);
+                    final stampedUpdated = (updated.artisanId == null || updated.artisanId!.isEmpty)
+                        ? updated.copyWith(artisanId: op.owner)
+                        : updated;
+                    await productsBox.put(stampedUpdated.id, stampedUpdated);
                   }
                   final updatedOp = op.copyWith(
                     status: OfflineOperation.statusCompleted,
@@ -1399,7 +1585,10 @@ class ProductRepository {
                     return;
                   }
 
-                  await productsBox.put(published.id, published);
+                  final stampedPublished = (published.artisanId == null || published.artisanId!.isEmpty)
+                      ? published.copyWith(artisanId: op.owner)
+                      : published;
+                  await productsBox.put(stampedPublished.id, stampedPublished);
                   final updatedOp = op.copyWith(
                     status: OfflineOperation.statusCompleted,
                     clearLeaseExpiresAt: true,
@@ -1495,7 +1684,10 @@ class ProductRepository {
                   return;
                 }
 
-                await productsBox.put(unpublished.id, unpublished);
+                final stampedUnpublished = (unpublished.artisanId == null || unpublished.artisanId!.isEmpty)
+                    ? unpublished.copyWith(artisanId: op.owner)
+                    : unpublished;
+                await productsBox.put(stampedUnpublished.id, stampedUnpublished);
                 final updatedOp = op.copyWith(
                   status: OfflineOperation.statusCompleted,
                   clearLeaseExpiresAt: true,

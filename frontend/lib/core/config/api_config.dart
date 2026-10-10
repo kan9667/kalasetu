@@ -10,7 +10,7 @@ class ApiConfig {
   static String? _cachedBaseUrl;
 
   /// Current Wi-Fi IP of the host machine
-  static const String hostLanIp = '192.168.1.6';
+  static const String hostLanIp = '192.168.1.33';
 
   /// Deployed production Railway backend
   static const String deployedBackendUrl =

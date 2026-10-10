@@ -80,7 +80,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     if (result is RequestOtpSuccess) {
       _startCooldown();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('OTP sent successfully. Valid for 5 minutes.')),
+        SnackBar(content: Text('call_initiated_msg'.tr())),
       );
     } else if (result is RequestOtpFailure) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,8 +96,8 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     final otp = _controllers.map((c) => c.text).join().trim();
     if (otp.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter all 6 digits of your verification code.'),
+        SnackBar(
+          content: Text('enter_6_digits_hint'.tr()),
           backgroundColor: AppColors.error,
         ),
       );
@@ -114,6 +114,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
     if (success) {
       await ref.read(userProfileProvider.notifier).reloadProfile();
+      // Explicit reload — purges any foreign products and fetches the newly-logged-in
+      // artisan's catalogue before the home screen renders.
+      unawaited(
+        ref.read(productListProvider.notifier).loadProducts(forceRefresh: true),
+      );
       if (mounted) {
         context.goNamed(AppRouteConstants.home);
       }
@@ -166,7 +171,42 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppSpacing.xxl),
+            const SizedBox(height: AppSpacing.md),
+
+            // Voice Call Guidance Banner
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.terracotta.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                border: Border.all(
+                  color: AppColors.terracotta.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.phone_in_talk,
+                    color: AppColors.terracotta,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'listen_code_hint'.tr(),
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.terracottaDark,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
 
             // OTP Input Boxes
             Row(
@@ -208,6 +248,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
             AppButton(
               label: 'verify_btn'.tr(),
+              icon: Icons.check_circle_outline,
               onPressed: _handleOtpComplete,
               isLoading: authState.isLoading,
             ),
@@ -216,9 +257,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
             AppButton(
               label: _resendCooldown > 0
-                  ? 'Resend OTP in ${_resendCooldown}s'
+                  ? '${'resend_otp'.tr()} (${_resendCooldown}s)'
                   : 'resend_otp'.tr(),
               type: AppButtonType.text,
+              icon: Icons.phone_callback,
               onPressed: _resendCooldown > 0 ? null : _handleResend,
             ),
 

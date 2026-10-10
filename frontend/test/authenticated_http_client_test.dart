@@ -59,7 +59,14 @@ void main() {
         ),
       );
 
-      await dio.get('/test-endpoint');
+      await dio.get(
+        '/test-endpoint',
+        options: Options(extra: {
+          'expected_user_id': 'artisan_test',
+          'expected_session_gen': 0,
+          'expected_backend_origin': 'https://example.com',
+        }),
+      );
 
       expect(captured, isNotNull);
       expect(captured!.headers['Authorization'], 'Bearer jwt_valid_artisan_token_123');
@@ -154,7 +161,14 @@ void main() {
         ),
       );
 
-      await dio.get('/get-items');
+      await dio.get(
+        '/get-items',
+        options: Options(extra: {
+          'expected_user_id': 'artisan_test',
+          'expected_session_gen': 0,
+          'expected_backend_origin': 'https://example.com',
+        }),
+      );
 
       expect(captured, isNotNull);
       expect(captured!.headers.containsKey('Idempotency-Key'), isFalse);

@@ -137,6 +137,9 @@ class Product extends HiveObject {
   @HiveField(29)
   final String? reviewedMediaChecksum;
 
+  @HiveField(30)
+  final String? artisanId;
+
   Product({
     required this.id,
     required this.title,
@@ -168,6 +171,7 @@ class Product extends HiveObject {
     this.transportCost,
     this.otherOverhead,
     this.reviewedMediaChecksum,
+    this.artisanId,
   }) : createdAt = createdAt ?? DateTime.now();
 
   /// All captured photos in order (primary first), for the review screen's
@@ -219,6 +223,7 @@ class Product extends HiveObject {
     double? transportCost,
     double? otherOverhead,
     String? reviewedMediaChecksum,
+    String? artisanId,
     bool clearApprovalMetadata = false,
   }) {
     return Product(
@@ -252,6 +257,7 @@ class Product extends HiveObject {
       transportCost: transportCost ?? this.transportCost,
       otherOverhead: otherOverhead ?? this.otherOverhead,
       reviewedMediaChecksum: reviewedMediaChecksum ?? this.reviewedMediaChecksum,
+      artisanId: artisanId ?? this.artisanId,
     );
   }
 
@@ -287,6 +293,7 @@ class Product extends HiveObject {
       'transportCost': transportCost,
       'otherOverhead': otherOverhead,
       'reviewedMediaChecksum': reviewedMediaChecksum,
+      'artisanId': artisanId,
     };
   }
 
@@ -439,6 +446,7 @@ class Product extends HiveObject {
           (json['otherOverhead'] as num?)?.toDouble(),
       reviewedMediaChecksum: json['reviewedMediaChecksum'] as String? ??
           (json['reviewed_media_checksum'] as String? ?? json['media_sha256'] as String?),
+      artisanId: json['artisan_id'] as String? ?? json['artisanId'] as String?,
     );
   }
 }

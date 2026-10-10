@@ -130,8 +130,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               const SizedBox(height: AppSpacing.lg),
 
               AppButton(
-                label: 'continue_btn'.tr(),
-                icon: Icons.login,
+                label: 'get_otp_call_btn'.tr(),
+                icon: Icons.phone_in_talk,
                 onPressed: _handleContinue,
                 isLoading: authState.isLoading,
                 isCompact: isCompact,

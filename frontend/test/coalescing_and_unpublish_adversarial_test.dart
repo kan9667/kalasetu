@@ -864,6 +864,7 @@ void main() {
         status: ProductStatus.soldOut, // Currently sold out
         revision: 2,
         contentHash: sampleHash,
+        artisanId: 'artisan_coalesce',
       );
       await productsBox.put(product.id, product);
 

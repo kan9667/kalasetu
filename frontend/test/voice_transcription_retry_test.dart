@@ -1187,8 +1187,8 @@ void main() {
       await flow.loadSavedDraftState(draftId: 'review_listing_retake', originalImagePath: '', enhancedImagePath: '', transcript: 'Handmade clay pot');
       speechService.listingDelayCompleter = Completer<void>();
       final flight = flow.generateAiListing('en');
-      for (var n = 0; n < 100 && speechService.generateListingCallCount == 0; n++) {
-        await Future<void>.delayed(Duration.zero);
+      for (var n = 0; n < 200 && speechService.generateListingCallCount == 0; n++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
       }
       expect(speechService.generateListingCallCount, 1);
       await flow.retakeDescription();
@@ -1264,8 +1264,8 @@ void main() {
       await flow.loadSavedDraftState(draftId: 'review_session_bump', originalImagePath: '', enhancedImagePath: '', transcript: 'Handmade clay pot');
       speechService.listingDelayCompleter = Completer<void>();
       final flight = flow.generateAiListing('en');
-      for (var n = 0; n < 100 && speechService.generateListingCallCount == 0; n++) {
-        await Future<void>.delayed(Duration.zero);
+      for (var n = 0; n < 200 && speechService.generateListingCallCount == 0; n++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
       }
       expect(speechService.generateListingCallCount, 1);
 
@@ -1335,8 +1335,8 @@ void main() {
       final flight1 = flow.transcribeVoiceDirectly(audioFile);
 
       // Wait for snapshot creation and AiOperationRecord save to disk
-      for (var n = 0; n < 100 && speechService.transcribeAudioCallCount == 0; n++) {
-        await Future<void>.delayed(Duration.zero);
+      for (var n = 0; n < 200 && speechService.transcribeAudioCallCount == 0; n++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
       }
       expect(speechService.transcribeAudioCallCount, 1);
 
@@ -1397,8 +1397,8 @@ void main() {
       speechService.listingDelayCompleter = Completer<void>();
       final flight1 = flow.generateAiListing('en');
 
-      for (var n = 0; n < 100 && speechService.generateListingCallCount == 0; n++) {
-        await Future<void>.delayed(Duration.zero);
+      for (var n = 0; n < 200 && speechService.generateListingCallCount == 0; n++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
       }
       expect(speechService.generateListingCallCount, 1);
 

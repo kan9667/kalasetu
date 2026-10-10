@@ -301,11 +301,37 @@ final productListProvider =
       final repository = ref.watch(productRepositoryProvider);
       final notifier = ProductListNotifier(repository, ref);
       ref.watch(syncServiceProvider);
+
+      // Connectivity → trigger sync when back online
       ref.listen<AsyncValue<bool>>(connectivityProvider, (previous, next) {
         if (next.value == true && previous?.value != true) {
           unawaited(notifier.syncQueue());
         }
       });
+
+      // Auth state → clear and reload on login, logout, or account switch.
+      // Fixes products persisting in memory across account switches on shared devices.
+      ref.listen<AuthState>(authStateProvider, (previous, next) {
+        final prevUserId = previous?.userId;
+        final nextUserId = next.userId;
+        final wasAuth = previous?.isAuthenticated ?? false;
+        final isAuth = next.isAuthenticated;
+
+        final accountChanged = prevUserId != nextUserId;
+        final authStatusChanged = wasAuth != isAuth;
+
+        if (accountChanged || authStatusChanged) {
+          debugPrint(
+            '[productListProvider] Auth state changed '
+            '($prevUserId/$wasAuth → $nextUserId/$isAuth). '
+            'Triggering reload to clear foreign cache.',
+          );
+          // forceRefresh only when logging in (authenticated session available).
+          // On logout, pass forceRefresh: false so filter phase empties the list.
+          unawaited(notifier.loadProducts(forceRefresh: isAuth));
+        }
+      });
+
       return notifier;
     });
 
@@ -975,6 +1001,7 @@ class AddProductFlowNotifier extends StateNotifier<AddProductDraft> {
   // screen behind it). Instead, isAiProcessing is now always derived from
   // the full set of "is anything still pending" signals in one place.
   void _recomputeAiProcessing() {
+    if (!mounted) return;
     final imageQueuePending = state.imageQueueItemId != null &&
         state.imageQueueItemId!.isNotEmpty &&
         state.imageQueueStatus != QueueStatus.completed &&
