@@ -2,7 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:kalasetu/core/router/app_route_constants.dart';
 import 'package:kalasetu/features/auth/screens/sign_in_screen.dart';
 import 'package:kalasetu/features/auth/screens/register_screen.dart';
 import 'package:kalasetu/features/auth/providers/auth_provider.dart';
@@ -16,7 +18,10 @@ class _FakeAuthRepository extends AuthRepository {
   }
 
   @override
-  Future<VerifyOtpResult> verifyOtpWithBackend(String phoneNumber, String otp) async {
+  Future<VerifyOtpResult> verifyOtpWithBackend(
+    String phoneNumber,
+    String otp,
+  ) async {
     final profile = UserProfile(
       id: 'artisan_123',
       name: 'Ravi Verma',
@@ -32,6 +37,20 @@ class _FakeAuthRepository extends AuthRepository {
   @override
   Future<RegisterArtisanResult> registerArtisan(UserProfile profile) async {
     return RegisterArtisanSuccess(profile.copyWith(id: 'artisan_123'));
+  }
+}
+
+class _UnregisteredAuthRepository extends AuthRepository {
+  @override
+  Future<void> savePhoneNumber(String phoneNumber) async {}
+
+  @override
+  Future<RequestOtpResult> requestOtp(String phone) async {
+    return const RequestOtpFailure(
+      message: 'Artisan not registered. Please register first.',
+      statusCode: 404,
+      notFound: true,
+    );
   }
 }
 
@@ -52,37 +71,82 @@ void main() {
     }
   });
 
-  testWidgets('Sign-in screen renders phone entry, register option, and action buttons', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: SignInScreen(),
+  testWidgets(
+    'Sign-in screen renders phone entry, register option, and action buttons',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(child: MaterialApp(home: SignInScreen())),
+      );
+
+      await tester.pump(const Duration(seconds: 1));
+
+      // Verify phone input field is present
+      final phoneField = find.byType(TextField);
+      expect(phoneField, findsOneWidget);
+
+      // Enter phone number
+      await tester.enterText(phoneField, '9876543210');
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Verify multiple action buttons exist (Continue, Register, NGO assist)
+      expect(find.byType(ElevatedButton), findsWidgets);
+      expect(find.byType(OutlinedButton), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'unregistered login shows registration action without opening OTP',
+    (tester) async {
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            name: AppRouteConstants.signIn,
+            path: '/',
+            builder: (_, _) => const SignInScreen(),
+          ),
+          GoRoute(
+            name: AppRouteConstants.register,
+            path: '/register',
+            builder: (_, _) => const Scaffold(body: Text('Registration page')),
+          ),
+          GoRoute(
+            name: AppRouteConstants.otp,
+            path: '/otp',
+            builder: (_, _) => const Scaffold(body: Text('OTP page')),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(
+              _UnregisteredAuthRepository(),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
         ),
-      ),
-    );
+      );
+      await tester.enterText(find.byType(TextFormField), '9876543210');
+      await tester.tap(find.byIcon(Icons.login));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.pump(const Duration(seconds: 1));
+      expect(find.text('artisan_not_registered'), findsOneWidget);
+      expect(find.text('OTP page'), findsNothing);
+      await tester.tap(find.text('register_action'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Registration page'), findsOneWidget);
+    },
+  );
 
-    // Verify phone input field is present
-    final phoneField = find.byType(TextField);
-    expect(phoneField, findsOneWidget);
-
-    // Enter phone number
-    await tester.enterText(phoneField, '9876543210');
-    await tester.pump(const Duration(milliseconds: 500));
-
-    // Verify multiple action buttons exist (Continue, Register, NGO assist)
-    expect(find.byType(ElevatedButton), findsWidgets);
-    expect(find.byType(OutlinedButton), findsWidgets);
-  });
-
-  testWidgets('Register screen renders all required artisan profile fields', (WidgetTester tester) async {
+  testWidgets('Register screen renders all required artisan profile fields', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: RegisterScreen(),
-        ),
-      ),
+      const ProviderScope(child: MaterialApp(home: RegisterScreen())),
     );
 
     await tester.pump(const Duration(seconds: 1));
@@ -96,13 +160,25 @@ void main() {
     final textFields = find.byType(TextFormField);
     await tester.enterText(textFields.at(0), 'Shanti Devi'); // Name
     await tester.enterText(textFields.at(1), '9876543210'); // Phone
-    await tester.enterText(textFields.at(2), 'Madhubani Art Cluster'); // Cluster
+    await tester.enterText(
+      textFields.at(2),
+      'Madhubani Art Cluster',
+    ); // Cluster
     await tester.enterText(textFields.at(3), '12'); // Experience
     await tester.enterText(textFields.at(4), 'PEH1234567890'); // Pehchan ID
-    await tester.enterText(textFields.at(5), 'Shanti Devi'); // Bank Account Holder
-    await tester.enterText(textFields.at(6), '012345678901'); // Bank Account Number
+    await tester.enterText(
+      textFields.at(5),
+      'Shanti Devi',
+    ); // Bank Account Holder
+    await tester.enterText(
+      textFields.at(6),
+      '012345678901',
+    ); // Bank Account Number
     await tester.enterText(textFields.at(7), 'SBIN0001234'); // IFSC Code
-    await tester.enterText(textFields.at(8), 'State Bank of India'); // Bank Name
+    await tester.enterText(
+      textFields.at(8),
+      'State Bank of India',
+    ); // Bank Name
     await tester.pump();
 
     // Verify Register Button is rendered
@@ -112,9 +188,7 @@ void main() {
   test('AuthNotifier saves registered profile on OTP verification', () async {
     final fakeRepo = _FakeAuthRepository();
     final container = ProviderContainer(
-      overrides: [
-        authRepositoryProvider.overrideWithValue(fakeRepo),
-      ],
+      overrides: [authRepositoryProvider.overrideWithValue(fakeRepo)],
     );
     final authNotifier = container.read(authStateProvider.notifier);
 
